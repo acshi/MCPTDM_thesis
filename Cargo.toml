@@ -1,0 +1,21 @@
+[package]
+name = "selfdriving"
+version = "0.1.0"
+authors = ["Acshi Haggenmiller <acshikh@umich.edu>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rvx = { path = "../rvx" }
+rand = "0.8"
+parry2d-f64 = "0.4"
+enum_dispatch = "0.3.3"
+fstrings = "0.2.3"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "benchmark"
+harness = false
