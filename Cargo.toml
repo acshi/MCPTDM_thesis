@@ -9,9 +9,13 @@ edition = "2018"
 [dependencies]
 rvx = { path = "../rvx" }
 rand = "0.8"
-parry2d-f64 = "0.4"
+parry2d-f64 = "0.5"
 enum_dispatch = "0.3.3"
 fstrings = "0.2.3"
+approx = "0.5.0"
+serde = "1.0.126"
+rayon = "1.5.1"
+itertools = "0.10.0"
 
 [dev-dependencies]
 criterion = "0.3"
@@ -19,3 +23,6 @@ criterion = "0.3"
 [[bench]]
 name = "benchmark"
 harness = false
+
+[profile.release]
+debug = true

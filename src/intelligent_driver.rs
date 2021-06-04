@@ -1,4 +1,4 @@
-use crate::{forward_policies::ForwardPolicyTrait, Road, BREAKING_ACCEL};
+use crate::{car::BREAKING_ACCEL, forward_control::ForwardControlTrait, Road};
 
 #[derive(Debug, Clone)]
 pub struct IntelligentDriverPolicy;
@@ -10,7 +10,7 @@ impl IntelligentDriverPolicy {
 }
 
 // https://en.wikipedia.org/wiki/Intelligent_driver_model
-impl ForwardPolicyTrait for IntelligentDriverPolicy {
+impl ForwardControlTrait for IntelligentDriverPolicy {
     fn choose_accel(&mut self, road: &Road, car_i: usize) -> f64 {
         let car = &road.cars[car_i];
 
@@ -20,22 +20,21 @@ impl ForwardPolicyTrait for IntelligentDriverPolicy {
         if let Some((forward_dist, c_i)) = road.dist_clear_ahead(car_i) {
             let approaching_rate = car.vel - road.cars[c_i].vel;
 
-            let spacing_term = car.follow_min_dist
-                + car.vel * car.follow_time
+            let spacing_term = car.follow_dist()
                 + car.vel * approaching_rate / (2.0 * (car.preferred_accel * BREAKING_ACCEL));
             let accel_interaction = car.preferred_accel * (-(spacing_term / forward_dist).powi(2));
 
             accel = accel_free_road + accel_interaction;
 
-            if car_i == 0 {
-                eprintln_f!("{approaching_rate=:.2}, {spacing_term=:.2}, {accel_free_road=:.2}, {accel_interaction=:.2}");
-            }
+            // if car_i == 6 {
+            //     eprintln_f!("vel = {:.2}, {approaching_rate=:.2}, {spacing_term=:.2}, {accel_free_road=:.2}, {accel_interaction=:.2}", car.vel);
+            // }
         } else {
             accel = accel_free_road;
 
-            if car_i == 0 {
-                eprintln_f!("{accel_free_road=:.2}");
-            }
+            // if car_i == 0 {
+            //     eprintln_f!("{accel_free_road=:.2}");
+            // }
         }
 
         accel
