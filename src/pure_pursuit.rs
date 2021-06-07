@@ -5,7 +5,7 @@ use crate::{car::PRIUS_LENGTH, side_control::SideControlTrait, Road, LANE_WIDTH}
 use itertools::Itertools;
 
 const AHEAD_DIST_MIN: f64 = LANE_WIDTH + PRIUS_LENGTH * 0.2;
-const AHEAD_DIST_MAX: f64 = 10.0 * PRIUS_LENGTH;
+const AHEAD_DIST_MAX: f64 = 20.0 * PRIUS_LENGTH;
 
 #[derive(Clone)]
 pub struct PurePursuitPolicy {
@@ -222,7 +222,7 @@ impl SideControlTrait for PurePursuitPolicy {
             target_ahead_dist * 2.0,
         );
         if contact.is_none() {
-            eprintln!("trajectory: {:.2?}", trajectory);
+            eprintln_f!("{car_i=}, trajectory: {:.2?}", trajectory);
             eprintln_f!("{car_ref_x=:.2}, {car_ref_y=:.2}, {target_ahead_dist=:.2}");
         }
 

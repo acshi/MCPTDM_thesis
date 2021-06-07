@@ -23,10 +23,21 @@ https://dingyan89.medium.com/three-methods-of-vehicle-lateral-control-pure-pursu
 https://thomasfermi.github.io/Algorithms-for-Automated-Driving/Control/PurePursuit.html
 
 Tasks:
-Overall for this week: Get basic MPDM running: lane change in any valid direction or lane keep.
-ADD barrier to force merge!!!
+Overall for this week: Have a preliminary quantitative comparison between classic MPDM, "naive" EUDM, and a POMCP-inspired search.
+
+My EUDM right now isn't actually a tree search! It is redoing the simulation work for the early seconds WAY TOO MUCH!
+
+Right now, if we are part-way through executing the current action, and then decide to switch to a new action, we will reset that waiting period. Actually I think we reset it for the simulation even when we don't switch policies!!! I think EUDM proper keeps this all synchronized?
+
+Reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Online they use 0.2 seconds timesteps, tree depth 5 and 1-second actions).
+
+Implement open-loop simulation of agents for either EUDM CFB, or for vehicles far enough away from the ego vehicle.
+
 
 Finished tasks:
+EUDM-style tree search
+ADD barrier to force merge!!!
+Get basic MPDM running: lane change in any valid direction or lane keep.
 Implement basic reward function and get something dumb executing it.
 Intellgient driving model!
 Implement bicycle model.
@@ -38,3 +49,5 @@ Much later tasks, NOT IMPORTANT now:
 Modify pure pursuit to actually work as it is normally considered around the back axle. See if changing the bicycle model to be based on the back axle makes this work.
 See if we can copy EUDM reward function, including constant weights and even how much of the track to evaluate before terminating.
 We can make car-car closest-points WAY faster by writing specific code for that.
+Get our testing setup and parameters to better match that used by the EUDM code: https://github.com/HKUST-Aerial-Robotics/eudm_planner/blob/master/eudm_planner/config/eudm_config.pb.txt
+Maybe switch cars to a structure of arrays kind of thing?

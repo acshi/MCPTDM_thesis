@@ -27,14 +27,14 @@ pub const SPEED_DEFAULT: f64 = 45.0 * MPH_TO_MPS;
 pub const SPEED_LOW: f64 = 35.0 * MPH_TO_MPS;
 pub const SPEED_HIGH: f64 = 55.0 * MPH_TO_MPS;
 pub const FOLLOW_DIST_MIN: f64 = 0.5 * PRIUS_LENGTH;
-pub const FOLLOW_TIME_LOW: f64 = 0.4;
+pub const FOLLOW_TIME_LOW: f64 = 0.8;
 pub const FOLLOW_TIME_HIGH: f64 = 2.0;
-pub const FOLLOW_TIME_DEFAULT: f64 = (FOLLOW_TIME_LOW + FOLLOW_TIME_HIGH) / 2.0;
+pub const FOLLOW_TIME_DEFAULT: f64 = 1.2;
 
 pub const PREFERRED_ACCEL_LOW: f64 = 0.2; // semi truck, 2min zero to sixty
 pub const PREFERRED_ACCEL_HIGH: f64 = 11.2; // model s, 2.4s zero to sixty
 pub const PREFERRED_ACCEL_DEFAULT: f64 = 2.0; // 16s zero to sixty, just under max accel for a prius (13s)
-pub const BREAKING_ACCEL: f64 = 12.0;
+pub const BREAKING_ACCEL: f64 = 6.0;
 
 // maybe needs to be a function of velocity too???
 // also not really tuned/reasonably chosen, ahahah
@@ -234,9 +234,15 @@ impl Car {
             r.draw(
                 Rvx::text(
                     &format!(
-                        "MPH: {:.1}\nFollow time: {:.1}",
+                        "MPH: {:.1}\nFollow time: {:.1}\nx: {:.1}\n{}",
                         self.vel * MPS_TO_MPH,
                         self.target_follow_time,
+                        self.x,
+                        if self.car_i == 0 {
+                            format!("{:?}", self.side_policy.as_ref().unwrap())
+                        } else {
+                            "".to_owned()
+                        },
                     ),
                     "Arial",
                     40.0,

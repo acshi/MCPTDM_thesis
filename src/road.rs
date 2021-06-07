@@ -4,6 +4,7 @@ use itertools::Itertools;
 use parry2d_f64::{
     math::Isometry,
     query::{self, ClosestPoints},
+    shape::Shape,
 };
 use rand::prelude::StdRng;
 use rvx::{Rvx, RvxColor};
@@ -26,23 +27,32 @@ pub const ROAD_LENGTH: f64 = 500.0;
 pub const SIDE_MARGIN: f64 = 0.0;
 
 const EFFICIENCY_WEIGHT: f64 = 1.0;
-const SAFETY_WEIGHT: f64 = 40.0;
+const SAFETY_WEIGHT: f64 = 1000.0;
 const SAFETY_MARGIN: f64 = LANE_WIDTH - PRIUS_WIDTH - 1.5;
-const SMOOTHNESS_WEIGHT: f64 = 1.0;
+const SMOOTHNESS_WEIGHT: f64 = 2.0;
 
 #[derive(Clone, Debug)]
 pub struct Road {
-    pub t: f64, // current time in seconds
+    pub t: f64,           // current time in seconds
+    pub timesteps: usize, // current time in timesteps (related by DT)
     pub cars: Vec<Car>,
     pub last_ego_policy_id: Option<u64>,
     pub reward: f64,
     pub debug: bool,
 }
 
+fn range_dist(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> f64 {
+    let sep1 = (low_a - high_b).max(0.0);
+    let sep2 = (low_b - high_a).max(0.0);
+    let sep = sep1.max(sep2);
+    sep
+}
+
 impl Road {
     pub fn new() -> Self {
         let mut road = Self {
             t: 0.0,
+            timesteps: 0,
             cars: vec![Car::new(0, 0)],
             last_ego_policy_id: None,
             reward: 0.0,
@@ -150,94 +160,117 @@ impl Road {
     }
 
     pub fn dist_clear_ahead(&self, car_i: usize) -> Option<(f64, usize)> {
-        self.dist_clear(car_i, true)
+        self.dist_clear::<true>(car_i)
     }
 
     // fn dist_clear_behind(&self, car_i: usize) -> Option<(f64, usize)> {
     //     self.dist_clear(car_i, false)
     // }
 
-    pub fn dist_clear(&self, car_i: usize, ahead: bool) -> Option<(f64, usize)> {
+    pub fn dist_clear<const AHEAD: bool>(&self, car_i: usize) -> Option<(f64, usize)> {
         let car = &self.cars[car_i];
 
         let mut min_dist = f64::MAX;
         let mut min_car_i = None;
 
-        let mut dist_thresh_sq = (car.follow_dist() * 4.0).powi(2);
+        let mut dist_thresh = car.follow_dist() * 4.0;
 
         let pose = self.cars[car_i].pose();
         let shape = self.cars[car_i].shape();
+        let aabb = shape.compute_aabb(&pose);
         for (i, c) in self.cars.iter().enumerate() {
             if i == car_i {
                 continue;
             }
             // skip cars behind this one
-            if ahead && c.x < car.x || !ahead && c.x > car.x {
+            if AHEAD && c.x < car.x || !AHEAD && c.x > car.x {
                 // if i == 0 && car_i == 14 {
                 //     eprintln_f!("Skipping {car_i} to ego: c.x {:.2} car.x {:.2}", c.x, car.x);
                 // }
                 continue;
             }
 
-            let dist_sq = (c.x - car.x).powi(2) + (c.y - car.y).powi(2);
-            if dist_sq >= dist_thresh_sq {
+            if (c.x - car.x).abs() >= dist_thresh {
                 continue;
             }
 
-            match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), f64::MAX) {
-                Ok(ClosestPoints::WithinMargin(a, b)) => {
-                    let forward_dist = (a[0] - b[0]).abs();
+            if true {
+                let other_aabb = c.shape().compute_aabb(&c.pose());
 
-                    // to determine side-distance we have to be more clever, since the closest points
-                    // do not necessarily give the closest side distance. So for that, we do another query.
-                    let side_dist;
-                    match query::closest_points(
-                        &(Isometry::translation(b[0] - a[0] + car.length / 2.0, 0.0) * pose),
-                        &shape,
-                        &c.pose(),
-                        &c.shape(),
-                        SIDE_MARGIN,
-                    ) {
-                        Ok(ClosestPoints::WithinMargin(a, b)) => {
-                            side_dist = (a[1] - b[1]).abs();
-                            // if i == 0 && car_i == 14 {
-                            //     eprintln_f!(
-                            //         "From {car_i} to ego: {side_dist=:.2}, {a=:.2?}, {b=:.2?}",
-                            //         a = a.coords.as_slice(),
-                            //         b = b.coords.as_slice(),
-                            //     );
-                            // }
-                        }
-                        Ok(ClosestPoints::Intersecting) => side_dist = 0.0,
-                        _ => side_dist = SIDE_MARGIN + 0.01,
-                    }
+                let side_sep = range_dist(
+                    aabb.mins[1],
+                    aabb.maxs[1],
+                    other_aabb.mins[1],
+                    other_aabb.maxs[1],
+                );
 
-                    // let side_dist = (a[1] - b[1]).abs();
-                    // if i == 0 && car_i == 14 {
-                    //     eprintln_f!("From {car_i} to ego: {forward_dist=:.2}, {side_dist=:.2}, {a=:.2?}, {b=:.2?}", a = a.coords.as_slice(), b = b.coords.as_slice());
-                    // }
-                    if side_dist > SIDE_MARGIN {
-                        continue;
-                    }
+                // if car_i == 0 {
+                //     eprintln_f!("ego from {i} {side_sep=:.2}");
+                // }
 
-                    if forward_dist < min_dist {
-                        min_dist = forward_dist;
-                        min_car_i = Some(i);
-
-                        dist_thresh_sq = min_dist.powi(2) + (SIDE_MARGIN + car.width / 2.0).powi(2);
-                    }
-                }
-                Ok(ClosestPoints::Intersecting) => {
-                    let dist = 0.0;
+                if side_sep <= SIDE_MARGIN {
+                    let dist = other_aabb.mins[0] - aabb.maxs[0];
                     if dist < min_dist {
                         min_dist = dist;
                         min_car_i = Some(i);
                     }
-                    // if i == 0 && car_i == 14 {
-                    //     eprintln_f!("From {car_i} to ego: intersecting!");
-                    // }
                 }
-                _ => (),
+            } else {
+                match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), f64::MAX) {
+                    Ok(ClosestPoints::WithinMargin(a, b)) => {
+                        let forward_dist = (a[0] - b[0]).abs();
+
+                        // to determine side-distance we have to be more clever, since the closest points
+                        // do not necessarily give the closest side distance. So for that, we do another query.
+                        let side_dist;
+                        match query::closest_points(
+                            &(Isometry::translation(b[0] - a[0] + car.length / 2.0, 0.0) * pose),
+                            &shape,
+                            &c.pose(),
+                            &c.shape(),
+                            SIDE_MARGIN,
+                        ) {
+                            Ok(ClosestPoints::WithinMargin(a, b)) => {
+                                side_dist = (a[1] - b[1]).abs();
+                                // if i == 0 && car_i == 14 {
+                                //     eprintln_f!(
+                                //         "From {car_i} to ego: {side_dist=:.2}, {a=:.2?}, {b=:.2?}",
+                                //         a = a.coords.as_slice(),
+                                //         b = b.coords.as_slice(),
+                                //     );
+                                // }
+                            }
+                            Ok(ClosestPoints::Intersecting) => side_dist = 0.0,
+                            _ => continue,
+                        }
+
+                        // let side_dist = (a[1] - b[1]).abs();
+                        // if i == 0 && car_i == 14 {
+                        //     eprintln_f!("From {car_i} to ego: {forward_dist=:.2}, {side_dist=:.2}, {a=:.2?}, {b=:.2?}", a = a.coords.as_slice(), b = b.coords.as_slice());
+                        // }
+                        if side_dist > SIDE_MARGIN {
+                            continue;
+                        }
+
+                        if forward_dist < min_dist {
+                            min_dist = forward_dist;
+                            min_car_i = Some(i);
+
+                            dist_thresh = min_dist.hypot(SIDE_MARGIN + car.width / 2.0);
+                        }
+                    }
+                    Ok(ClosestPoints::Intersecting) => {
+                        let dist = 0.0;
+                        if dist < min_dist {
+                            min_dist = dist;
+                            min_car_i = Some(i);
+                        }
+                        // if i == 0 && car_i == 14 {
+                        //     eprintln_f!("From {car_i} to ego: intersecting!");
+                        // }
+                    }
+                    _ => (),
+                }
             }
 
             // let d = query::distance(&pose, &shape, &c.pose(), &c.shape()).unwrap();
@@ -248,27 +281,67 @@ impl Road {
     }
 
     fn min_unsafe_dist(&self, car_i: usize) -> Option<f64> {
-        let mut min_dist = None;
+        let car = &self.cars[car_i];
 
-        let pose = self.cars[car_i].pose();
-        let shape = self.cars[car_i].shape();
+        let mut min_dist = None;
+        let mut dist_thresh = car.length + SAFETY_WEIGHT;
+
+        let pose = car.pose();
+        let shape = car.shape();
+        let aabb = shape.compute_aabb(&pose);
         for (i, c) in self.cars.iter().enumerate() {
             if i == car_i {
                 continue;
             }
 
-            match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), SAFETY_MARGIN) {
-                Ok(ClosestPoints::WithinMargin(a, b)) => {
-                    let dist = (a - b).magnitude();
-                    if dist < min_dist.unwrap_or(f64::MAX) {
+            if (c.x - car.x).abs() >= dist_thresh {
+                continue;
+            }
+
+            if true {
+                // let mut aabb_min_dist = None;
+                let other_aabb = c.shape().compute_aabb(&c.pose());
+
+                let side_sep = range_dist(
+                    aabb.mins[1],
+                    aabb.maxs[1],
+                    other_aabb.mins[1],
+                    other_aabb.maxs[1],
+                );
+
+                if side_sep <= SAFETY_MARGIN {
+                    let longitidinal_sep = range_dist(
+                        aabb.mins[0],
+                        aabb.maxs[0],
+                        other_aabb.mins[0],
+                        other_aabb.maxs[0],
+                    );
+                    let dist = side_sep.max(longitidinal_sep);
+                    if dist < min_dist.unwrap_or(SAFETY_MARGIN) {
                         min_dist = Some(dist);
+                        dist_thresh = dist.hypot(SIDE_MARGIN + car.width / 2.0);
                     }
                 }
-                Ok(ClosestPoints::Intersecting) => {
-                    min_dist = Some(0.0);
+            } else {
+                // let mut ab = None;
+                match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), SAFETY_MARGIN) {
+                    Ok(ClosestPoints::WithinMargin(a, b)) => {
+                        let dist = (a - b).magnitude();
+                        if dist < min_dist.unwrap_or(f64::MAX) {
+                            min_dist = Some(dist);
+                        }
+                        // ab = Some((a, b));
+                    }
+                    Ok(ClosestPoints::Intersecting) => {
+                        min_dist = Some(0.0);
+                    }
+                    _ => (),
                 }
-                _ => (),
             }
+
+            // if min_dist != aabb_min_dist {
+            //     panic_f!("{i}:\n{aabb=:.2?}\n{other_aabb=:.2?}\n{side_sep=:.2}, {aabb_min_dist=:.2?}, {min_dist=:.2?}, {ab=:.2?}");
+            // }
 
             // let d = query::distance(&pose, &shape, &c.pose(), &c.shape()).unwrap();
             // min_dist = min_dist.min(d);
@@ -341,6 +414,7 @@ impl Road {
         }
 
         self.t += dt;
+        self.timesteps += 1;
 
         self.update_reward(dt);
     }
@@ -361,6 +435,7 @@ impl Road {
                 self.reward += SMOOTHNESS_WEIGHT;
                 if self.debug {
                     eprintln_f!("policy change from {last_policy_id} to {policy_id}");
+                    eprintln!("New policy:\n{:?}", ecar.side_policy.as_ref().unwrap());
                 }
             }
         }
@@ -408,7 +483,9 @@ impl Road {
 
         // draw the cars
         for (i, car) in self.cars.iter().enumerate() {
-            if i == 0 {
+            if i == 0 && car.crashed {
+                car.draw(r, RvxColor::ORANGE.set_a(0.6));
+            } else if i == 0 {
                 car.draw(r, RvxColor::GREEN.set_a(0.6));
             } else if car.crashed {
                 car.draw(r, RvxColor::RED.set_a(0.6));

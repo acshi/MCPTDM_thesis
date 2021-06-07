@@ -1,6 +1,10 @@
 use parry2d_f64::{math::Point, na::Point2};
 
-use crate::{car::PRIUS_LENGTH, side_policies::SidePolicyTrait, LANE_WIDTH};
+use crate::{
+    car::PRIUS_LENGTH,
+    side_policies::{SidePolicy, SidePolicyTrait},
+    LANE_WIDTH,
+};
 
 const TRANSITION_DIST_MIN: f64 = 1.0 * PRIUS_LENGTH;
 const TRANSITION_DIST_MAX: f64 = 100.0 * PRIUS_LENGTH;
@@ -36,7 +40,7 @@ impl SidePolicyTrait for LaneChangePolicy {
 
         // reset start_xy after long enough
         // so that the trajectory doesn't run out
-        if (start_x - car.x).abs() > 500.0 {
+        if (start_x - car.x).abs() > 50.0 {
             start_x = car.x;
             start_y = car.y;
             self.start_xy = Some((car.x, car.y));
@@ -53,7 +57,7 @@ impl SidePolicyTrait for LaneChangePolicy {
         vec![
             Point::new(start_x, start_y),
             Point::new(target_x, target_y),
-            Point::new(target_x + 1000.0, target_y), // then continue straight
+            Point::new(target_x + 100.0, target_y), // then continue straight
         ]
     }
 
@@ -66,5 +70,9 @@ impl SidePolicyTrait for LaneChangePolicy {
             follow_time.to_bits().hash(&mut hasher);
         }
         hasher.finish()
+    }
+
+    fn operating_policy(&self) -> SidePolicy {
+        SidePolicy::LaneChangePolicy(self.clone())
     }
 }

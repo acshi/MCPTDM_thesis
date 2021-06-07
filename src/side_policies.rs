@@ -1,5 +1,6 @@
 use parry2d_f64::na::Point2;
 
+use crate::delayed_policy::DelayedPolicy;
 use crate::lane_change_policy::LaneChangePolicy;
 use crate::Road;
 
@@ -7,7 +8,14 @@ use crate::Road;
 #[derive(Debug, Clone)]
 pub enum SidePolicy {
     LaneChangePolicy,
+    DelayedPolicy,
 }
+
+// impl SidePolicy {
+//     fn operating_policy(&self) -> Self {
+
+//     }
+// }
 
 #[enum_dispatch(SidePolicy)]
 pub trait SidePolicyTrait {
@@ -17,4 +25,5 @@ pub trait SidePolicyTrait {
 
     fn choose_trajectory(&mut self, road: &Road, car_i: usize) -> Vec<Point2<f64>>;
     fn policy_id(&self) -> u64;
+    fn operating_policy(&self) -> SidePolicy;
 }

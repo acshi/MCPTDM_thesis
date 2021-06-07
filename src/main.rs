@@ -26,6 +26,7 @@ extern crate approx;
 
 mod arg_parameters;
 mod car;
+mod delayed_policy;
 mod forward_control;
 mod intelligent_driver;
 mod lane_change_policy;
@@ -67,7 +68,7 @@ impl State {
 
     fn update(&mut self, dt: f64) {
         if self.timestep % MPDM_INTERVAL == 0 {
-            let policy = mpdm_choose_policy(&self.params, self.road.sim_estimate(), 0);
+            let policy = mpdm_choose_policy(&self.params, self.road.sim_estimate());
 
             let old_policy_id = self.road.cars[0]
                 .side_policy
