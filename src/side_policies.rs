@@ -24,6 +24,6 @@ pub trait SidePolicyTrait {
     }
 
     fn choose_trajectory(&mut self, road: &Road, car_i: usize) -> Vec<Point2<f64>>;
-    fn policy_id(&self) -> u64;
+    fn policy_id(&self) -> u32;
     fn operating_policy(&self) -> SidePolicy;
 }

@@ -16,6 +16,8 @@ use road::{Road, LANE_WIDTH};
 use rvx::Rvx;
 use side_policies::SidePolicyTrait;
 
+use crate::eudm_dcp_tree::{dcp_tree_choose_policy, tree_choose_policy};
+
 #[allow(unused)]
 #[macro_use]
 extern crate fstrings;
@@ -27,12 +29,14 @@ extern crate approx;
 mod arg_parameters;
 mod car;
 mod delayed_policy;
+mod eudm_dcp_tree;
 mod forward_control;
 mod intelligent_driver;
 mod lane_change_policy;
 mod mpdm;
 mod pure_pursuit;
 mod rate_timer;
+mod reward;
 mod road;
 mod side_control;
 mod side_policies;
@@ -40,18 +44,37 @@ mod side_policies;
 #[macro_use]
 extern crate enum_dispatch;
 
-const DT: f64 = 0.02;
-const MPDM_INTERVAL: u32 = 5;
-
 const AHEAD_TIME_DEFAULT: f64 = 0.6;
 const LANE_CHANGE_TIME: f64 = 4.0;
 
 struct State {
     // rng: Rc<RefCell<StdRng>>,
-    params: Parameters,
+    params: Rc<Parameters>,
     road: Road,
+    traces: Vec<rvx::Shape>,
     r: Option<Rvx>,
     timestep: u32,
+}
+
+fn check_for_duplicate_shapes(shapes: &[rvx::Shape]) {
+    let mut ht = std::collections::HashMap::new();
+    for shape in shapes.iter() {
+        let entry = ht.entry(shape).or_insert(-1);
+        *entry += 1;
+    }
+    let duplicates = ht.iter().map(|(_k, v)| *v).sum::<i32>();
+    eprintln!(
+        "Traces has {} shapes and {} duplicates",
+        shapes.len(),
+        duplicates
+    );
+
+    let (most_common_shape, most_common_count) = ht.iter().max_by_key(|a| a.1).unwrap();
+    eprintln!(
+        "The most common shape with {} copies is {:?}",
+        *most_common_count + 1,
+        most_common_shape
+    );
 }
 
 impl State {
@@ -60,6 +83,7 @@ impl State {
             r.clear();
 
             self.road.draw(r);
+            r.draw_all(self.traces.iter().cloned());
 
             r.set_global_rot(-PI / 2.0);
             r.commit_changes();
@@ -67,8 +91,22 @@ impl State {
     }
 
     fn update(&mut self, dt: f64) {
-        if self.timestep % MPDM_INTERVAL == 0 {
-            let policy = mpdm_choose_policy(&self.params, self.road.sim_estimate());
+        let replan_interval = (self.params.replan_dt / self.params.physics_dt).round() as u32;
+
+        // let mut fake_sim_estimate = self.road.clone();
+        // fake_sim_estimate.debug = false;
+
+        if self.timestep % replan_interval == 0 {
+            let (policy, traces) = match self.params.method.as_str() {
+                "mpdm" => mpdm_choose_policy(&self.params, self.road.sim_estimate()),
+                "eudm" => dcp_tree_choose_policy(&self.params, self.road.sim_estimate()),
+                "tree" => tree_choose_policy(&self.params, self.road.sim_estimate()),
+                _ => panic!("invalid method '{}'", self.params.method),
+            };
+            self.traces = traces;
+            if false {
+                check_for_duplicate_shapes(&self.traces);
+            }
 
             let old_policy_id = self.road.cars[0]
                 .side_policy
@@ -96,12 +134,14 @@ fn run_with_parameters(
     n_scenarios: usize,
     n_scenarios_completed: Arc<Mutex<usize>>,
 ) {
+    let params = Rc::new(params);
+
     let mut full_seed = [0; 32];
     full_seed[0..8].copy_from_slice(&params.rng_seed.to_le_bytes());
 
     let rng = Rc::new(RefCell::new(StdRng::from_seed(full_seed)));
 
-    let mut road = Road::new();
+    let mut road = Road::new(params.clone());
     road.add_obstacle(100.0, 0);
 
     while road.cars.len() < params.n_cars {
@@ -113,24 +153,23 @@ fn run_with_parameters(
         r: None,
         timestep: 0,
         params,
+        traces: Vec::new(),
     };
 
     if use_graphics {
-        let mut r = Rvx::new("Self-Driving!", "0.0.0.0", 8000);
+        let mut r = Rvx::new("Self-Driving!", [0, 0, 0, 0], 8000);
         r.set_user_zoom(Some(0.4)); // 0.22
         std::thread::sleep(Duration::from_millis(500));
         r.set_user_zoom(None);
         state.r = Some(r);
     }
 
-    let mut rate = RateTimer::new(Duration::from_millis((DT * 1000.0 * 0.25) as u64));
+    let mut rate = RateTimer::new(Duration::from_millis(
+        (state.params.physics_dt * 1000.0 / state.params.graphics_speedup) as u64,
+    ));
 
-    for i in 0..state.params.max_steps {
-        if use_graphics {
-            eprint!("{}: ", i);
-        }
-
-        state.update(DT);
+    for _ in 0..state.params.max_steps {
+        state.update(state.params.physics_dt);
 
         if use_graphics {
             state.update_graphics();
@@ -144,10 +183,6 @@ fn run_with_parameters(
         //         );
         //     }
         // }
-    }
-
-    if use_graphics {
-        println!();
     }
 
     *n_scenarios_completed.lock().unwrap() += 1;

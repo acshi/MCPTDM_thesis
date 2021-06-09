@@ -104,9 +104,10 @@ impl Car {
                 AHEAD_TIME_DEFAULT,
             ))),
             side_policy: Some(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
+                lane_i as u32 * 3,
                 lane_i,
                 LANE_CHANGE_TIME,
-                None,
+                FOLLOW_TIME_DEFAULT,
             ))),
         }
     }
@@ -234,8 +235,9 @@ impl Car {
             r.draw(
                 Rvx::text(
                     &format!(
-                        "MPH: {:.1}\nFollow time: {:.1}\nx: {:.1}\n{}",
+                        "MPH: {:.1}\nPref MPH: {:.1}\nFollow time: {:.1}\nx: {:.1}\n{}",
                         self.vel * MPS_TO_MPH,
+                        self.preferred_vel * MPS_TO_MPH,
                         self.target_follow_time,
                         self.x,
                         if self.car_i == 0 {

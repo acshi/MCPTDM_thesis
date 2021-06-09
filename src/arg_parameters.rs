@@ -6,28 +6,77 @@ use serde::{Deserialize, Serialize};
 use crate::run_with_parameters;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EudmParameters {
+    pub dt: f64,
+    pub layer_t: f64,
+    pub search_depth: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TreeParameters {
+    pub dt: f64,
+    pub layer_t: f64,
+    pub search_depth: u32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MpdmParameters {
+    pub dt: f64,
+    pub forward_t: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RewardParameters {
+    pub efficiency_weight: f64,
+    pub safety_weight: f64,
+    pub smoothness_weight: f64,
+    pub safety_margin: f64,
+    pub discount: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Parameters {
     pub rng_seed: u64,
     pub run_fast: bool,
+    pub thread_limit: usize,
+    pub graphics_speedup: f64,
+
+    pub physics_dt: f64,
+    pub replan_dt: f64,
+
     pub max_steps: u32,
     pub n_cars: usize,
+    pub method: String,
 
-    pub thread_limit: usize,
+    pub reward: RewardParameters,
+    pub eudm: EudmParameters,
+    pub tree: TreeParameters,
+    pub mpdm: MpdmParameters,
+
     pub file_name: Option<String>,
 }
 
-impl Default for Parameters {
-    fn default() -> Self {
-        Parameters {
-            rng_seed: 0,
-            run_fast: false,
-            max_steps: 500,
-            n_cars: 40,
-            thread_limit: 1,
-            file_name: None,
-        }
+impl Parameters {
+    fn new() -> Result<Self, config::ConfigError> {
+        let mut s = config::Config::new();
+        s.merge(config::File::with_name("parameters"))?;
+        s.try_into()
     }
 }
+
+// impl Default for Parameters {
+//     fn default() -> Self {
+//         Parameters {
+//             rng_seed: 0,
+//             run_fast: false,
+//             max_steps: 500,
+//             n_cars: 40,
+//             eudm: Default::default(),
+//             thread_limit: 1,
+//             file_name: None,
+//         }
+//     }
+// }
 
 fn create_scenarios(
     base_params: &Parameters,
@@ -45,6 +94,7 @@ fn create_scenarios(
             "rng_seed" => params.rng_seed = value.parse().unwrap(),
             "run_fast" => params.run_fast = value.parse().unwrap(),
             "n_cars" => params.n_cars = value.parse().unwrap(),
+            "method" => params.method = value.parse().unwrap(),
             "max_steps" => params.max_steps = value.parse().unwrap(),
             "thread_limit" => params.thread_limit = value.parse().unwrap(),
             _ => panic!("{} is not a valid parameter!", name),
@@ -71,6 +121,8 @@ fn create_scenarios(
 }
 
 pub fn run_parallel_scenarios() {
+    let parameters_default = Parameters::new().unwrap();
+
     // let args = std::env::args().collect_vec();
     let mut name_value_pairs = Vec::<(String, Vec<String>)>::new();
     // let mut arg_i = 0;
@@ -84,7 +136,7 @@ pub fn run_parallel_scenarios() {
             eprintln!("Usage: (<param name> [param value]* ::)*");
             eprintln!("For example: uwb_limit 8 12 16 24 32 :: forward_sim_steps 1000 :: rng_seed 0 1 2 3 4");
             eprintln!("Valid parameters and their default values:");
-            let params_str = format!("{:?}", Parameters::default())
+            let params_str = format!("{:?}", parameters_default)
                 .replace(", file_name: None", "")
                 .replace(", ", "\n\t")
                 .replace("Parameters { ", "\t")
@@ -112,7 +164,7 @@ pub fn run_parallel_scenarios() {
     //     eprintln!("{}: {:?}", name, vals);
     // }
 
-    let mut base_scenario = Parameters::default();
+    let mut base_scenario = parameters_default;
     base_scenario.file_name = Some("".to_owned());
 
     let scenarios = create_scenarios(&base_scenario, &name_value_pairs);

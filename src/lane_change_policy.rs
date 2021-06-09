@@ -9,17 +9,26 @@ use crate::{
 const TRANSITION_DIST_MIN: f64 = 1.0 * PRIUS_LENGTH;
 const TRANSITION_DIST_MAX: f64 = 100.0 * PRIUS_LENGTH;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LaneChangePolicy {
+    policy_id: u32,
     target_lane_i: i32,
     transition_time: f64,
-    follow_time: Option<f64>,
+    follow_time: f64,
     start_xy: Option<(f64, f64)>,
 }
 
+impl std::fmt::Debug for LaneChangePolicy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "lane_i: {}, ", self.target_lane_i)?;
+        write!(f, "follow_t: {:.2?}", self.follow_time)
+    }
+}
+
 impl LaneChangePolicy {
-    pub fn new(target_lane_i: i32, transition_time: f64, follow_time: Option<f64>) -> Self {
+    pub fn new(policy_id: u32, target_lane_i: i32, transition_time: f64, follow_time: f64) -> Self {
         Self {
+            policy_id,
             target_lane_i,
             transition_time,
             follow_time,
@@ -29,9 +38,9 @@ impl LaneChangePolicy {
 }
 
 impl SidePolicyTrait for LaneChangePolicy {
-    fn choose_follow_time(&mut self, road: &crate::Road, car_i: usize) -> f64 {
+    fn choose_follow_time(&mut self, _road: &crate::Road, _car_i: usize) -> f64 {
         self.follow_time
-            .unwrap_or(road.cars[car_i].preferred_follow_time)
+        // .unwrap_or(road.cars[car_i].preferred_follow_time)
     }
 
     fn choose_trajectory(&mut self, road: &crate::Road, car_i: usize) -> Vec<Point2<f64>> {
@@ -61,15 +70,16 @@ impl SidePolicyTrait for LaneChangePolicy {
         ]
     }
 
-    fn policy_id(&self) -> u64 {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        self.target_lane_i.hash(&mut hasher);
-        self.transition_time.to_bits().hash(&mut hasher);
-        if let Some(follow_time) = self.follow_time {
-            follow_time.to_bits().hash(&mut hasher);
-        }
-        hasher.finish()
+    fn policy_id(&self) -> u32 {
+        self.policy_id
+        // use std::hash::{Hash, Hasher};
+        // let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        // self.target_lane_i.hash(&mut hasher);
+        // self.transition_time.to_bits().hash(&mut hasher);
+        // if let Some(follow_time) = self.follow_time {
+        //     follow_time.to_bits().hash(&mut hasher);
+        // }
+        // hasher.finish()
     }
 
     fn operating_policy(&self) -> SidePolicy {

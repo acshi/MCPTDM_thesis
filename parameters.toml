@@ -1,0 +1,32 @@
+rng_seed = 0
+run_fast = false
+graphics_speedup = 4
+thread_limit = 1
+
+physics_dt = 0.01
+replan_dt = 0.05
+
+max_steps = 500
+n_cars = 20
+method = "eudm"
+
+[reward]
+efficiency_weight = 1.0
+safety_weight = 1000.0
+smoothness_weight = 5.0
+safety_margin = 0.44 # bounded by lane width 3.7 - prius width 1.76 = 1.94
+discount = 0.85 # per second
+
+[eudm]
+dt = 0.05
+layer_t = 2.0
+search_depth = 4
+
+[tree]
+dt = 0.2
+layer_t = 2.667
+search_depth = 3
+
+[mpdm]
+dt = 0.2
+forward_t = 8.0

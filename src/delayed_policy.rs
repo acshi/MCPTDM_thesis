@@ -18,6 +18,7 @@ pub struct DelayedPolicy {
 impl std::fmt::Debug for DelayedPolicy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f)?;
+        writeln!(f, "policy_id: {:?}", self.policy_id())?;
         writeln!(f, "policy_a: {:?}", self.policy_a)?;
         writeln!(f, "policy_b: {:?}", self.policy_b)?;
         writeln!(f, "delay_time: {:.2?}", self.delay_time)?;
@@ -69,17 +70,26 @@ impl SidePolicyTrait for DelayedPolicy {
         }
     }
 
-    fn policy_id(&self) -> u64 {
-        use std::hash::{Hash, Hasher};
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    fn policy_id(&self) -> u32 {
+        let mut policy_id = 100;
         if self.has_switched {
-            self.policy_b.policy_id().hash(&mut hasher);
+            policy_id += 10 * self.policy_b.policy_id();
         } else {
-            self.policy_a.policy_id().hash(&mut hasher);
+            policy_id += 10 * self.policy_a.policy_id();
         }
-        self.policy_b.policy_id().hash(&mut hasher);
-        self.delay_time.to_bits().hash(&mut hasher);
-        hasher.finish()
+        policy_id += self.policy_b.policy_id();
+        policy_id
+
+        // use std::hash::{Hash, Hasher};
+        // let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        // if self.has_switched {
+        //     self.policy_b.policy_id().hash(&mut hasher);
+        // } else {
+        //     self.policy_a.policy_id().hash(&mut hasher);
+        // }
+        // self.policy_b.policy_id().hash(&mut hasher);
+        // self.delay_time.to_bits().hash(&mut hasher);
+        // hasher.finish()
     }
 
     fn operating_policy(&self) -> SidePolicy {

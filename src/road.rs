@@ -1,15 +1,17 @@
-use std::{cell::RefCell, f64::consts::PI, rc::Rc};
+use std::{cell::RefCell, f64::consts::PI, rc::Rc, u32};
 
 use itertools::Itertools;
+use nalgebra::Point3;
 use parry2d_f64::{
     math::Isometry,
+    na::point,
     query::{self, ClosestPoints},
     shape::Shape,
 };
 use rand::prelude::StdRng;
 use rvx::{Rvx, RvxColor};
 
-use crate::{car::PRIUS_WIDTH, side_control::SideControlTrait};
+use crate::{arg_parameters::Parameters, reward::Reward, side_control::SideControlTrait};
 use crate::{
     car::{MPH_TO_MPS, PRIUS_MAX_STEER},
     forward_control::ForwardControlTrait,
@@ -26,18 +28,15 @@ pub const ROAD_LENGTH: f64 = 500.0;
 
 pub const SIDE_MARGIN: f64 = 0.0;
 
-const EFFICIENCY_WEIGHT: f64 = 1.0;
-const SAFETY_WEIGHT: f64 = 1000.0;
-const SAFETY_MARGIN: f64 = LANE_WIDTH - PRIUS_WIDTH - 1.5;
-const SMOOTHNESS_WEIGHT: f64 = 2.0;
-
 #[derive(Clone, Debug)]
 pub struct Road {
+    pub params: Rc<Parameters>,
     pub t: f64,           // current time in seconds
     pub timesteps: usize, // current time in timesteps (related by DT)
     pub cars: Vec<Car>,
-    pub last_ego_policy_id: Option<u64>,
-    pub reward: f64,
+    pub last_ego_policy_id: Option<u32>,
+    pub reward: Reward,
+    pub car_traces: Option<Vec<Vec<(Point3<f64>, u32)>>>,
     pub debug: bool,
 }
 
@@ -49,14 +48,16 @@ fn range_dist(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> f64 {
 }
 
 impl Road {
-    pub fn new() -> Self {
+    pub fn new(params: Rc<Parameters>) -> Self {
         let mut road = Self {
+            params,
             t: 0.0,
             timesteps: 0,
             cars: vec![Car::new(0, 0)],
             last_ego_policy_id: None,
-            reward: 0.0,
+            reward: Reward::new(),
             debug: true,
+            car_traces: Some(Vec::new()),
         };
 
         road.cars[0].preferred_vel = 90.0 * MPH_TO_MPS;
@@ -281,10 +282,13 @@ impl Road {
     }
 
     fn min_unsafe_dist(&self, car_i: usize) -> Option<f64> {
+        let safety_margin = self.params.reward.safety_margin;
+
         let car = &self.cars[car_i];
 
         let mut min_dist = None;
-        let mut dist_thresh = car.length + SAFETY_WEIGHT;
+        let dist_thresh = 2.0 * car.length + safety_margin;
+        // let mut dist_thresh = car.length + self.params.reward.safety_weight;
 
         let pose = car.pose();
         let shape = car.shape();
@@ -309,7 +313,7 @@ impl Road {
                     other_aabb.maxs[1],
                 );
 
-                if side_sep <= SAFETY_MARGIN {
+                if side_sep <= safety_margin {
                     let longitidinal_sep = range_dist(
                         aabb.mins[0],
                         aabb.maxs[0],
@@ -317,14 +321,22 @@ impl Road {
                         other_aabb.maxs[0],
                     );
                     let dist = side_sep.max(longitidinal_sep);
-                    if dist < min_dist.unwrap_or(SAFETY_MARGIN) {
+                    if dist < min_dist.unwrap_or(safety_margin) {
+                        // if car_i == 0 {
+                        //     if (c.x - car.x).abs() >= 2.0 * car.length + safety_margin {
+                        //         eprintln_f!("{i}: c.x: {:.2}, car.x: {:.2}, car.length + safety_margin: {:.2} mins: {:.2?} maxs: {:.2?}, other mins: {:.2?} maxs: {:.2?}, {side_sep=:.2}, {dist=:.2}",
+                        //                     c.x, car.x, 2.0 * car.length + safety_margin,
+                        //                     aabb.mins.coords.as_slice(), aabb.maxs.coords.as_slice(), other_aabb.mins.coords.as_slice(), other_aabb.maxs.coords.as_slice());
+                        //         panic!();
+                        //     }
+                        // }
+
                         min_dist = Some(dist);
-                        dist_thresh = dist.hypot(SIDE_MARGIN + car.width / 2.0);
                     }
                 }
             } else {
                 // let mut ab = None;
-                match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), SAFETY_MARGIN) {
+                match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), safety_margin) {
                     Ok(ClosestPoints::WithinMargin(a, b)) => {
                         let dist = (a - b).magnitude();
                         if dist < min_dist.unwrap_or(f64::MAX) {
@@ -398,6 +410,17 @@ impl Road {
             }
         }
 
+        if let Some(traces) = self.car_traces.as_mut() {
+            traces.resize(self.cars.len(), Vec::new());
+
+            for (car_i, car) in self.cars.iter_mut().enumerate() {
+                if !car.crashed {
+                    let policy_id = car.side_policy.as_ref().unwrap().policy_id();
+                    traces[car_i].push((point!(car.x, car.y, car.theta), policy_id));
+                }
+            }
+        }
+
         // for car_i in 0..self.cars.len() {
         //     if !self.cars[car_i].crashed {
         //         if self.collides_any(car_i) {
@@ -420,21 +443,28 @@ impl Road {
     }
 
     fn update_reward(&mut self, dt: f64) {
+        let rparams = &self.params.reward;
         let ecar = &self.cars[0];
-        self.reward += EFFICIENCY_WEIGHT * (ecar.preferred_vel - ecar.vel).abs() * dt;
+        self.reward.efficiency += rparams.efficiency_weight
+            * (ecar.preferred_vel - ecar.vel).abs()
+            * dt
+            * self.reward.discount;
 
         let min_dist = self.min_unsafe_dist(0);
         if min_dist.is_some() {
-            self.reward += SAFETY_WEIGHT * dt;
+            self.reward.safety += rparams.safety_weight * dt * self.reward.discount;
             // eprintln!("UNSAFE: {:.2}", min_dist.unwrap());
         }
 
         let policy_id = ecar.side_policy.as_ref().unwrap().policy_id();
         if let Some(last_policy_id) = self.last_ego_policy_id {
             if policy_id != last_policy_id {
-                self.reward += SMOOTHNESS_WEIGHT;
+                self.reward.smoothness += rparams.smoothness_weight * self.reward.discount;
                 if self.debug {
-                    eprintln_f!("policy change from {last_policy_id} to {policy_id}");
+                    eprintln_f!(
+                        "{}: policy change from {last_policy_id} to {policy_id}",
+                        self.timesteps
+                    );
                     eprintln!("New policy:\n{:?}", ecar.side_policy.as_ref().unwrap());
                 }
             }
@@ -443,7 +473,7 @@ impl Road {
     }
 
     pub fn final_reward(&self) -> f64 {
-        self.reward / self.t
+        self.reward.total() / self.t
     }
 
     pub fn draw(&self, r: &mut Rvx) {
@@ -495,5 +525,59 @@ impl Road {
                 car.draw(r, RvxColor::BLUE.set_a(0.6));
             }
         }
+    }
+
+    pub fn make_traces(&self, include_obstacle_cars: bool) -> Vec<rvx::Shape> {
+        let mut shapes = Vec::new();
+
+        if self.car_traces.is_none() {
+            return shapes;
+        }
+
+        let traces: &Vec<Vec<(Point3<f64>, u32)>> = self.car_traces.as_ref().unwrap();
+        for (car_i, trace) in traces.iter().enumerate() {
+            if trace.is_empty() {
+                continue;
+            }
+
+            let points = trace
+                .iter()
+                .flat_map(|(p, _)| &p.coords.as_slice()[0..2])
+                .copied()
+                .collect_vec();
+            if car_i == 0 {
+                // eprintln!("Points in trace: {}", trace.len());
+                shapes.push(Rvx::lines(&points, 4.0).color(RvxColor::GREEN.set_a(0.8)));
+                shapes.push(Rvx::array(
+                    Rvx::circle().scale(0.2).color(RvxColor::BLACK.set_a(0.8)),
+                    &points,
+                ));
+
+                // label the points with the policy_id active at that point in time
+                // for (xyt, policy_id) in trace.iter() {
+                //     shapes.push(
+                //         Rvx::text(&format!("{}", policy_id), "Arial", 30.0)
+                //             .rot(-PI / 2.0)
+                //             .translate(&[xyt.x, xyt.y])
+                //             .color(RvxColor::BLACK),
+                //     );
+                // }
+            } else if include_obstacle_cars {
+                shapes.push(Rvx::lines(&points, 4.0).color(RvxColor::WHITE.set_a(0.5)));
+            }
+
+            // let draw_trace = trace[1];
+            // let mut draw_car = Car::new(car_i, 0);
+            // draw_car.x = draw_trace.x;
+            // draw_car.y = draw_trace.y;
+            // draw_car.theta = draw_trace.z;
+            // if car_i == 0 {
+            //     draw_car.draw(r, RvxColor::GREEN.set_a(0.5));
+            // } else {
+            //     draw_car.draw(r, RvxColor::DARK_GRAY.set_a(0.5));
+            // }
+        }
+
+        shapes
     }
 }

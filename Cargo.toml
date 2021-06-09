@@ -8,17 +8,19 @@ edition = "2018"
 
 [dependencies]
 rvx = { path = "../rvx" }
-rand = "0.8"
-parry2d-f64 = "0.5"
-enum_dispatch = "0.3.3"
+rand = "0.8.3"
+parry2d-f64 = "0.5.1"
+enum_dispatch = "0.3.7"
 fstrings = "0.2.3"
 approx = "0.5.0"
 serde = "1.0.126"
 rayon = "1.5.1"
 itertools = "0.10.0"
+config = "0.11.0"
+nalgebra = "0.27.1"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.3.4"
 
 [[bench]]
 name = "benchmark"

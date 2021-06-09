@@ -25,9 +25,9 @@ https://thomasfermi.github.io/Algorithms-for-Automated-Driving/Control/PurePursu
 Tasks:
 Overall for this week: Have a preliminary quantitative comparison between classic MPDM, "naive" EUDM, and a POMCP-inspired search.
 
-My EUDM right now isn't actually a tree search! It is redoing the simulation work for the early seconds WAY TOO MUCH!
+We should be able to display traces for the entire tree search! Very useful for debugging and understanding. Then do that for the eudm and mpdm styles, too.
 
-Right now, if we are part-way through executing the current action, and then decide to switch to a new action, we will reset that waiting period. Actually I think we reset it for the simulation even when we don't switch policies!!! I think EUDM proper keeps this all synchronized?
+Right now, if we are part-way through executing the current action, and then decide to switch to a new action, we will reset that waiting period. Actually I think we reset it for the simulation even when we don't switch policies!!! I think EUDM proper keeps this all synchronized? NO! it doesn't! I don't think???
 
 Reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Online they use 0.2 seconds timesteps, tree depth 5 and 1-second actions).
 
