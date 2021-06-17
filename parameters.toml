@@ -17,18 +17,18 @@ super_debug = false
 only_crashes_with_ego = true
 obstacles_only_for_ego = true
 true_belief_sample_only = false
-debugging_scenario = 3
+# debugging_scenario = 3
 
 [cost]
 efficiency_weight = 1.0
 safety_weight = 500.0
 smoothness_weight = 15.0
 uncomfortable_dec_weight = 5.0
-curvature_change_weight = 10.0
+curvature_change_weight = 5.0
 safety_margin = 0.44 # bounded by lane width 3.7 - prius width 1.76 = 1.94
 uncomfortable_dec = 1.6
 large_curvature_change = 0.12
-discount = 1.0 # per second, 0.85
+discount_factor = 0.85 # per second, 0.85
 
 [tree]
 dt = 0.2

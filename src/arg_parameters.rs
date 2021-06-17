@@ -60,7 +60,7 @@ pub struct CostParameters {
     pub safety_margin: f64,
     pub uncomfortable_dec: f64,
     pub large_curvature_change: f64,
-    pub discount: f64,
+    pub discount_factor: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -119,7 +119,7 @@ fn create_scenarios(
             "method" => params.method = value.parse().unwrap(),
             "max_steps" => params.max_steps = value.parse().unwrap(),
             "n_cars" => params.n_cars = value.parse().unwrap(),
-            "discount" => params.cost.discount = value.parse().unwrap(),
+            "discount_factor" => params.cost.discount_factor = value.parse().unwrap(),
             "rng_seed" => params.rng_seed = value.parse().unwrap(),
             "run_fast" => params.run_fast = value.parse().unwrap(),
             "thread_limit" => params.thread_limit = value.parse().unwrap(),
@@ -141,7 +141,7 @@ fn create_scenarios(
 
     for s in scenarios.iter_mut() {
         s.scenario_name = Some(format_f!(
-            "_method_{s.method}_max_steps_{s.max_steps}_n_cars_{s.n_cars}_discount_{s.cost.discount}_rng_seed_{s.rng_seed}_"
+            "_method_{s.method}_max_steps_{s.max_steps}_n_cars_{s.n_cars}_discount_factor_{s.cost.discount_factor}_rng_seed_{s.rng_seed}_"
         ));
     }
 

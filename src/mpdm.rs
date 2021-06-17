@@ -97,6 +97,9 @@ pub fn mpdm_choose_policy(
         // if roads.timesteps() >= 80 && i != 0 {
         //     continue;
         // }
+        // if i == 0 || i == 3 {
+        //     continue;
+        // }
 
         let (cost, mut new_traces) = evaluate_policy(params, &roads, &policy);
         traces.append(&mut new_traces);

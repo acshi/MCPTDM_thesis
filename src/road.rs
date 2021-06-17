@@ -127,7 +127,7 @@ impl Road {
         // but make sure we don't give ourselves a bad estimate of the ego car!!!
         road.cars[0] = self.cars[0].clone();
         road.debug = false;
-        road.cost.discount = self.params.cost.discount;
+        road.cost.discount_factor = self.params.cost.discount_factor;
         road
     }
 

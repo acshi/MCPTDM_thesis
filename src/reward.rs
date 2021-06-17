@@ -19,6 +19,6 @@ impl std::fmt::Display for Reward {
 impl std::fmt::Debug for Reward {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = self;
-        write_f!(f, "avg_vel: {s.avg_vel:5.2}, safety: {s.safety:5.3}, uncomfortable_dec: {s.uncomfortable_dec:5.3}, curvature_change: {s.curvature_change:5.3}")
+        write_f!(f, "avg_vel: {s.avg_vel:5.2}, safety: {s.safety:5.3}, ud: {s.uncomfortable_dec:5.3}, cc: {s.curvature_change:5.3}")
     }
 }

@@ -35,10 +35,10 @@ https://thomasfermi.github.io/Algorithms-for-Automated-Driving/Control/PurePursu
 Questions for Ed:
 It seems like my random obstacle car policy-changes are causing the ego vehicle to sometimes be in an impossible situation. Another vehicle can crash into it without it having a chance to escape!!! Partially this might be because I allow the other vehicle to maybe have better acceleration. What parameters should I randomize for the obstacle vehicles and how? Should the ego always be top-performing?
 
+My policies carry some state. Some of which gets reset when you switch to that policy. So that means you could switch to the policy... that you are already on, and this would give different behavior. Either we embrace this, and treat it as a different policy choice, or we maybe find some way to avoid having that state? How does this work for lane changes or for "maintaining" speed? (maintaining _which_ speed!!)
+
 Tasks:
 Overall for this week: Implement CFB; fix bugs to get "mostly reasonable" behavior with all the methods
-
-Report same overall reward metrics as the EUDM paper, _separate_ from the optimization cost function.. For example, no discount is applied to these overall rewards.
 
 Implement open-loop simulation of agents for either EUDM CFB, or for vehicles far enough away from the ego vehicle.
 
@@ -57,6 +57,7 @@ POMCP proper? (maybe cut it)
 MAYBE SKIP: We need _something_ to improve our belief or we will be too scared of trying to pass vehicles... Something bayesian should be simple and work just fine with the forward simulator? Since we have so few possible policies? I guess the difficulty is the joint nature of the situation, though? Then there is also the different between our belief about their _current_ state, and our belief about their _future_ state. Vehicle X is definitely lane-keeping right now.... but it could start a lane-change soon...? I guess we would need to define a belief space capable of handling that future uncertainty? I think the POMCP simulator would expect that the forward simulations would include things like that as it goes simulating. MAYBE, the obstacle-vehicle versions of the policies, modified to be nicer, will make this an entirely moot point. That would be simpler, so let's go with that!!!
 
 Finished tasks:
+Report same overall reward metrics as the EUDM paper, _separate_ from the optimization cost function.. For example, no discount is applied to these overall rewards.
 We need it to be possible to stop behind a vehicle and then still turn when it is safe to do so. Maybe we just need the intelligent driver model to only look at the target lane?
 We need obstacle vehicles to be a _little_ nicer about when they change lanes, or we _will_ end up getting hit by vehicles willy-nilly! (We can make them perform the lane-change more slowly and also check there is nothing too close in the lane we want to change into)
 Read that related paper from Max.
