@@ -1,0 +1,3 @@
+# Use lld (llvm) linker to boost link time!
+[build]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]

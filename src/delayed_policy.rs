@@ -50,6 +50,16 @@ impl DelayedPolicy {
 }
 
 impl SidePolicyTrait for DelayedPolicy {
+    fn choose_target_lane(&mut self, road: &Road, car_i: usize) -> i32 {
+        self.check_for_switch(road);
+
+        if self.has_switched {
+            self.policy_b.choose_target_lane(road, car_i)
+        } else {
+            self.policy_a.choose_target_lane(road, car_i)
+        }
+    }
+
     fn choose_trajectory(&mut self, road: &Road, car_i: usize) -> Vec<Point2<f64>> {
         self.check_for_switch(road);
 

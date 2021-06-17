@@ -14,27 +14,49 @@ impl ForwardControlTrait for IntelligentDriverPolicy {
     fn choose_accel(&mut self, road: &Road, car_i: usize) -> f64 {
         let car = &road.cars[car_i];
 
-        let accel_free_road = car.preferred_accel * (1.0 - (car.vel / car.preferred_vel).powi(4));
+        let accel_free_road = if car.target_vel == 0.0 {
+            if car.vel > 0.0 {
+                -BREAKING_ACCEL
+            } else {
+                0.0
+            }
+        } else {
+            car.preferred_accel * (1.0 - (car.vel / car.target_vel).powi(4))
+        };
+
+        assert!(
+            accel_free_road.is_finite(),
+            "Bad accel_free_road: {}, w/ vel {:.2}, target_vel: {:.2}",
+            accel_free_road,
+            car.vel,
+            car.target_vel,
+        );
 
         let accel;
-        if let Some((forward_dist, c_i)) = road.dist_clear_ahead(car_i) {
+        if let Some((forward_dist, c_i)) = road.dist_clear_ahead_in_lane(car_i, car.target_lane_i) {
             let approaching_rate = car.vel - road.cars[c_i].vel;
 
-            let spacing_term = car.follow_dist()
-                + car.vel * approaching_rate / (2.0 * (car.preferred_accel * BREAKING_ACCEL));
+            let follow_dist = car.follow_dist();
+            let spacing_term = follow_dist
+                + car.vel * approaching_rate
+                    / (2.0 * (car.preferred_accel * BREAKING_ACCEL).sqrt());
             let accel_interaction = car.preferred_accel * (-(spacing_term / forward_dist).powi(2));
 
             accel = accel_free_road + accel_interaction;
 
-            // if car_i == 6 {
-            //     eprintln_f!("vel = {:.2}, {approaching_rate=:.2}, {spacing_term=:.2}, {accel_free_road=:.2}, {accel_interaction=:.2}", car.vel);
-            // }
+            if road.super_debug() && car.is_ego() {
+                eprintln_f!("{road.timesteps}: {car_i=}, {c_i=}, lane_i = {car.target_lane_i}, {forward_dist=:.2}, {follow_dist=:.2}, vel = {car.vel:.2}, {approaching_rate=:.2}, {spacing_term=:.2}, {accel_free_road=:.2}, {accel_interaction=:.2}");
+            } else if road.super_debug() && c_i == 0 && road.params.debug_car_i == Some(car_i) {
+                eprintln_f!("{road.timesteps}: {car_i=}, {c_i=}, lane_i = {car.target_lane_i}, {forward_dist=:.2}, {follow_dist=:.2}, vel = {car.vel:.2}, {approaching_rate=:.2}, {spacing_term=:.2}, {accel_free_road=:.2}, {accel_interaction=:.2}");
+            }
         } else {
             accel = accel_free_road;
 
-            // if car_i == 0 {
-            //     eprintln_f!("{accel_free_road=:.2}");
-            // }
+            if road.super_debug() && car.is_ego() {
+                eprintln_f!(
+                    "{road.timesteps}: {car_i=}, lane_i = {car.target_lane_i}, vel = {car.vel:.2}, {accel_free_road=:6.2}, {car.target_vel=:.2}"
+                );
+            }
         }
 
         accel

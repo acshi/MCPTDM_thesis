@@ -1,32 +1,57 @@
-rng_seed = 0
-run_fast = false
-graphics_speedup = 4
-thread_limit = 1
-
-physics_dt = 0.01
-replan_dt = 0.05
-
-max_steps = 500
+max_steps = 2000
 n_cars = 20
 method = "eudm"
 
-[reward]
-efficiency_weight = 1.0
-safety_weight = 1000.0
-smoothness_weight = 5.0
-safety_margin = 0.44 # bounded by lane width 3.7 - prius width 1.76 = 1.94
-discount = 0.85 # per second
+physics_dt = 0.01
+replan_dt = 0.05
+nonego_policy_change_prob = 0.05
+nonego_policy_change_dt = 0.2
 
-[eudm]
-dt = 0.05
-layer_t = 2.0
-search_depth = 4
+thread_limit = 7
+rng_seed = 0
+run_fast = false
+graphics_speedup = 4
+debug_car_i = 2
+debug_steps_before = 20
+super_debug = false
+only_crashes_with_ego = true
+obstacles_only_for_ego = true
+true_belief_sample_only = false
+debugging_scenario = 3
+
+[cost]
+efficiency_weight = 1.0
+safety_weight = 500.0
+smoothness_weight = 15.0
+uncomfortable_dec_weight = 5.0
+curvature_change_weight = 10.0
+safety_margin = 0.44 # bounded by lane width 3.7 - prius width 1.76 = 1.94
+uncomfortable_dec = 1.6
+large_curvature_change = 0.12
+discount = 1.0 # per second, 0.85
 
 [tree]
 dt = 0.2
 layer_t = 2.667
 search_depth = 3
+samples_n = 8
 
 [mpdm]
 dt = 0.2
 forward_t = 8.0
+samples_n = 16
+
+[eudm]
+dt = 0.2
+layer_t = 2.0
+samples_n = 8
+search_depth = 5
+
+[mcts]
+dt = 0.2
+layer_t = 2.0
+search_depth = 4
+samples_n = 32
+prefer_same_policy = true
+choose_random_policy = true
+ucb_const = -1000.0

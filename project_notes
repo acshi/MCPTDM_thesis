@@ -9,6 +9,16 @@ This paper considers both a double merge and also a "ring" scenario, and makes d
 What do we want to do from this: There are a lot of components they use (their vehicle models, trajectory generation), that may be useful to start from? This needs more investigation. I like the DCP-Tree idea, as a very simple MPDM extension, and would love to take that. CFB is a nice heuristic, that could maybe be modified? Or made more justified in some way?
 
 Safe Trajectory Generation for Complex Urban Environments Using Spatio-Temporal Semantic Corridor
+...
+
+Combining Neural Networks and Tree Search for Task and Motion Planning in Challenging Environments
+This paper considers an urban driving situation with an all-way stop intersection, and 0-5 other vehicles. The car has to get to the intersection, wait for its turn to cross, cross safely, and then get back up to speed. There may be a stopped vehicle on the road that it has to get around. The obstacle vehicles follow a simple and agressive policy: they maintain a 6-meter follow distance, they accelerate at 1m/s^2 and brake at 2m/s^2, they will stop at the intersection and wait their turn, they otherwise try to maintain the 25mph speed limit. They don't change lanes. The ego vehicle is controlled by a "multi-level policy", with both low-level control policies and high-level "option" policies. Both of these are learned through reinforcement learning, by simulating examples for the deep learning (not that deep, only one hidden layer) to learn from. The cost function is complicated and not completely specified in the paper, and includes the current state, bonuses for completing goals, and penalities for violating constraints. It penalizes acceleration and steering angle rate and their derivatives (like jerk), and lateral acceleration as well. It includes penalties for being off from the reference speed (which I suppose changes when the vehicle is supposed to stop at the intersection) as well as offset from the center of the road. They use an l2 norm of weighted costs. The paper uses "Linear Temporal Logic" (LTL) to specify the rules of successfully completing goals. Violating these LTL rules or having a collision both result in a terminal condition with a penalty. Learning is done with a vector of derived features for the ego vehicle and a smaller set for all the nearby/relevant vehicles. A variety of boolean predicates from the LTL are also included as features. They use MCTS to actually choose the next option policy, but augment it by using the expected value of policies from the deep q-learning network to guide the search, instead of the more typical UCB-style. They also use "Progressive Widening" which limits the maximum number of children of a given node, and apparently helps with MCTS in large spaces.
+
+Monte Carlo Tree Search in Continuous Action Spaces with Execution Uncertainty
+This paper considers the game of Curling, which has similaries to Bocci Ball, but is played in the Winter Olympics. It uses MCTS in a continuous action space, and proposes Kernel Regression Upper Confidence Bound for Trees (KR-UCT), a modification of the classic MCTS with UCB (i.e. UCT) algorithm. The principal idea is that like in a discrete space, we start off with a set of possible actions. When we choose which action to take in refining the tree, we use kernel regression to estimate the value of each action. So, a kernel function is selected that provides a similarity metric between two actions, and the whole set of actions is used to evaluate the value of each, using that kernel-weighted mean. Progressive Widening is also employed in a modified way. Normal progressive widening (also called unpruning) starts with a limited set of actions that can be taken, but over time as more samples are taken of a given node, new actions are progressively added to that node. In KR-UCT, new actions are added when specified by progressive widening, but because of the continuous action space, they are chosen to be (approximately) the action with the highest kernel-estimated value and the lowest kernel density -- essentially meaning that if all continuous actions where included, this is the action that would be chosen by the UCT-like selection algorithm. Finally, for selecting the final action to take once searching is complete, the lower confidence bound (LCB) is used, essentially choosing the action that we are most confident will not do poorly, (a sort of opposite of the UCB idea).
+
+Monte-Carlo Planning in Large POMDPs (POMCP)
+The idea of POMCP is to use MCTS to solve a black-box POMDP. It builds the search tree by branching on _both_ actions and observations, and so the partially-observableness of the problem ends up taking effect by yielding different observations. It maintains the belief state as an unweighted particle filter. It must be unweighted because it has no way of knowing what the probabilities associated with anything are, exactly, since the POMDP is black-box. However, with enough particles you get the right distribution anyways. Simulations are performed following UCT, just with the slightly different tree structure branching on actions and observations. After choosing the best action, we get a corresponding true observation from the environment. Now our new belief state is derived from all the simulations we performed that ended up agreeing with both the action we took and the observation that occurred, one particle per consistent simulation. Particle reinvigoration (presumably by adding artificial noise) is also used to make sure we maintain diversity and enough particles. They inserted domain knowledge through the use of "preferred actions." When present, preferred actions where inserted into the tree with an initial value equal to the highest empirical value from a set of test runs, and with N=10 already, and furthermore, roll-outs beyond the end of the search tree proper where limited to preferred actions only. Without the preferred actions, those roll-outs would have been chosen uniformly. Importantly, after taking an action, POMCP does not start from an empty tree and the current state, but continues from the pruned version of the tree that is consistent with the action it took and the observation it received.
 
 Advice from Ed:
 Each of May's policies includes both lateral and longitudinal control, so that they are coupled. We want to avoid a situation in which we choose a trajectory and only thereafter choose velocities for it, which might be an impossible task. We want to let MPDM do most of the heavy work in chooseing velocity. So maybe we bundle our laternal and longitudal policies into one combined policy for MPDM to choose. Perhaps we always use the intelligen driver model, but we allow the policy to choose the parameters for it: desired follow time and desired velocity.... maybe just desired follow time? (if efficiency means how close we are to the target velocity, then changing that by itself might not do anything if we are in traffic.)
@@ -22,19 +32,44 @@ https://www.ri.cmu.edu/pub_files/2009/2/Automatic_Steering_Methods_for_Autonomou
 https://dingyan89.medium.com/three-methods-of-vehicle-lateral-control-pure-pursuit-stanley-and-mpc-db8cc1d32081
 https://thomasfermi.github.io/Algorithms-for-Automated-Driving/Control/PurePursuit.html
 
+Questions for Ed:
+It seems like my random obstacle car policy-changes are causing the ego vehicle to sometimes be in an impossible situation. Another vehicle can crash into it without it having a chance to escape!!! Partially this might be because I allow the other vehicle to maybe have better acceleration. What parameters should I randomize for the obstacle vehicles and how? Should the ego always be top-performing?
+
 Tasks:
-Overall for this week: Have a preliminary quantitative comparison between classic MPDM, "naive" EUDM, and a POMCP-inspired search.
+Overall for this week: Implement CFB; fix bugs to get "mostly reasonable" behavior with all the methods
 
-We should be able to display traces for the entire tree search! Very useful for debugging and understanding. Then do that for the eudm and mpdm styles, too.
-
-Right now, if we are part-way through executing the current action, and then decide to switch to a new action, we will reset that waiting period. Actually I think we reset it for the simulation even when we don't switch policies!!! I think EUDM proper keeps this all synchronized? NO! it doesn't! I don't think???
-
-Reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Online they use 0.2 seconds timesteps, tree depth 5 and 1-second actions).
+Report same overall reward metrics as the EUDM paper, _separate_ from the optimization cost function.. For example, no discount is applied to these overall rewards.
 
 Implement open-loop simulation of agents for either EUDM CFB, or for vehicles far enough away from the ego vehicle.
 
+Implement the rest of CFB
+
+Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
+
+A new idea: improve MCTS with progressive widening (I guess just adding new leaf nodes with different belief samples?) Or even a KR-UCT like approach that take advantage of the fact that policies with different longitudinal choices are more similar than ones with different lateral choices? Or even extend to continuous space with KR-UCT? Or use KR-UCT to make POMCP work?
+
+A new idea: a machine-learning approach that choose which paths of the tree to search?
+
+Belief estimation? Skip it to save time? Just give each the same belief? That's fair!
+
+POMCP proper? (maybe cut it)
+
+MAYBE SKIP: We need _something_ to improve our belief or we will be too scared of trying to pass vehicles... Something bayesian should be simple and work just fine with the forward simulator? Since we have so few possible policies? I guess the difficulty is the joint nature of the situation, though? Then there is also the different between our belief about their _current_ state, and our belief about their _future_ state. Vehicle X is definitely lane-keeping right now.... but it could start a lane-change soon...? I guess we would need to define a belief space capable of handling that future uncertainty? I think the POMCP simulator would expect that the forward simulations would include things like that as it goes simulating. MAYBE, the obstacle-vehicle versions of the policies, modified to be nicer, will make this an entirely moot point. That would be simpler, so let's go with that!!!
 
 Finished tasks:
+We need it to be possible to stop behind a vehicle and then still turn when it is safe to do so. Maybe we just need the intelligent driver model to only look at the target lane?
+We need obstacle vehicles to be a _little_ nicer about when they change lanes, or we _will_ end up getting hit by vehicles willy-nilly! (We can make them perform the lane-change more slowly and also check there is nothing too close in the lane we want to change into)
+Read that related paper from Max.
+Proper accleration/deceleration policies, right now, we stay in an acceleration policy, and then that ineherently doesn't keep accelerating over time. Right now eudm does fine by being smart enough to switch in and out of acceleration policies, to ratchet up its speed. OOps!!!
+Have a preliminary quantitative comparison between classic MPDM, "naive" EUDM, and a POMCP-inspired search.
+Only tree is using the discount!!! Add for eudm and mpdm and mcts.
+MCTS
+Perform multiple trials, given we will have differently sampled states.
+Sample belief state to intialize obstacle agent policies, instead of letting them be known correct!
+Start maintaining a belief about what the other agents' policies might be. (Currently, the ego agent magically knows the policies, but not other info like desired velocity, etc...)
+Make an evaluation setup and graph comparing the methods I have now and their rewards! Something super simple!
+Obstacle vehicles need to be able to change policies/lanes. The easiest way to incorporate something like this is for the obstacle vehicles to be unable to crash with anything but the ego vehicle.
+We should be able to display traces for the entire tree search! Very useful for debugging and understanding. Then do that for the eudm and mpdm styles, too.
 EUDM-style tree search
 ADD barrier to force merge!!!
 Get basic MPDM running: lane change in any valid direction or lane keep.

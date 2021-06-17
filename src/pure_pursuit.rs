@@ -1,7 +1,7 @@
 use parry2d_f64::{math::Isometry, na::Point2, shape::Ball};
 use rvx::{Rvx, RvxColor};
 
-use crate::{car::PRIUS_LENGTH, side_control::SideControlTrait, Road, LANE_WIDTH};
+use crate::{car::PRIUS_LENGTH, road::LANE_WIDTH, side_control::SideControlTrait, Road};
 use itertools::Itertools;
 
 const AHEAD_DIST_MIN: f64 = LANE_WIDTH + PRIUS_LENGTH * 0.2;

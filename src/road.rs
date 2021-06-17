@@ -1,7 +1,7 @@
 use std::{cell::RefCell, f64::consts::PI, rc::Rc, u32};
 
 use itertools::Itertools;
-use nalgebra::Point3;
+use nalgebra::{vector, Point3};
 use parry2d_f64::{
     math::Isometry,
     na::point,
@@ -11,11 +11,16 @@ use parry2d_f64::{
 use rand::prelude::StdRng;
 use rvx::{Rvx, RvxColor};
 
-use crate::{arg_parameters::Parameters, reward::Reward, side_control::SideControlTrait};
 use crate::{
-    car::{MPH_TO_MPS, PRIUS_MAX_STEER},
-    forward_control::ForwardControlTrait,
+    arg_parameters::Parameters,
+    belief::Belief,
+    car::SPEED_DEFAULT,
+    cost::Cost,
+    mpdm::{make_obstacle_vehicle_policy_choices, make_policy_choices},
+    side_control::SideControlTrait,
+    side_policies::SidePolicy,
 };
+use crate::{car::PRIUS_MAX_STEER, forward_control::ForwardControlTrait};
 
 use crate::side_policies::SidePolicyTrait;
 
@@ -28,14 +33,16 @@ pub const ROAD_LENGTH: f64 = 500.0;
 
 pub const SIDE_MARGIN: f64 = 0.0;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Road {
     pub params: Rc<Parameters>,
     pub t: f64,           // current time in seconds
     pub timesteps: usize, // current time in timesteps (related by DT)
     pub cars: Vec<Car>,
-    pub last_ego_policy_id: Option<u32>,
-    pub reward: Reward,
+    pub belief: Option<Rc<Belief>>,
+    pub last_ego: Car,
+    pub cost: Cost,
+    pub ego_is_safe: bool,
     pub car_traces: Option<Vec<Vec<(Point3<f64>, u32)>>>,
     pub debug: bool,
 }
@@ -49,20 +56,25 @@ fn range_dist(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> f64 {
 
 impl Road {
     pub fn new(params: Rc<Parameters>) -> Self {
+        let ego_car = Car::new(0, 0);
+
         let mut road = Self {
-            params,
             t: 0.0,
             timesteps: 0,
-            cars: vec![Car::new(0, 0)],
-            last_ego_policy_id: None,
-            reward: Reward::new(),
-            debug: true,
+            last_ego: ego_car.clone(),
+            cars: vec![ego_car],
+            belief: None,
+            cost: Cost::new(1.0),
+            ego_is_safe: true,
+            debug: !params.run_fast,
             car_traces: Some(Vec::new()),
+            params,
         };
 
-        road.cars[0].preferred_vel = 90.0 * MPH_TO_MPS;
+        road.cars[0].preferred_vel = SPEED_DEFAULT;
         road.cars[0].theta = PI / 16.0;
-        road.cars[0].y = -LANE_WIDTH / 2.0 + 0.5;
+        road.cars[0].y = Road::get_lane_y(0);
+        // road.cars[0].side_policy = Some(make_policy_choices()[4].clone());
 
         road
     }
@@ -95,7 +107,7 @@ impl Road {
     pub fn add_obstacle(&mut self, x: f64, lane_i: i32) {
         let mut car = Car::new(self.cars.len(), lane_i);
         car.x = x;
-        car.y += LANE_WIDTH / 2.0;
+        car.y += LANE_WIDTH / 4.0;
         car.theta = PI / 2.0;
         car.vel = 0.0;
         car.preferred_vel = 0.0;
@@ -104,11 +116,99 @@ impl Road {
         self.cars.push(car);
     }
 
+    pub fn init_belief(&mut self) {
+        let n_policies = make_policy_choices().len();
+        self.belief = Some(Rc::new(Belief::uniform(self.cars.len(), n_policies)));
+    }
+
     pub fn sim_estimate(&self) -> Self {
         let mut road = self.clone();
         road.cars = self.cars.iter().map(|c| c.sim_estimate()).collect();
+        // but make sure we don't give ourselves a bad estimate of the ego car!!!
+        road.cars[0] = self.cars[0].clone();
         road.debug = false;
+        road.cost.discount = self.params.cost.discount;
         road
+    }
+
+    pub fn sample_belief(&self, rng: &mut StdRng) -> Self {
+        let belief = self.belief.clone().unwrap();
+        let policies = make_obstacle_vehicle_policy_choices();
+
+        let mut road = self.sim_estimate();
+
+        let sample = belief.sample(rng);
+
+        // sample policies from the belief state
+        for (car_i, car) in road.cars.iter_mut().enumerate().skip(1) {
+            car.side_policy = Some(policies[sample[car_i]].clone());
+        }
+
+        road
+    }
+
+    pub fn ego_policy(&self) -> &SidePolicy {
+        self.cars[0].side_policy.as_ref().unwrap()
+    }
+
+    pub fn set_ego_policy(&mut self, policy: SidePolicy) {
+        self.cars[0].side_policy = Some(policy);
+    }
+
+    pub fn take_update_steps(&mut self, t: f64, dt: f64) {
+        // For example, w/ t = 1.0, dt = 0.4 we get steps [0.2, 0.4, 0.4]
+        let n_full_steps = (t / dt).floor() as i32;
+        let remaining = t - dt * n_full_steps as f64;
+        if remaining > 1e-6 {
+            self.update(remaining);
+        }
+        for _ in 0..n_full_steps {
+            self.update(dt);
+        }
+    }
+
+    pub fn super_debug(&self) -> bool {
+        self.debug
+            && self.params.super_debug
+            && self.timesteps + self.params.debug_steps_before >= self.params.max_steps as usize
+    }
+
+    pub fn lane_definitely_clear_between(
+        &self,
+        skip_car_i: usize,
+        lane_i: i32,
+        low_x: f64,
+        high_x: f64,
+    ) -> bool {
+        assert!(low_x < high_x);
+        for c in self.cars.iter() {
+            if c.car_i == skip_car_i {
+                continue;
+            }
+            if c.x + c.length / 2.0 < low_x || c.x - c.length / 2.0 > high_x {
+                continue;
+            }
+            let small_theta = c.theta.abs() < 5.0 / 180.0 * PI;
+            if c.current_lane() != lane_i && small_theta {
+                continue;
+            }
+            if small_theta {
+                return false;
+            }
+
+            // larger theta... more complicated case!
+            if parry2d_f64::query::intersection_test(
+                &Isometry::translation((high_x + low_x) * 0.5, Road::get_lane_y(lane_i)),
+                &parry2d_f64::shape::Cuboid::new(vector!((high_x - low_x) * 0.5, LANE_WIDTH * 0.5)),
+                &c.pose(),
+                &c.shape(),
+            )
+            .unwrap()
+            {
+                return false;
+            }
+        }
+        true
     }
 
     pub fn collides_between(&self, car_i1: usize, car_i2: usize) -> bool {
@@ -160,8 +260,13 @@ impl Road {
         false
     }
 
+    #[allow(unused)]
     pub fn dist_clear_ahead(&self, car_i: usize) -> Option<(f64, usize)> {
         self.dist_clear::<true>(car_i)
+    }
+
+    pub fn dist_clear_ahead_in_lane(&self, car_i: usize, lane_i: i32) -> Option<(f64, usize)> {
+        self.dist_clear_in_lane::<true>(car_i, Some(lane_i))
     }
 
     // fn dist_clear_behind(&self, car_i: usize) -> Option<(f64, usize)> {
@@ -169,20 +274,42 @@ impl Road {
     // }
 
     pub fn dist_clear<const AHEAD: bool>(&self, car_i: usize) -> Option<(f64, usize)> {
+        self.dist_clear_in_lane::<AHEAD>(car_i, None)
+    }
+
+    pub fn dist_clear_in_lane<const AHEAD: bool>(
+        &self,
+        car_i: usize,
+        lane_i: Option<i32>,
+    ) -> Option<(f64, usize)> {
         let car = &self.cars[car_i];
 
         let mut min_dist = f64::MAX;
         let mut min_car_i = None;
 
-        let mut dist_thresh = car.follow_dist() * 4.0;
+        let dist_thresh = car.vel * 100.0 + car.length;
 
         let pose = self.cars[car_i].pose();
         let shape = self.cars[car_i].shape();
-        let aabb = shape.compute_aabb(&pose);
+        // we remove rotation from the ego's aabb calculation because otherwise we will
+        // see spurious potential collisions from the back of the car while turning.
+        // no rotation just focuses on the front of the ego-car for this calculation
+        let no_rotation_pose = if let Some(lane_i) = lane_i {
+            Isometry::translation(pose.translation.vector.x, Road::get_lane_y(lane_i))
+        } else {
+            Isometry::translation(pose.translation.vector.x, pose.translation.vector.y)
+        };
+
+        let aabb = shape.compute_aabb(&no_rotation_pose);
         for (i, c) in self.cars.iter().enumerate() {
             if i == car_i {
                 continue;
             }
+
+            if self.params.obstacles_only_for_ego && c.crashed && !car.is_ego() {
+                continue;
+            }
+
             // skip cars behind this one
             if AHEAD && c.x < car.x || !AHEAD && c.x > car.x {
                 // if i == 0 && car_i == 14 {
@@ -195,100 +322,43 @@ impl Road {
                 continue;
             }
 
-            if true {
-                let other_aabb = c.shape().compute_aabb(&c.pose());
+            let other_aabb = c.shape().compute_aabb(&c.pose());
 
-                let side_sep = range_dist(
-                    aabb.mins[1],
-                    aabb.maxs[1],
-                    other_aabb.mins[1],
-                    other_aabb.maxs[1],
-                );
+            let side_sep = range_dist(
+                aabb.mins[1],
+                aabb.maxs[1],
+                other_aabb.mins[1],
+                other_aabb.maxs[1],
+            );
 
-                // if car_i == 0 {
-                //     eprintln_f!("ego from {i} {side_sep=:.2}");
-                // }
-
-                if side_sep <= SIDE_MARGIN {
-                    let dist = other_aabb.mins[0] - aabb.maxs[0];
-                    if dist < min_dist {
-                        min_dist = dist;
-                        min_car_i = Some(i);
-                    }
+            if side_sep <= SIDE_MARGIN {
+                let dist = other_aabb.mins[0] - aabb.maxs[0];
+                if dist < min_dist {
+                    min_dist = dist;
+                    min_car_i = Some(i);
                 }
-            } else {
-                match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), f64::MAX) {
-                    Ok(ClosestPoints::WithinMargin(a, b)) => {
-                        let forward_dist = (a[0] - b[0]).abs();
 
-                        // to determine side-distance we have to be more clever, since the closest points
-                        // do not necessarily give the closest side distance. So for that, we do another query.
-                        let side_dist;
-                        match query::closest_points(
-                            &(Isometry::translation(b[0] - a[0] + car.length / 2.0, 0.0) * pose),
-                            &shape,
-                            &c.pose(),
-                            &c.shape(),
-                            SIDE_MARGIN,
-                        ) {
-                            Ok(ClosestPoints::WithinMargin(a, b)) => {
-                                side_dist = (a[1] - b[1]).abs();
-                                // if i == 0 && car_i == 14 {
-                                //     eprintln_f!(
-                                //         "From {car_i} to ego: {side_dist=:.2}, {a=:.2?}, {b=:.2?}",
-                                //         a = a.coords.as_slice(),
-                                //         b = b.coords.as_slice(),
-                                //     );
-                                // }
-                            }
-                            Ok(ClosestPoints::Intersecting) => side_dist = 0.0,
-                            _ => continue,
-                        }
-
-                        // let side_dist = (a[1] - b[1]).abs();
-                        // if i == 0 && car_i == 14 {
-                        //     eprintln_f!("From {car_i} to ego: {forward_dist=:.2}, {side_dist=:.2}, {a=:.2?}, {b=:.2?}", a = a.coords.as_slice(), b = b.coords.as_slice());
-                        // }
-                        if side_dist > SIDE_MARGIN {
-                            continue;
-                        }
-
-                        if forward_dist < min_dist {
-                            min_dist = forward_dist;
-                            min_car_i = Some(i);
-
-                            dist_thresh = min_dist.hypot(SIDE_MARGIN + car.width / 2.0);
-                        }
-                    }
-                    Ok(ClosestPoints::Intersecting) => {
-                        let dist = 0.0;
-                        if dist < min_dist {
-                            min_dist = dist;
-                            min_car_i = Some(i);
-                        }
-                        // if i == 0 && car_i == 14 {
-                        //     eprintln_f!("From {car_i} to ego: intersecting!");
-                        // }
-                    }
-                    _ => (),
+                if self.super_debug() && car.is_ego() {
+                    eprintln_f!("ego from {i} {side_sep=:.2}, {dist=:.2}");
+                } else if self.super_debug()
+                    && c.is_ego()
+                    && self.params.debug_car_i == Some(car.car_i)
+                {
+                    eprintln_f!("{car.car_i} from ego {side_sep=:.2}, {dist=:.2}");
                 }
             }
-
-            // let d = query::distance(&pose, &shape, &c.pose(), &c.shape()).unwrap();
-            // min_dist = min_dist.min(d);
         }
 
         Some((min_dist, min_car_i?))
     }
 
     fn min_unsafe_dist(&self, car_i: usize) -> Option<f64> {
-        let safety_margin = self.params.reward.safety_margin;
+        let safety_margin = self.params.cost.safety_margin;
 
         let car = &self.cars[car_i];
 
         let mut min_dist = None;
         let dist_thresh = 2.0 * car.length + safety_margin;
-        // let mut dist_thresh = car.length + self.params.reward.safety_weight;
 
         let pose = car.pose();
         let shape = car.shape();
@@ -297,66 +367,49 @@ impl Road {
             if i == car_i {
                 continue;
             }
-
             if (c.x - car.x).abs() >= dist_thresh {
                 continue;
             }
 
-            if true {
-                // let mut aabb_min_dist = None;
-                let other_aabb = c.shape().compute_aabb(&c.pose());
-
-                let side_sep = range_dist(
-                    aabb.mins[1],
-                    aabb.maxs[1],
-                    other_aabb.mins[1],
-                    other_aabb.maxs[1],
+            let other_aabb = c.shape().compute_aabb(&c.pose());
+            let side_sep = range_dist(
+                aabb.mins[1],
+                aabb.maxs[1],
+                other_aabb.mins[1],
+                other_aabb.maxs[1],
+            );
+            if side_sep <= safety_margin {
+                let longitidinal_sep = range_dist(
+                    aabb.mins[0],
+                    aabb.maxs[0],
+                    other_aabb.mins[0],
+                    other_aabb.maxs[0],
                 );
+                let dist = side_sep.max(longitidinal_sep);
+                if dist < min_dist.unwrap_or(safety_margin) {
+                    // if self.super_debug() && car.is_ego() {
+                    //     let road = self;
+                    //     eprintln_f!("{road.timesteps}: ego from {i}, {car.x=:.2}, {c.x=:.2}, car.length + safety_margin: {:.2} mins: {:.2?} maxs: {:.2?}, other mins: {:.2?} maxs: {:.2?}, {side_sep=:.2}, {dist=:.2}",
+                    //                 2.0 * car.length + safety_margin,
+                    //                 aabb.mins.coords.as_slice(), aabb.maxs.coords.as_slice(), other_aabb.mins.coords.as_slice(), other_aabb.maxs.coords.as_slice());
+                    // }
 
-                if side_sep <= safety_margin {
-                    let longitidinal_sep = range_dist(
-                        aabb.mins[0],
-                        aabb.maxs[0],
-                        other_aabb.mins[0],
-                        other_aabb.maxs[0],
-                    );
-                    let dist = side_sep.max(longitidinal_sep);
-                    if dist < min_dist.unwrap_or(safety_margin) {
-                        // if car_i == 0 {
-                        //     if (c.x - car.x).abs() >= 2.0 * car.length + safety_margin {
-                        //         eprintln_f!("{i}: c.x: {:.2}, car.x: {:.2}, car.length + safety_margin: {:.2} mins: {:.2?} maxs: {:.2?}, other mins: {:.2?} maxs: {:.2?}, {side_sep=:.2}, {dist=:.2}",
-                        //                     c.x, car.x, 2.0 * car.length + safety_margin,
-                        //                     aabb.mins.coords.as_slice(), aabb.maxs.coords.as_slice(), other_aabb.mins.coords.as_slice(), other_aabb.maxs.coords.as_slice());
-                        //         panic!();
-                        //     }
-                        // }
-
-                        min_dist = Some(dist);
-                    }
-                }
-            } else {
-                // let mut ab = None;
-                match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), safety_margin) {
-                    Ok(ClosestPoints::WithinMargin(a, b)) => {
-                        let dist = (a - b).magnitude();
-                        if dist < min_dist.unwrap_or(f64::MAX) {
-                            min_dist = Some(dist);
+                    // bounding boxes are close enough, now do the more expensive exact calculation
+                    match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), safety_margin)
+                    {
+                        Ok(ClosestPoints::WithinMargin(a, b)) => {
+                            let dist = (a - b).magnitude();
+                            if dist < min_dist.unwrap_or(safety_margin) {
+                                min_dist = Some(dist);
+                            }
                         }
-                        // ab = Some((a, b));
+                        Ok(ClosestPoints::Intersecting) => {
+                            min_dist = Some(0.0);
+                        }
+                        _ => (),
                     }
-                    Ok(ClosestPoints::Intersecting) => {
-                        min_dist = Some(0.0);
-                    }
-                    _ => (),
                 }
             }
-
-            // if min_dist != aabb_min_dist {
-            //     panic_f!("{i}:\n{aabb=:.2?}\n{other_aabb=:.2?}\n{side_sep=:.2}, {aabb_min_dist=:.2?}, {min_dist=:.2?}, {ab=:.2?}");
-            // }
-
-            // let d = query::distance(&pose, &shape, &c.pose(), &c.shape()).unwrap();
-            // min_dist = min_dist.min(d);
         }
 
         min_dist
@@ -364,12 +417,14 @@ impl Road {
 
     pub fn update(&mut self, dt: f64) {
         for car_i in 0..self.cars.len() {
-            if true || !self.cars[car_i].crashed {
+            if !self.cars[car_i].crashed {
                 // policy
                 let trajectory;
                 {
                     let mut policy = self.cars[car_i].side_policy.take().unwrap();
+                    self.cars[car_i].target_lane_i = policy.choose_target_lane(self, car_i);
                     self.cars[car_i].target_follow_time = policy.choose_follow_time(self, car_i);
+                    self.cars[car_i].target_vel = policy.choose_vel(self, car_i);
                     trajectory = policy.choose_trajectory(self, car_i);
                     self.cars[car_i].side_policy = Some(policy);
                 }
@@ -410,6 +465,14 @@ impl Road {
             }
         }
 
+        // if self.super_debug() {
+        //     let ego = &self.cars[0];
+        //     eprintln!(
+        //         "{}: ego x: {:.2}, y: {:.2}, vel: {:.2}",
+        //         self.timesteps, ego.x, ego.y, ego.vel
+        //     );
+        // }
+
         if let Some(traces) = self.car_traces.as_mut() {
             traces.resize(self.cars.len(), Vec::new());
 
@@ -421,59 +484,93 @@ impl Road {
             }
         }
 
-        // for car_i in 0..self.cars.len() {
-        //     if !self.cars[car_i].crashed {
-        //         if self.collides_any(car_i) {
-        //             self.cars[car_i].crashed = true;
-        //         }
-        //     }
-        // }
+        if self.params.only_crashes_with_ego {
+            let i1 = 0;
+            for i2 in 1..self.cars.len() {
+                if self.cars[i1].crashed && self.cars[i2].crashed {
+                    continue;
+                }
+                if self.collides_between(i1, i2) {
+                    if self.super_debug() {
+                        eprintln!();
+                        eprintln!("{}: CRASH between:", self.timesteps);
+                        eprintln!("{:.2?}", self.cars[i1]);
+                        eprintln!("{:.2?}", self.cars[i2]);
+                        eprintln!();
+                    }
 
-        for (i1, i2) in (0..self.cars.len()).tuple_combinations() {
-            if self.collides_between(i1, i2) {
-                self.cars[i1].crashed = true;
-                self.cars[i2].crashed = true;
+                    self.cars[i1].crashed = true;
+                    self.cars[i2].crashed = true;
+                }
+            }
+        } else {
+            for (i1, i2) in (0..self.cars.len()).tuple_combinations() {
+                if self.cars[i1].crashed && self.cars[i2].crashed {
+                    continue;
+                }
+                if self.collides_between(i1, i2) {
+                    if self.super_debug() {
+                        eprintln!();
+                        eprintln!("{}: CRASH between:", self.timesteps);
+                        eprintln!("{:.2?}", self.cars[i1]);
+                        eprintln!("{:.2?}", self.cars[i2]);
+                        eprintln!();
+                    }
+
+                    self.cars[i1].crashed = true;
+                    self.cars[i2].crashed = true;
+                }
             }
         }
 
         self.t += dt;
         self.timesteps += 1;
 
-        self.update_reward(dt);
+        self.update_cost(dt);
     }
 
-    fn update_reward(&mut self, dt: f64) {
-        let rparams = &self.params.reward;
-        let ecar = &self.cars[0];
-        self.reward.efficiency += rparams.efficiency_weight
-            * (ecar.preferred_vel - ecar.vel).abs()
+    fn update_cost(&mut self, dt: f64) {
+        let cparams = &self.params.cost;
+        let car = &self.cars[0];
+        self.cost.efficiency += cparams.efficiency_weight
+            * (car.preferred_vel - car.vel).abs()
             * dt
-            * self.reward.discount;
+            * self.cost.discount;
 
         let min_dist = self.min_unsafe_dist(0);
         if min_dist.is_some() {
-            self.reward.safety += rparams.safety_weight * dt * self.reward.discount;
-            // eprintln!("UNSAFE: {:.2}", min_dist.unwrap());
-        }
-
-        let policy_id = ecar.side_policy.as_ref().unwrap().policy_id();
-        if let Some(last_policy_id) = self.last_ego_policy_id {
-            if policy_id != last_policy_id {
-                self.reward.smoothness += rparams.smoothness_weight * self.reward.discount;
-                if self.debug {
-                    eprintln_f!(
-                        "{}: policy change from {last_policy_id} to {policy_id}",
-                        self.timesteps
-                    );
-                    eprintln!("New policy:\n{:?}", ecar.side_policy.as_ref().unwrap());
-                }
+            self.cost.safety += cparams.safety_weight * dt * self.cost.discount;
+            if self.debug {
+                eprintln!("{}: UNSAFE: {:.2}", self.timesteps, min_dist.unwrap());
             }
         }
-        self.last_ego_policy_id = Some(policy_id);
-    }
+        self.ego_is_safe = min_dist.is_none();
 
-    pub fn final_reward(&self) -> f64 {
-        self.reward.total() / self.t
+        let policy_id = car.policy_id();
+        let last_policy_id = self.last_ego.policy_id();
+        if policy_id != last_policy_id {
+            self.cost.smoothness += cparams.smoothness_weight * self.cost.discount;
+            if self.debug {
+                eprintln_f!(
+                    "{}: policy change from {last_policy_id} to {policy_id}",
+                    self.timesteps
+                );
+                eprintln!("New policy:\n{:?}", car.side_policy.as_ref().unwrap());
+            }
+        }
+
+        let accel = (car.vel - self.last_ego.vel) / dt;
+        if accel <= -cparams.uncomfortable_dec {
+            self.cost.uncomfortable_dec +=
+                cparams.uncomfortable_dec_weight * dt * self.cost.discount;
+        }
+        let curvature_change = (car.theta - self.last_ego.theta).abs() / dt;
+        if curvature_change >= cparams.large_curvature_change {
+            self.cost.curvature_change += cparams.curvature_change_weight * dt * self.cost.discount;
+        }
+
+        self.last_ego = self.cars[0].clone();
+        self.cost.update_discount(dt);
     }
 
     pub fn draw(&self, r: &mut Rvx) {
@@ -496,6 +593,13 @@ impl Road {
                 .color(RvxColor::WHITE),
         );
 
+        r.draw(
+            Rvx::text(&format!("{}", self.timesteps), "Arial", 150.0)
+                .rot(-PI / 2.0)
+                .translate(&[0.0, 5.0 * LANE_WIDTH])
+                .color(RvxColor::WHITE),
+        );
+
         // adjust for ego car
         r.set_translate_modifier(-self.cars[0].x, 0.0);
 
@@ -514,25 +618,37 @@ impl Road {
         // draw the cars
         for (i, car) in self.cars.iter().enumerate() {
             if i == 0 && car.crashed {
-                car.draw(r, RvxColor::ORANGE.set_a(0.6));
+                car.draw(&self.params, r, RvxColor::ORANGE.set_a(0.6));
             } else if i == 0 {
-                car.draw(r, RvxColor::GREEN.set_a(0.6));
+                car.draw(&self.params, r, RvxColor::GREEN.set_a(0.6));
             } else if car.crashed {
-                car.draw(r, RvxColor::RED.set_a(0.6));
+                car.draw(&self.params, r, RvxColor::RED.set_a(0.6));
             } else if car.vel == 0.0 {
-                car.draw(r, RvxColor::WHITE.set_a(0.6));
+                car.draw(&self.params, r, RvxColor::WHITE.set_a(0.6));
             } else {
-                car.draw(r, RvxColor::BLUE.set_a(0.6));
+                car.draw(&self.params, r, RvxColor::BLUE.set_a(0.6));
             }
         }
     }
 
-    pub fn make_traces(&self, include_obstacle_cars: bool) -> Vec<rvx::Shape> {
+    pub fn reset_car_traces(&mut self) {
+        if self.params.run_fast {
+            self.car_traces = None;
+        } else {
+            self.car_traces = Some(Vec::new());
+        }
+    }
+
+    pub fn make_traces(&self, depth_level: u32, include_obstacle_cars: bool) -> Vec<rvx::Shape> {
         let mut shapes = Vec::new();
 
         if self.car_traces.is_none() {
             return shapes;
         }
+
+        // if depth_level != 2 {
+        //     return Vec::new();
+        // }
 
         let traces: &Vec<Vec<(Point3<f64>, u32)>> = self.car_traces.as_ref().unwrap();
         for (car_i, trace) in traces.iter().enumerate() {
@@ -540,28 +656,79 @@ impl Road {
                 continue;
             }
 
-            let points = trace
+            // sparsify points that are _really_ close together
+            let mut points_2d = trace.iter().map(|(p, _)| p).copied().collect_vec();
+            let mut p_i = 0;
+            while p_i + 1 < points_2d.len() {
+                if (points_2d[p_i] - points_2d[p_i + 1]).magnitude_squared() < 0.1f64.powi(2) {
+                    points_2d.remove(p_i + 1);
+                    continue;
+                }
+                p_i += 1;
+            }
+
+            let points = points_2d
                 .iter()
-                .flat_map(|(p, _)| &p.coords.as_slice()[0..2])
+                .flat_map(|p| &p.coords.as_slice()[0..2])
                 .copied()
                 .collect_vec();
+
             if car_i == 0 {
                 // eprintln!("Points in trace: {}", trace.len());
-                shapes.push(Rvx::lines(&points, 4.0).color(RvxColor::GREEN.set_a(0.8)));
+
+                let base_line_color = if self.cars[0].crashed {
+                    RvxColor::RED.scale_rgb(0.5)
+                } else if self.cost.safety > 0.0 {
+                    RvxColor::PINK
+                } else {
+                    RvxColor::GREEN
+                };
+
+                let line_color = match depth_level {
+                    0 => base_line_color.set_a(0.6),
+                    1 => base_line_color.scale_rgb(0.6).set_a(0.6),
+                    2 => base_line_color.scale_rgb(0.3).set_a(0.6),
+                    3 | _ => base_line_color.scale_rgb(0.1).set_a(0.6),
+                };
+
+                let mut line_width = match depth_level {
+                    0 => 12.0,
+                    1 => 6.0,
+                    2 => 3.0,
+                    3 | _ => 1.5,
+                };
+                if self.cars[0].crashed || self.cost.safety > 0.0 {
+                    line_width += 4.0;
+                }
+
+                shapes.push(Rvx::lines(&points, line_width).color(line_color));
+
+                let dot_color = match self.ego_policy().operating_policy().policy_id() {
+                    1 | 4 => RvxColor::RED,
+                    2 | 5 => RvxColor::BLUE,
+                    _ => RvxColor::BLACK,
+                };
+
                 shapes.push(Rvx::array(
-                    Rvx::circle().scale(0.2).color(RvxColor::BLACK.set_a(0.8)),
+                    Rvx::circle().scale(0.15).color(dot_color.set_a(0.4)),
                     &points,
                 ));
 
-                // label the points with the policy_id active at that point in time
-                // for (xyt, policy_id) in trace.iter() {
-                //     shapes.push(
-                //         Rvx::text(&format!("{}", policy_id), "Arial", 30.0)
-                //             .rot(-PI / 2.0)
-                //             .translate(&[xyt.x, xyt.y])
-                //             .color(RvxColor::BLACK),
-                //     );
-                // }
+            // label the points with the policy_id active at that point in time
+            // for (xyt, policy_id) in trace.iter() {
+            //     shapes.push(
+            //         Rvx::text(&format!("{}", policy_id), "Arial", 30.0)
+            //             .rot(-PI / 2.0)
+            //             .translate(&[xyt.x, xyt.y])
+            //             .color(RvxColor::BLACK),
+            //     );
+            // }
+            } else if Some(car_i) == self.params.debug_car_i {
+                shapes.push(Rvx::lines(&points, 4.0).color(RvxColor::DARK_GRAY.set_a(0.9)));
+                // shapes.push(Rvx::array(
+                //     Rvx::circle().scale(0.2).color(RvxColor::DARK_GRAY),
+                //     &points,
+                // ));
             } else if include_obstacle_cars {
                 shapes.push(Rvx::lines(&points, 4.0).color(RvxColor::WHITE.set_a(0.5)));
             }
@@ -579,5 +746,13 @@ impl Road {
         }
 
         shapes
+    }
+
+    pub fn get_lane_y(lane_i: i32) -> f64 {
+        (lane_i as f64 - 0.5) * LANE_WIDTH
+    }
+
+    pub fn get_lane_i(y: f64) -> i32 {
+        (y / LANE_WIDTH + 0.5).round() as i32
     }
 }

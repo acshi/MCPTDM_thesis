@@ -1,22 +1,19 @@
-use std::{
-    cell::RefCell,
-    f64::consts::PI,
-    rc::Rc,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{cell::RefCell, f64::consts::PI, rc::Rc, time::Duration};
 
 use arg_parameters::Parameters;
 
-use mpdm::mpdm_choose_policy;
+use car::{Car, MPH_TO_MPS};
+use mpdm::{make_obstacle_vehicle_policy_choices, make_policy_choices, mpdm_choose_policy};
 
-use rand::{prelude::StdRng, SeedableRng};
+use cost::Cost;
+use rand::{prelude::StdRng, Rng, SeedableRng};
 use rate_timer::RateTimer;
-use road::{Road, LANE_WIDTH};
+use reward::Reward;
+use road::Road;
 use rvx::Rvx;
 use side_policies::SidePolicyTrait;
 
-use crate::eudm_dcp_tree::{dcp_tree_choose_policy, tree_choose_policy};
+use crate::{eudm::dcp_tree_choose_policy, mcts::mcts_choose_policy, tree::tree_choose_policy};
 
 #[allow(unused)]
 #[macro_use]
@@ -27,33 +24,38 @@ extern crate fstrings;
 extern crate approx;
 
 mod arg_parameters;
+mod belief;
 mod car;
+mod cost;
 mod delayed_policy;
-mod eudm_dcp_tree;
+mod eudm;
 mod forward_control;
 mod intelligent_driver;
 mod lane_change_policy;
+mod mcts;
 mod mpdm;
 mod pure_pursuit;
 mod rate_timer;
 mod reward;
 mod road;
+mod road_set;
 mod side_control;
 mod side_policies;
+mod tree;
 
 #[macro_use]
 extern crate enum_dispatch;
 
 const AHEAD_TIME_DEFAULT: f64 = 0.6;
-const LANE_CHANGE_TIME: f64 = 4.0;
 
 struct State {
-    // rng: Rc<RefCell<StdRng>>,
+    rng: Rc<RefCell<StdRng>>,
     params: Rc<Parameters>,
     road: Road,
     traces: Vec<rvx::Shape>,
     r: Option<Rvx>,
     timestep: u32,
+    reward: Reward,
 }
 
 fn check_for_duplicate_shapes(shapes: &[rvx::Shape]) {
@@ -93,14 +95,15 @@ impl State {
     fn update(&mut self, dt: f64) {
         let replan_interval = (self.params.replan_dt / self.params.physics_dt).round() as u32;
 
-        // let mut fake_sim_estimate = self.road.clone();
-        // fake_sim_estimate.debug = false;
-
+        // method chooses the ego policy
         if self.timestep % replan_interval == 0 {
             let (policy, traces) = match self.params.method.as_str() {
-                "mpdm" => mpdm_choose_policy(&self.params, self.road.sim_estimate()),
-                "eudm" => dcp_tree_choose_policy(&self.params, self.road.sim_estimate()),
-                "tree" => tree_choose_policy(&self.params, self.road.sim_estimate()),
+                "mpdm" => mpdm_choose_policy(&self.params, &self.road, &mut *self.rng.borrow_mut()),
+                "eudm" => {
+                    dcp_tree_choose_policy(&self.params, &self.road, &mut *self.rng.borrow_mut())
+                }
+                "tree" => tree_choose_policy(&self.params, &self.road, &mut *self.rng.borrow_mut()),
+                "mcts" => mcts_choose_policy(&self.params, &self.road, &mut *self.rng.borrow_mut()),
                 _ => panic!("invalid method '{}'", self.params.method),
             };
             self.traces = traces;
@@ -118,22 +121,83 @@ impl State {
             }
         }
 
+        // random policy changes for the obstacle vehicles
+        let policy_change_interval =
+            (self.params.nonego_policy_change_dt / self.params.physics_dt).round() as u32;
+        if self.timestep % policy_change_interval == 0 {
+            let mut rng = self.rng.borrow_mut();
+            let policy_choices = make_obstacle_vehicle_policy_choices();
+
+            for c in self.road.cars[1..].iter_mut() {
+                if rng.gen_bool(self.params.nonego_policy_change_prob * dt) {
+                    c.side_policy =
+                        Some(policy_choices[rng.gen_range(0..policy_choices.len())].clone());
+                }
+            }
+        }
+
+        let last_ego_theta = self.road.cars[0].theta;
+        let last_ego_vel = self.road.cars[0].vel;
+
+        // actual simulation
         self.road.update(dt);
+
+        // final reporting reward (separate from cost function, though similar)
+        self.reward.avg_vel += self.road.cars[0].vel * dt;
+        if !self.road.ego_is_safe {
+            self.reward.safety += dt;
+        }
+        let accel = (self.road.cars[0].vel - last_ego_vel) / dt;
+        if accel <= -self.params.cost.uncomfortable_dec {
+            self.reward.uncomfortable_dec += dt;
+        }
+        let curvature_change = (self.road.cars[0].theta - last_ego_theta).abs() / dt;
+        if curvature_change >= self.params.cost.large_curvature_change {
+            self.reward.curvature_change += dt;
+        }
+        // eprintln_f!("{accel=:.2} {curvature_change=:.2}");
 
         self.timestep += 1;
     }
+}
 
-    fn final_reward(&self) -> f64 {
-        self.road.final_reward()
+fn debugging_scenarios(params: &Parameters, road: &mut Road) {
+    match params.debugging_scenario {
+        Some(1) => {
+            road.cars.truncate(1);
+            road.cars.push(Car::new(1, 1));
+            road.cars[1].side_policy = Some(make_obstacle_vehicle_policy_choices()[0].clone());
+        }
+        Some(2) => {
+            road.cars.truncate(1);
+            road.add_obstacle(5.0, 0);
+            road.cars.push(Car::new(2, 1));
+            road.cars[2].side_policy = Some(make_obstacle_vehicle_policy_choices()[0].clone());
+        }
+        Some(3) => {
+            road.cars.clear();
+            let mut c = Car::new(0, 0);
+            c.vel = 15.0 * MPH_TO_MPS;
+            c.side_policy = Some(make_policy_choices()[0].clone());
+            road.last_ego = c.clone();
+            road.cars.push(c);
+
+            let mut c = Car::new(1, 0);
+            c.x = 10.0;
+            c.vel = 10.0 * MPH_TO_MPS;
+            c.side_policy = Some(make_obstacle_vehicle_policy_choices()[0].clone());
+            road.cars.push(c);
+            let mut c = Car::new(2, 1);
+            c.x = 10.0;
+            c.vel = 10.0 * MPH_TO_MPS;
+            c.side_policy = Some(make_obstacle_vehicle_policy_choices()[3].clone());
+            road.cars.push(c);
+        }
+        _ => (),
     }
 }
 
-fn run_with_parameters(
-    params: Parameters,
-    use_graphics: bool,
-    n_scenarios: usize,
-    n_scenarios_completed: Arc<Mutex<usize>>,
-) {
+fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
     let params = Rc::new(params);
 
     let mut full_seed = [0; 32];
@@ -143,22 +207,27 @@ fn run_with_parameters(
 
     let mut road = Road::new(params.clone());
     road.add_obstacle(100.0, 0);
-
     while road.cars.len() < params.n_cars {
         road.add_random_car(&rng);
     }
+    road.init_belief();
+    debugging_scenarios(&params, &mut road);
 
     let mut state = State {
+        rng,
         road,
         r: None,
         timestep: 0,
         params,
         traces: Vec::new(),
+        reward: Default::default(),
     };
+
+    let use_graphics = !state.params.run_fast;
 
     if use_graphics {
         let mut r = Rvx::new("Self-Driving!", [0, 0, 0, 0], 8000);
-        r.set_user_zoom(Some(0.4)); // 0.22
+        // r.set_user_zoom(Some(0.4)); // 0.22
         std::thread::sleep(Duration::from_millis(500));
         r.set_user_zoom(None);
         state.r = Some(r);
@@ -185,18 +254,16 @@ fn run_with_parameters(
         // }
     }
 
-    *n_scenarios_completed.lock().unwrap() += 1;
-    print!(
-        "{}/{}: ",
-        *n_scenarios_completed.lock().unwrap(),
-        n_scenarios
-    );
-
-    println!("{:.4}", state.final_reward());
-
     if use_graphics {
         std::thread::sleep(Duration::from_millis(1000));
     }
+
+    state.reward.avg_vel /= state.road.t;
+    state.reward.safety /= state.road.t;
+    state.reward.uncomfortable_dec /= state.road.t;
+    state.reward.curvature_change /= state.road.t;
+
+    (state.road.cost, state.reward)
 }
 
 fn main() {

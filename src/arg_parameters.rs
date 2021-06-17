@@ -1,59 +1,98 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeMap,
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader, Write},
+    sync::{
+        atomic::{self, AtomicUsize},
+        Mutex,
+    },
+    time::Instant,
+};
 
+use atomic::Ordering::SeqCst;
+use itertools::Itertools;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-use crate::run_with_parameters;
+use crate::{cost::Cost, run_with_parameters};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct EudmParameters {
     pub dt: f64,
     pub layer_t: f64,
     pub search_depth: u32,
+    pub samples_n: usize,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct TreeParameters {
     pub dt: f64,
     pub layer_t: f64,
     pub search_depth: u32,
+    pub samples_n: usize,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct MctsParameters {
+    pub dt: f64,
+    pub layer_t: f64,
+    pub search_depth: u32,
+    pub samples_n: usize,
+    pub prefer_same_policy: bool,
+    pub choose_random_policy: bool,
+    pub ucb_const: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct MpdmParameters {
     pub dt: f64,
     pub forward_t: f64,
+    pub samples_n: usize,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RewardParameters {
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CostParameters {
     pub efficiency_weight: f64,
     pub safety_weight: f64,
     pub smoothness_weight: f64,
+    pub uncomfortable_dec_weight: f64,
+    pub curvature_change_weight: f64,
     pub safety_margin: f64,
+    pub uncomfortable_dec: f64,
+    pub large_curvature_change: f64,
     pub discount: f64,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Parameters {
-    pub rng_seed: u64,
-    pub run_fast: bool,
-    pub thread_limit: usize,
-    pub graphics_speedup: f64,
-
-    pub physics_dt: f64,
-    pub replan_dt: f64,
-
     pub max_steps: u32,
     pub n_cars: usize,
     pub method: String,
 
-    pub reward: RewardParameters,
+    pub physics_dt: f64,
+    pub replan_dt: f64,
+    pub nonego_policy_change_prob: f64,
+    pub nonego_policy_change_dt: f64,
+
+    pub thread_limit: usize,
+    pub rng_seed: u64,
+    pub run_fast: bool,
+    pub graphics_speedup: f64,
+    pub debug_car_i: Option<usize>,
+    pub debug_steps_before: usize,
+    pub super_debug: bool,
+    pub only_crashes_with_ego: bool,
+    pub obstacles_only_for_ego: bool,
+    pub true_belief_sample_only: bool,
+    pub debugging_scenario: Option<i32>,
+
+    pub cost: CostParameters,
     pub eudm: EudmParameters,
     pub tree: TreeParameters,
     pub mpdm: MpdmParameters,
+    pub mcts: MctsParameters,
 
-    pub file_name: Option<String>,
+    pub scenario_name: Option<String>,
 }
 
 impl Parameters {
@@ -63,20 +102,6 @@ impl Parameters {
         s.try_into()
     }
 }
-
-// impl Default for Parameters {
-//     fn default() -> Self {
-//         Parameters {
-//             rng_seed: 0,
-//             run_fast: false,
-//             max_steps: 500,
-//             n_cars: 40,
-//             eudm: Default::default(),
-//             thread_limit: 1,
-//             file_name: None,
-//         }
-//     }
-// }
 
 fn create_scenarios(
     base_params: &Parameters,
@@ -91,32 +116,35 @@ fn create_scenarios(
     for value in values.iter() {
         let mut params = base_params.clone();
         match name.as_str() {
-            "rng_seed" => params.rng_seed = value.parse().unwrap(),
-            "run_fast" => params.run_fast = value.parse().unwrap(),
-            "n_cars" => params.n_cars = value.parse().unwrap(),
             "method" => params.method = value.parse().unwrap(),
             "max_steps" => params.max_steps = value.parse().unwrap(),
+            "n_cars" => params.n_cars = value.parse().unwrap(),
+            "discount" => params.cost.discount = value.parse().unwrap(),
+            "rng_seed" => params.rng_seed = value.parse().unwrap(),
+            "run_fast" => params.run_fast = value.parse().unwrap(),
             "thread_limit" => params.thread_limit = value.parse().unwrap(),
             _ => panic!("{} is not a valid parameter!", name),
         }
-        let not_for_file_name = ["run_fast"];
-        if let Some(file_name) = params.file_name.as_mut() {
-            if !not_for_file_name.contains(&name.as_str()) {
-                if !file_name.is_empty() {
-                    file_name.push_str("_");
-                }
-                file_name.push_str(name);
-                file_name.push_str("_");
-                file_name.push_str(value);
-            }
-        }
-
         if name_value_pairs.len() > 1 {
             scenarios.append(&mut create_scenarios(&params, &name_value_pairs[1..]));
         } else {
             scenarios.push(params);
         }
     }
+
+    // when there are multiple scenarios, always run them fast!
+    if scenarios.len() > 1 {
+        for scenario in scenarios.iter_mut() {
+            scenario.run_fast = true;
+        }
+    }
+
+    for s in scenarios.iter_mut() {
+        s.scenario_name = Some(format_f!(
+            "_method_{s.method}_max_steps_{s.max_steps}_n_cars_{s.n_cars}_discount_{s.cost.discount}_rng_seed_{s.rng_seed}_"
+        ));
+    }
+
     scenarios
 }
 
@@ -165,7 +193,7 @@ pub fn run_parallel_scenarios() {
     // }
 
     let mut base_scenario = parameters_default;
-    base_scenario.file_name = Some("".to_owned());
+    base_scenario.scenario_name = Some("".to_owned());
 
     let scenarios = create_scenarios(&base_scenario, &name_value_pairs);
     // for (i, scenario) in scenarios.iter().enumerate() {
@@ -186,29 +214,81 @@ pub fn run_parallel_scenarios() {
             .unwrap();
     }
 
-    let n_scenarios_completed = Arc::new(Mutex::new(0));
+    let n_scenarios_completed = AtomicUsize::new(0);
+    let cumulative_results = Mutex::new(BTreeMap::new());
+
+    let cache_filename = "results.cache";
+    // read the existing cache file
+    {
+        let mut cumulative_results = cumulative_results.lock().unwrap();
+        if let Ok(file) = File::open(cache_filename) {
+            let file = BufReader::new(file);
+            for line in file.lines() {
+                let line = line.unwrap();
+                let parts = line.split_ascii_whitespace().collect_vec();
+                let scenario_name = parts[0].to_owned();
+                let compute_time: f64 = parts[1].parse().unwrap();
+                let efficiency: f64 = parts[2].parse().unwrap();
+                let safety: f64 = parts[3].parse().unwrap();
+                let smoothness: f64 = parts[4].parse().unwrap();
+                let cost = Cost {
+                    efficiency,
+                    safety,
+                    smoothness,
+                    ..Default::default()
+                };
+                cumulative_results.insert(scenario_name, (compute_time, cost));
+            }
+        }
+    }
+
+    let file = Mutex::new(
+        OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open(cache_filename)
+            .unwrap(),
+    );
 
     if n_scenarios == 1 {
-        run_with_parameters(
-            scenarios[0].clone(),
-            !scenarios[0].run_fast,
-            n_scenarios,
-            n_scenarios_completed,
-        );
+        let (cost, reward) = run_with_parameters(scenarios[0].clone());
+        println_f!("{cost:?} {reward:?}");
     } else {
         scenarios.par_iter().for_each(|scenario| {
             let result = std::panic::catch_unwind(|| {
-                run_with_parameters(
-                    scenario.clone(),
-                    false,
-                    n_scenarios,
-                    n_scenarios_completed.clone(),
-                );
+                let scenario_name = scenario.scenario_name.clone().unwrap();
+
+                if cumulative_results
+                    .lock()
+                    .unwrap()
+                    .contains_key(&scenario_name)
+                {
+                    n_scenarios_completed.fetch_add(1, SeqCst);
+                    return;
+                }
+
+                let start_time = Instant::now();
+                let (cost, reward) = run_with_parameters(scenario.clone());
+                let seconds = start_time.elapsed().as_secs_f64();
+
+                n_scenarios_completed.fetch_add(1, SeqCst);
+                print!("{}/{}: ", n_scenarios_completed.load(SeqCst), n_scenarios);
+                println_f!("{cost} {reward} {seconds:6.2}");
+                writeln_f!(
+                    file.lock().unwrap(),
+                    "{scenario_name} {cost} {reward} {seconds:6.2}"
+                )
+                .unwrap();
+
+                cumulative_results
+                    .lock()
+                    .unwrap()
+                    .insert(scenario_name, (seconds, cost));
             });
             if result.is_err() {
                 eprintln!(
                     "PANIC for scenario: {:?}",
-                    scenario.file_name.as_ref().unwrap()
+                    scenario.scenario_name.as_ref().unwrap()
                 );
             }
         });

@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"git.ignoreLimitWarning": true,
+		"rust-analyzer.diagnostics.disabled": [
+			"unresolved-macro-call",
+			"mismatched-arg-count"
+		]
+	}
+}

@@ -1,21 +1,23 @@
 use std::{cell::RefCell, f64::consts::PI, rc::Rc};
 
+use nalgebra::vector;
 use parry2d_f64::{
-    na::{Isometry2, Vector2},
+    na::Isometry2,
     shape::{Cuboid, Shape},
 };
 use rand::prelude::{Rng, StdRng};
 use rvx::{Rvx, RvxColor};
 
 use crate::{
+    arg_parameters::Parameters,
     forward_control::ForwardControl,
     intelligent_driver::IntelligentDriverPolicy,
-    lane_change_policy::LaneChangePolicy,
+    mpdm::make_obstacle_vehicle_policy_choices,
     pure_pursuit::PurePursuitPolicy,
-    road::{LANE_WIDTH, ROAD_LENGTH},
+    road::{Road, ROAD_LENGTH},
     side_control::{SideControl, SideControlTrait},
-    side_policies::SidePolicy,
-    AHEAD_TIME_DEFAULT, LANE_CHANGE_TIME,
+    side_policies::{SidePolicy, SidePolicyTrait},
+    AHEAD_TIME_DEFAULT,
 };
 
 pub const PRIUS_WIDTH: f64 = 1.76;
@@ -23,16 +25,18 @@ pub const PRIUS_LENGTH: f64 = 4.57;
 pub const PRIUS_MAX_STEER: f64 = 1.11; // from minimum turning radius of 4.34 meters and PRIUS_LENGTH
 pub const MPH_TO_MPS: f64 = 0.44704;
 pub const MPS_TO_MPH: f64 = 2.23694;
-pub const SPEED_DEFAULT: f64 = 45.0 * MPH_TO_MPS;
-pub const SPEED_LOW: f64 = 35.0 * MPH_TO_MPS;
-pub const SPEED_HIGH: f64 = 55.0 * MPH_TO_MPS;
-pub const FOLLOW_DIST_MIN: f64 = 0.5 * PRIUS_LENGTH;
+pub const SPEED_DEFAULT: f64 = 25.0 * MPH_TO_MPS;
+pub const SPEED_LOW: f64 = 15.0 * MPH_TO_MPS;
+pub const SPEED_HIGH: f64 = 35.0 * MPH_TO_MPS;
+pub const FOLLOW_DIST_BASE: f64 = 1.5 * PRIUS_LENGTH;
 pub const FOLLOW_TIME_LOW: f64 = 0.8;
 pub const FOLLOW_TIME_HIGH: f64 = 2.0;
 pub const FOLLOW_TIME_DEFAULT: f64 = 1.2;
 
-pub const PREFERRED_ACCEL_LOW: f64 = 0.2; // semi truck, 2min zero to sixty
-pub const PREFERRED_ACCEL_HIGH: f64 = 11.2; // model s, 2.4s zero to sixty
+pub const PREFERRED_VEL_ESTIMATE_MIN: f64 = 5.0 * MPH_TO_MPS;
+
+pub const PREFERRED_ACCEL_LOW: f64 = 1.0; // 0.2; // semi truck, 2min zero to sixty
+pub const PREFERRED_ACCEL_HIGH: f64 = 2.0; // 11.2; // model s, 2.4s zero to sixty
 pub const PREFERRED_ACCEL_DEFAULT: f64 = 2.0; // 16s zero to sixty, just under max accel for a prius (13s)
 pub const BREAKING_ACCEL: f64 = 6.0;
 
@@ -61,11 +65,12 @@ pub struct Car {
     pub preferred_vel: f64,
     pub preferred_accel: f64,
     pub preferred_steer_accel: f64,
-    pub follow_min_dist: f64,
     pub preferred_follow_time: f64,
 
     // current properties/goals
     pub target_follow_time: f64,
+    pub target_vel: f64,
+    pub target_lane_i: i32,
 
     pub forward_control: Option<ForwardControl>,
     pub side_control: Option<SideControl>,
@@ -74,7 +79,8 @@ pub struct Car {
 
 impl Car {
     pub fn new(car_i: usize, lane_i: i32) -> Self {
-        let lane_y = (lane_i as f64 - 0.5) * LANE_WIDTH;
+        let lane_y = Road::get_lane_y(lane_i);
+        let policies = make_obstacle_vehicle_policy_choices();
         Self {
             car_i,
             crashed: false,
@@ -91,10 +97,11 @@ impl Car {
             preferred_vel: SPEED_DEFAULT,
             preferred_accel: PREFERRED_ACCEL_DEFAULT,
             preferred_steer_accel: PREFERRED_STEER_ACCEL_DEFAULT,
-            follow_min_dist: FOLLOW_DIST_MIN,
             preferred_follow_time: FOLLOW_TIME_DEFAULT,
 
             target_follow_time: FOLLOW_TIME_DEFAULT,
+            target_vel: SPEED_DEFAULT,
+            target_lane_i: lane_i,
 
             // policy: Some(Policy::AdapativeCruisePolicy(AdapativeCruisePolicy::new())),
             forward_control: Some(ForwardControl::IntelligentDriverPolicy(
@@ -103,12 +110,11 @@ impl Car {
             side_control: Some(SideControl::PurePursuitPolicy(PurePursuitPolicy::new(
                 AHEAD_TIME_DEFAULT,
             ))),
-            side_policy: Some(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
-                lane_i as u32 * 3,
-                lane_i,
-                LANE_CHANGE_TIME,
-                FOLLOW_TIME_DEFAULT,
-            ))),
+            side_policy: Some(if lane_i == 0 {
+                policies[1].clone()
+            } else {
+                policies[4].clone()
+            }),
         }
     }
 
@@ -130,17 +136,28 @@ impl Car {
     pub fn sim_estimate(&self) -> Self {
         let mut sim_car = self.clone();
 
-        sim_car.preferred_vel = self.vel;
+        sim_car.preferred_vel = self.vel.max(PREFERRED_VEL_ESTIMATE_MIN);
         sim_car.preferred_accel = PREFERRED_ACCEL_DEFAULT;
         sim_car.preferred_steer_accel = PREFERRED_STEER_ACCEL_DEFAULT;
-        sim_car.follow_min_dist = FOLLOW_DIST_MIN;
         sim_car.preferred_follow_time = FOLLOW_TIME_DEFAULT;
 
         sim_car
     }
 
+    pub fn policy_id(&self) -> u32 {
+        self.side_policy
+            .as_ref()
+            .unwrap()
+            .operating_policy()
+            .policy_id()
+    }
+
+    pub fn is_ego(&self) -> bool {
+        self.car_i == 0
+    }
+
     pub fn follow_dist(&self) -> f64 {
-        self.follow_min_dist + self.target_follow_time * self.vel
+        FOLLOW_DIST_BASE + self.target_follow_time * self.vel
     }
 
     pub fn update(&mut self, dt: f64) {
@@ -152,7 +169,7 @@ impl Car {
         }
     }
 
-    pub fn draw(&self, r: &mut Rvx, color: RvxColor) {
+    pub fn draw(&self, params: &Parameters, r: &mut Rvx, color: RvxColor) {
         // front dot
         r.draw(
             Rvx::circle()
@@ -240,7 +257,7 @@ impl Car {
                         self.preferred_vel * MPS_TO_MPH,
                         self.target_follow_time,
                         self.x,
-                        if self.car_i == 0 {
+                        if self.is_ego() || params.debug_car_i == Some(self.car_i) {
                             format!("{:?}", self.side_policy.as_ref().unwrap())
                         } else {
                             "".to_owned()
@@ -250,28 +267,37 @@ impl Car {
                     40.0,
                 )
                 .rot(-PI / 2.0)
-                .translate(&[self.x, self.y]),
+                .translate(&[
+                    self.x
+                        + if params.debugging_scenario.is_some()
+                            && params.debug_car_i == Some(self.car_i)
+                        {
+                            -5.0
+                        } else {
+                            0.0
+                        },
+                    self.y,
+                ]),
             );
         }
 
-        if self.car_i == 0 {
+        if self.is_ego() {
             self.side_control.iter().for_each(|a| a.draw(r));
         }
     }
 
     pub fn current_lane(&self) -> i32 {
-        // let lane_y = (lane_i as f64 - 0.5) * LANE_WIDTH;
-        (self.y / LANE_WIDTH + 0.5).round() as i32
+        Road::get_lane_i(self.y)
     }
 
     pub fn pose(&self) -> Isometry2<f64> {
         let center_x = self.x - self.length / 2.0 * self.theta.cos();
         let center_y = self.y - self.length / 2.0 * self.theta.sin();
 
-        Isometry2::new(Vector2::new(center_x, center_y), self.theta)
+        Isometry2::new(vector!(center_x, center_y), self.theta)
     }
 
     pub fn shape(&self) -> impl Shape {
-        Cuboid::new(Vector2::new(self.length / 2.0, self.width / 2.0))
+        Cuboid::new(vector!(self.length / 2.0, self.width / 2.0))
     }
 }
