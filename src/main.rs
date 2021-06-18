@@ -3,6 +3,7 @@ use std::{cell::RefCell, f64::consts::PI, rc::Rc, time::Duration};
 use arg_parameters::Parameters;
 
 use car::{Car, MPH_TO_MPS};
+use cfb::conditional_focused_branching;
 use mpdm::{make_obstacle_vehicle_policy_choices, make_policy_choices, mpdm_choose_policy};
 
 use cost::Cost;
@@ -10,6 +11,7 @@ use rand::{prelude::StdRng, Rng, SeedableRng};
 use rate_timer::RateTimer;
 use reward::Reward;
 use road::Road;
+use road_set::RoadSet;
 use rvx::Rvx;
 use side_policies::SidePolicyTrait;
 
@@ -26,6 +28,7 @@ extern crate approx;
 mod arg_parameters;
 mod belief;
 mod car;
+mod cfb;
 mod cost;
 mod delayed_policy;
 mod eudm;
@@ -34,6 +37,7 @@ mod intelligent_driver;
 mod lane_change_policy;
 mod mcts;
 mod mpdm;
+mod open_loop_policy;
 mod pure_pursuit;
 mod rate_timer;
 mod reward;
@@ -264,6 +268,19 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
     state.reward.curvature_change /= state.road.t;
 
     (state.road.cost, state.reward)
+}
+
+fn road_set_for_scenario(
+    params: &Parameters,
+    true_road: &Road,
+    rng: &mut StdRng,
+    n: usize,
+) -> RoadSet {
+    if params.use_cfb {
+        conditional_focused_branching(params, true_road, n)
+    } else {
+        RoadSet::new_samples(true_road, rng, n)
+    }
 }
 
 fn main() {

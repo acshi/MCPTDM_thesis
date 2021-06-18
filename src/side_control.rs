@@ -3,12 +3,14 @@ use rvx::Rvx;
 
 use crate::Road;
 
+use crate::open_loop_policy::OpenLoopSideControl;
 use crate::pure_pursuit::PurePursuitPolicy;
 
 #[enum_dispatch]
 #[derive(Debug, Clone)]
 pub enum SideControl {
     PurePursuitPolicy,
+    OpenLoopSideControl,
 }
 
 #[enum_dispatch(SideControl)]

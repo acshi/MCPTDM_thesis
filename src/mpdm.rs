@@ -6,6 +6,7 @@ use crate::{
     lane_change_policy::{LaneChangePolicy, LongitudinalPolicy},
     road::Road,
     road_set::RoadSet,
+    road_set_for_scenario,
     side_policies::{SidePolicy, SidePolicyTrait},
 };
 
@@ -73,7 +74,7 @@ pub fn mpdm_choose_policy(
     rng: &mut StdRng,
 ) -> (SidePolicy, Vec<rvx::Shape>) {
     let mut traces = Vec::new();
-    let roads = RoadSet::new_samples(true_road, rng, params.mpdm.samples_n);
+    let roads = road_set_for_scenario(params, true_road, rng, params.mpdm.samples_n);
     let debug = true_road.debug
         && true_road.timesteps + params.debug_steps_before >= params.max_steps as usize;
     if debug {
@@ -94,7 +95,7 @@ pub fn mpdm_choose_policy(
     let mut best_policy = None;
 
     for (i, policy) in policy_choices.into_iter().enumerate() {
-        // if roads.timesteps() >= 80 && i != 0 {
+        // if roads.timesteps() >= 2200 && i != 3 {
         //     continue;
         // }
         // if i == 0 || i == 3 {

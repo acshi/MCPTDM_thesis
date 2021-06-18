@@ -60,13 +60,13 @@ impl SidePolicyTrait for DelayedPolicy {
         }
     }
 
-    fn choose_trajectory(&mut self, road: &Road, car_i: usize) -> Vec<Point2<f64>> {
+    fn choose_trajectory(&mut self, road: &Road, car_i: usize, traj: &mut Vec<Point2<f64>>) {
         self.check_for_switch(road);
 
         if self.has_switched {
-            self.policy_b.choose_trajectory(road, car_i)
+            self.policy_b.choose_trajectory(road, car_i, traj)
         } else {
-            self.policy_a.choose_trajectory(road, car_i)
+            self.policy_a.choose_trajectory(road, car_i, traj)
         }
     }
 

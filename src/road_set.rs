@@ -8,6 +8,10 @@ pub struct RoadSet {
 }
 
 impl RoadSet {
+    pub fn new(roads: Vec<Road>) -> Self {
+        Self { roads }
+    }
+
     pub fn new_samples(road: &Road, rng: &mut StdRng, n: usize) -> Self {
         assert!(n > 0);
 

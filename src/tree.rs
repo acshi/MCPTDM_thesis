@@ -6,6 +6,7 @@ use crate::{
     mpdm::make_policy_choices,
     road::Road,
     road_set::RoadSet,
+    road_set_for_scenario,
     side_policies::{SidePolicy, SidePolicyTrait},
 };
 
@@ -100,7 +101,7 @@ pub fn tree_choose_policy(
     true_road: &Road,
     rng: &mut StdRng,
 ) -> (SidePolicy, Vec<rvx::Shape>) {
-    let roads = RoadSet::new_samples(true_road, rng, params.tree.samples_n);
+    let roads = road_set_for_scenario(params, true_road, rng, params.tree.samples_n);
     let policy_choices = make_policy_choices();
     let debug = true_road.debug && true_road.timesteps >= (params.max_steps - 100) as usize;
 

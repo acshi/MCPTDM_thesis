@@ -7,6 +7,7 @@ use crate::{
     mpdm::make_policy_choices,
     road::Road,
     road_set::RoadSet,
+    road_set_for_scenario,
     side_policies::{SidePolicy, SidePolicyTrait},
 };
 
@@ -36,6 +37,7 @@ fn dcp_tree_search(
     }
 
     let mut best_sub_policy = None;
+    let mut best_switch_depth = 0;
     let mut best_cost = Cost::max_value();
 
     // Let's first consider the ongoing policy, which may be mid-way through a transition
@@ -82,6 +84,7 @@ fn dcp_tree_search(
             let cost = init_policy_roads.cost();
             if cost < best_cost {
                 best_cost = cost;
+                best_switch_depth = switch_depth;
                 best_sub_policy = Some(&operating_policy);
             }
         } else {
@@ -109,11 +112,8 @@ fn dcp_tree_search(
                 let cost = roads.cost();
                 if cost < best_cost {
                     best_cost = cost;
-                    if switch_depth == 1 {
-                        best_sub_policy = Some(sub_policy);
-                    } else {
-                        best_sub_policy = Some(&operating_policy);
-                    }
+                    best_switch_depth = switch_depth;
+                    best_sub_policy = Some(sub_policy);
                 }
             }
         }
@@ -125,7 +125,7 @@ fn dcp_tree_search(
             SidePolicy::DelayedPolicy(DelayedPolicy::new(
                 operating_policy.clone(),
                 best_sub_policy.clone(),
-                eudm.layer_t,
+                eudm.layer_t * best_switch_depth as f64,
             )),
             traces,
         )
@@ -139,7 +139,7 @@ pub fn dcp_tree_choose_policy(
     true_road: &Road,
     rng: &mut StdRng,
 ) -> (SidePolicy, Vec<rvx::Shape>) {
-    let roads = RoadSet::new_samples(true_road, rng, params.eudm.samples_n);
+    let roads = road_set_for_scenario(params, true_road, rng, params.eudm.samples_n);
     let debug = true_road.debug
         && true_road.timesteps + params.debug_steps_before >= params.max_steps as usize;
     let policy_choices = make_policy_choices();

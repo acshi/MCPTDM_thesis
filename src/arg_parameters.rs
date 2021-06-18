@@ -64,10 +64,20 @@ pub struct CostParameters {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CfbParameters {
+    pub key_vehicle_base_dist: f64,
+    pub key_vehicle_dist_time: f64,
+    pub uncertainty_threshold: f64,
+    pub dt: f64,
+    pub horizon_t: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Parameters {
     pub max_steps: u32,
     pub n_cars: usize,
     pub method: String,
+    pub use_cfb: bool,
 
     pub physics_dt: f64,
     pub replan_dt: f64,
@@ -81,12 +91,14 @@ pub struct Parameters {
     pub debug_car_i: Option<usize>,
     pub debug_steps_before: usize,
     pub super_debug: bool,
+
     pub only_crashes_with_ego: bool,
     pub obstacles_only_for_ego: bool,
     pub true_belief_sample_only: bool,
     pub debugging_scenario: Option<i32>,
 
     pub cost: CostParameters,
+    pub cfb: CfbParameters,
     pub eudm: EudmParameters,
     pub tree: TreeParameters,
     pub mpdm: MpdmParameters,
@@ -117,6 +129,7 @@ fn create_scenarios(
         let mut params = base_params.clone();
         match name.as_str() {
             "method" => params.method = value.parse().unwrap(),
+            "use_cfb" => params.use_cfb = value.parse().unwrap(),
             "max_steps" => params.max_steps = value.parse().unwrap(),
             "n_cars" => params.n_cars = value.parse().unwrap(),
             "discount_factor" => params.cost.discount_factor = value.parse().unwrap(),
@@ -141,7 +154,7 @@ fn create_scenarios(
 
     for s in scenarios.iter_mut() {
         s.scenario_name = Some(format_f!(
-            "_method_{s.method}_max_steps_{s.max_steps}_n_cars_{s.n_cars}_discount_factor_{s.cost.discount_factor}_rng_seed_{s.rng_seed}_"
+            "_method_{s.method}_use_cfb_{s.use_cfb}_max_steps_{s.max_steps}_n_cars_{s.n_cars}_discount_factor_{s.cost.discount_factor}_rng_seed_{s.rng_seed}_"
         ));
     }
 

@@ -13,6 +13,7 @@ use crate::{
     forward_control::ForwardControl,
     intelligent_driver::IntelligentDriverPolicy,
     mpdm::make_obstacle_vehicle_policy_choices,
+    open_loop_policy::{OpenLoopForwardControl, OpenLoopPolicy, OpenLoopSideControl},
     pure_pursuit::PurePursuitPolicy,
     road::{Road, ROAD_LENGTH},
     side_control::{SideControl, SideControlTrait},
@@ -141,7 +142,23 @@ impl Car {
         sim_car.preferred_steer_accel = PREFERRED_STEER_ACCEL_DEFAULT;
         sim_car.preferred_follow_time = FOLLOW_TIME_DEFAULT;
 
+        sim_car.target_lane_i = sim_car.current_lane();
+        sim_car.target_vel = sim_car.vel;
+        sim_car.target_follow_time = sim_car.preferred_follow_time;
+
         sim_car
+    }
+
+    pub fn open_loop_estimate(&self) -> Self {
+        let mut car = self.sim_estimate();
+
+        car.side_policy = Some(SidePolicy::OpenLoopPolicy(OpenLoopPolicy));
+        car.side_control = Some(SideControl::OpenLoopSideControl(OpenLoopSideControl));
+        car.forward_control = Some(ForwardControl::OpenLoopForwardControl(
+            OpenLoopForwardControl,
+        ));
+
+        car
     }
 
     pub fn policy_id(&self) -> u32 {

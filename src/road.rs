@@ -1,7 +1,7 @@
 use std::{cell::RefCell, f64::consts::PI, rc::Rc, u32};
 
 use itertools::Itertools;
-use nalgebra::{vector, Point3};
+use nalgebra::{vector, Point2, Point3};
 use parry2d_f64::{
     math::Isometry,
     na::point,
@@ -44,6 +44,7 @@ pub struct Road {
     pub cost: Cost,
     pub ego_is_safe: bool,
     pub car_traces: Option<Vec<Vec<(Point3<f64>, u32)>>>,
+    pub trajectory_buffer: Vec<Point2<f64>>,
     pub debug: bool,
 }
 
@@ -68,6 +69,7 @@ impl Road {
             ego_is_safe: true,
             debug: !params.run_fast,
             car_traces: Some(Vec::new()),
+            trajectory_buffer: Vec::new(),
             params,
         };
 
@@ -121,11 +123,40 @@ impl Road {
         self.belief = Some(Rc::new(Belief::uniform(self.cars.len(), n_policies)));
     }
 
+    pub fn clone_without_cars(&self) -> Self {
+        Self {
+            params: self.params.clone(),
+            t: self.t,
+            timesteps: self.timesteps,
+            cars: Vec::new(),
+            belief: self.belief.clone(),
+            last_ego: self.last_ego.clone(),
+            cost: self.cost.clone(),
+            ego_is_safe: self.ego_is_safe,
+            car_traces: None,
+            trajectory_buffer: Vec::new(),
+            debug: self.debug,
+        }
+    }
+
     pub fn sim_estimate(&self) -> Self {
-        let mut road = self.clone();
+        let mut road = self.clone_without_cars();
         road.cars = self.cars.iter().map(|c| c.sim_estimate()).collect();
-        // but make sure we don't give ourselves a bad estimate of the ego car!!!
+        // preserve the ego-car
         road.cars[0] = self.cars[0].clone();
+        road.debug = false;
+        road.cost.discount_factor = self.params.cost.discount_factor;
+        road
+    }
+
+    pub fn open_loop_estimate(&self, keep_car_i: usize) -> Self {
+        let mut road = self.clone_without_cars();
+        road.cars = self.cars.iter().map(|c| c.open_loop_estimate()).collect();
+        // preserve the ego-car and the specified one
+        road.cars[0] = self.cars[0].clone();
+        if keep_car_i != 0 {
+            road.cars[keep_car_i] = self.cars[keep_car_i].clone();
+        }
         road.debug = false;
         road.cost.discount_factor = self.params.cost.discount_factor;
         road
@@ -302,28 +333,25 @@ impl Road {
 
         let aabb = shape.compute_aabb(&no_rotation_pose);
         for (i, c) in self.cars.iter().enumerate() {
-            if i == car_i {
+            // fastest way to get to 'continue' (for performance)
+            if (c.x - car.x).abs() >= dist_thresh {
                 continue;
             }
-
-            if self.params.obstacles_only_for_ego && c.crashed && !car.is_ego() {
-                continue;
-            }
-
-            // skip cars behind this one
+            // skip cars behind (or ahead of) this one
             if AHEAD && c.x < car.x || !AHEAD && c.x > car.x {
                 // if i == 0 && car_i == 14 {
                 //     eprintln_f!("Skipping {car_i} to ego: c.x {:.2} car.x {:.2}", c.x, car.x);
                 // }
                 continue;
             }
-
-            if (c.x - car.x).abs() >= dist_thresh {
+            if i == car_i {
+                continue;
+            }
+            if self.params.obstacles_only_for_ego && c.crashed && !car.is_ego() {
                 continue;
             }
 
             let other_aabb = c.shape().compute_aabb(&c.pose());
-
             let side_sep = range_dist(
                 aabb.mins[1],
                 aabb.maxs[1],
@@ -416,16 +444,17 @@ impl Road {
     }
 
     pub fn update(&mut self, dt: f64) {
+        let mut trajectory = std::mem::replace(&mut self.trajectory_buffer, Vec::new());
+
         for car_i in 0..self.cars.len() {
             if !self.cars[car_i].crashed {
                 // policy
-                let trajectory;
                 {
                     let mut policy = self.cars[car_i].side_policy.take().unwrap();
                     self.cars[car_i].target_lane_i = policy.choose_target_lane(self, car_i);
                     self.cars[car_i].target_follow_time = policy.choose_follow_time(self, car_i);
                     self.cars[car_i].target_vel = policy.choose_vel(self, car_i);
-                    trajectory = policy.choose_trajectory(self, car_i);
+                    policy.choose_trajectory(self, car_i, &mut trajectory);
                     self.cars[car_i].side_policy = Some(policy);
                 }
 
@@ -527,6 +556,8 @@ impl Road {
         self.timesteps += 1;
 
         self.update_cost(dt);
+
+        self.trajectory_buffer = trajectory;
     }
 
     fn update_cost(&mut self, dt: f64) {

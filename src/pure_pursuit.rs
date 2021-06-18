@@ -234,20 +234,22 @@ impl SideControlTrait for PurePursuitPolicy {
         let car_to_target_y = target_y - car_ref_y;
 
         let ahead_dist = car_to_target_y.hypot(car_to_target_x);
-        let angle_to_target = car_to_target_y.atan2(car_to_target_x);
+        // let angle_to_target = car_to_target_y.atan2(car_to_target_x);
+        let angle_to_target_sin = car_to_target_y / ahead_dist;
 
         // if car_i == 0 {
         //     eprintln_f!("{target_ahead_dist=:.2}, {target_x=:.2}, {target_y=:.2}");
         // }
 
-        let target_steer = (2.0 * car.length * angle_to_target.sin() / ahead_dist).atan();
+        let target_steer = (2.0 * car.length * angle_to_target_sin / ahead_dist).atan();
 
         self.target_x = target_x;
         self.target_y = target_y;
         self.car_x = car_ref_x;
         self.car_y = car_ref_y;
         self.ahead_dist = target_ahead_dist;
-        self.trajectory = trajectory.to_vec();
+        self.trajectory.clear();
+        self.trajectory.extend_from_slice(trajectory);
 
         target_steer
     }
