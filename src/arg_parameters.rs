@@ -52,6 +52,9 @@ pub struct MpdmParameters {
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct CostParameters {
+    pub efficiency_low_speed_cost: f64,
+    pub efficiency_high_speed_cost: f64,
+    pub efficiency_high_speed_tolerance: f64,
     pub efficiency_weight: f64,
     pub safety_weight: f64,
     pub smoothness_weight: f64,
@@ -73,6 +76,15 @@ pub struct CfbParameters {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct BeliefParameters {
+    pub different_lane_prob: f64,
+    pub different_longitudinal_prob: f64,
+    pub accelerate_delta_vel_thresh: f64,
+    pub accelerate_ahead_dist_thresh: f64,
+    pub decelerate_vel_thresh: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Parameters {
     pub max_steps: u32,
     pub n_cars: usize,
@@ -83,6 +95,7 @@ pub struct Parameters {
     pub replan_dt: f64,
     pub nonego_policy_change_prob: f64,
     pub nonego_policy_change_dt: f64,
+    pub lane_change_time: f64,
 
     pub thread_limit: usize,
     pub rng_seed: u64,
@@ -91,12 +104,15 @@ pub struct Parameters {
     pub debug_car_i: Option<usize>,
     pub debug_steps_before: usize,
     pub super_debug: bool,
+    pub separation_debug: bool,
+    pub intelligent_driver_debug: bool,
 
     pub only_crashes_with_ego: bool,
     pub obstacles_only_for_ego: bool,
     pub true_belief_sample_only: bool,
     pub debugging_scenario: Option<i32>,
 
+    pub belief: BeliefParameters,
     pub cost: CostParameters,
     pub cfb: CfbParameters,
     pub eudm: EudmParameters,

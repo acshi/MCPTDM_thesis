@@ -11,7 +11,7 @@ use crate::{
 const TRANSITION_DIST_MIN: f64 = 1.0 * PRIUS_LENGTH;
 const TRANSITION_DIST_MAX: f64 = 100.0 * PRIUS_LENGTH;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum LongitudinalPolicy {
     Maintain,
     Accelerate,
@@ -21,7 +21,7 @@ pub enum LongitudinalPolicy {
 #[derive(Clone)]
 pub struct LaneChangePolicy {
     policy_id: u32,
-    target_lane_i: i32,
+    target_lane_i: Option<i32>,
     transition_time: f64,
     wait_for_clear: bool,
     long_policy: LongitudinalPolicy,
@@ -33,14 +33,14 @@ impl std::fmt::Debug for LaneChangePolicy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = self;
         let policy_str = format_f!("{s.long_policy:?}");
-        write_f!(f, "lane {s.target_lane_i}, {policy_str:10}")
+        write_f!(f, "lane {s.target_lane_i:?}, {policy_str:10}")
     }
 }
 
 impl LaneChangePolicy {
     pub fn new(
         policy_id: u32,
-        target_lane_i: i32,
+        target_lane_i: Option<i32>,
         transition_time: f64,
         wait_for_clear: bool,
         long_policy: LongitudinalPolicy,
@@ -63,7 +63,7 @@ impl LaneChangePolicy {
             .max(TRANSITION_DIST_MIN)
             .min(TRANSITION_DIST_MAX);
 
-        let target_y = Road::get_lane_y(self.target_lane_i);
+        let target_y = Road::get_lane_y(self.target_lane_i.unwrap_or_else(|| car.current_lane()));
 
         let transition_left = (car.y - target_y).abs() / LANE_WIDTH;
         let transition_dist = total_transition_dist * transition_left;
@@ -102,6 +102,7 @@ impl SidePolicyTrait for LaneChangePolicy {
             return road.cars[car_i].current_lane();
         }
         self.target_lane_i
+            .unwrap_or_else(|| road.cars[car_i].current_lane())
     }
 
     fn choose_follow_time(&mut self, _road: &Road, _car_i: usize) -> f64 {
@@ -131,7 +132,7 @@ impl SidePolicyTrait for LaneChangePolicy {
             let car = &road.cars[car_i];
             self.waiting_done = road.lane_definitely_clear_between(
                 car_i,
-                self.target_lane_i,
+                self.target_lane_i.unwrap_or_else(|| car.current_lane()),
                 car.x - car.length * 2.0,
                 car.x + car.length,
             );

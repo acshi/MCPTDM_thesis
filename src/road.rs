@@ -57,7 +57,7 @@ fn range_dist(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> f64 {
 
 impl Road {
     pub fn new(params: Rc<Parameters>) -> Self {
-        let ego_car = Car::new(0, 0);
+        let ego_car = Car::new(&params, 0, 0);
 
         let mut road = Self {
             t: 0.0,
@@ -76,7 +76,7 @@ impl Road {
         road.cars[0].preferred_vel = SPEED_DEFAULT;
         road.cars[0].theta = PI / 16.0;
         road.cars[0].y = Road::get_lane_y(0);
-        // road.cars[0].side_policy = Some(make_policy_choices()[4].clone());
+        // road.set_ego_policy(make_policy_choices()[4].clone());
 
         road
     }
@@ -96,7 +96,7 @@ impl Road {
 
     pub fn add_random_car(&mut self, rng: &Rc<RefCell<StdRng>>) {
         for _ in 0..100 {
-            let car = Car::random_new(self.cars.len(), rng);
+            let car = Car::random_new(&self.params, self.cars.len(), rng);
             if self.collides_any_car(&car) {
                 continue;
             }
@@ -107,7 +107,7 @@ impl Road {
     }
 
     pub fn add_obstacle(&mut self, x: f64, lane_i: i32) {
-        let mut car = Car::new(self.cars.len(), lane_i);
+        let mut car = Car::new(&self.params, self.cars.len(), lane_i);
         car.x = x;
         car.y += LANE_WIDTH / 4.0;
         car.theta = PI / 2.0;
@@ -119,8 +119,15 @@ impl Road {
     }
 
     pub fn init_belief(&mut self) {
-        let n_policies = make_policy_choices().len();
+        let n_policies = make_policy_choices(&self.params).len();
         self.belief = Some(Rc::new(Belief::uniform(self.cars.len(), n_policies)));
+    }
+
+    pub fn update_belief(&mut self) {
+        let mut belief_rc = self.belief.take().unwrap();
+        let belief = Rc::get_mut(&mut belief_rc).expect("update_belief should only be called when it has exclusive access to the top-level road");
+        belief.update(&self);
+        self.belief = Some(belief_rc);
     }
 
     pub fn clone_without_cars(&self) -> Self {
@@ -164,7 +171,7 @@ impl Road {
 
     pub fn sample_belief(&self, rng: &mut StdRng) -> Self {
         let belief = self.belief.clone().unwrap();
-        let policies = make_obstacle_vehicle_policy_choices();
+        let policies = make_obstacle_vehicle_policy_choices(&self.params);
 
         let mut road = self.sim_estimate();
 
@@ -183,6 +190,16 @@ impl Road {
     }
 
     pub fn set_ego_policy(&mut self, policy: SidePolicy) {
+        // we don't want to lose state when "switching" to the same policy we are already running
+        // this only really matters for mantain velocity policy and delayed switch policies
+        // For the delayed switching policies, it is assumed that any switch is wanted
+        // in order to reset the switching time
+        let policy_id = policy.policy_id();
+        let old_policy_id = self.ego_policy().policy_id();
+        if policy_id < 100 && policy_id == old_policy_id {
+            // not a delayed policy... keep state by not changing
+            return;
+        }
         self.cars[0].side_policy = Some(policy);
     }
 
@@ -366,13 +383,15 @@ impl Road {
                     min_car_i = Some(i);
                 }
 
-                if self.super_debug() && car.is_ego() {
-                    eprintln_f!("ego from {i} {side_sep=:.2}, {dist=:.2}");
-                } else if self.super_debug()
-                    && c.is_ego()
-                    && self.params.debug_car_i == Some(car.car_i)
-                {
-                    eprintln_f!("{car.car_i} from ego {side_sep=:.2}, {dist=:.2}");
+                if self.params.separation_debug {
+                    if self.super_debug() && car.is_ego() {
+                        eprintln_f!("ego from {i} {side_sep=:.2}, {dist=:.2}");
+                    } else if self.super_debug()
+                        && c.is_ego()
+                        && self.params.debug_car_i == Some(car.car_i)
+                    {
+                        eprintln_f!("{car.car_i} from ego {side_sep=:.2}, {dist=:.2}");
+                    }
                 }
             }
         }
@@ -494,13 +513,13 @@ impl Road {
             }
         }
 
-        // if self.super_debug() {
-        //     let ego = &self.cars[0];
-        //     eprintln!(
-        //         "{}: ego x: {:.2}, y: {:.2}, vel: {:.2}",
-        //         self.timesteps, ego.x, ego.y, ego.vel
-        //     );
-        // }
+        if self.super_debug() {
+            let ego = &self.cars[0];
+            eprintln!(
+                "{}: ego x: {:.2}, y: {:.2}, vel: {:.10}",
+                self.timesteps, ego.x, ego.y, ego.vel
+            );
+        }
 
         if let Some(traces) = self.car_traces.as_mut() {
             traces.resize(self.cars.len(), Vec::new());
@@ -563,6 +582,21 @@ impl Road {
     fn update_cost(&mut self, dt: f64) {
         let cparams = &self.params.cost;
         let car = &self.cars[0];
+
+        if car.vel < car.preferred_vel {
+            self.cost.efficiency += cparams.efficiency_weight
+                * cparams.efficiency_low_speed_cost
+                * (car.preferred_vel - car.vel)
+                * dt
+                * self.cost.discount;
+        } else if car.vel > car.preferred_vel + cparams.efficiency_high_speed_tolerance {
+            self.cost.efficiency += cparams.efficiency_weight
+                * cparams.efficiency_high_speed_cost
+                * (car.vel - car.preferred_vel - cparams.efficiency_high_speed_tolerance)
+                * dt
+                * self.cost.discount;
+        }
+
         self.cost.efficiency += cparams.efficiency_weight
             * (car.preferred_vel - car.vel).abs()
             * dt
@@ -586,7 +620,7 @@ impl Road {
                     "{}: policy change from {last_policy_id} to {policy_id}",
                     self.timesteps
                 );
-                eprintln!("New policy:\n{:?}", car.side_policy.as_ref().unwrap());
+                eprintln!("New policy:\n{:?}", self.ego_policy().operating_policy());
             }
         }
 
@@ -735,8 +769,8 @@ impl Road {
                 shapes.push(Rvx::lines(&points, line_width).color(line_color));
 
                 let dot_color = match self.ego_policy().operating_policy().policy_id() {
-                    1 | 4 => RvxColor::RED,
-                    2 | 5 => RvxColor::BLUE,
+                    1 | 3 => RvxColor::RED,
+                    4 => RvxColor::BLUE,
                     _ => RvxColor::BLACK,
                 };
 
@@ -755,13 +789,13 @@ impl Road {
             //     );
             // }
             } else if Some(car_i) == self.params.debug_car_i {
-                shapes.push(Rvx::lines(&points, 4.0).color(RvxColor::DARK_GRAY.set_a(0.9)));
+                shapes.push(Rvx::lines(&points, 6.0).color(RvxColor::DARK_GRAY.set_a(0.9)));
                 // shapes.push(Rvx::array(
                 //     Rvx::circle().scale(0.2).color(RvxColor::DARK_GRAY),
                 //     &points,
                 // ));
             } else if include_obstacle_cars {
-                shapes.push(Rvx::lines(&points, 4.0).color(RvxColor::WHITE.set_a(0.5)));
+                shapes.push(Rvx::lines(&points, 6.0).color(RvxColor::WHITE.set_a(0.5)));
             }
 
             // let draw_trace = trace[1];

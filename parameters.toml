@@ -1,34 +1,56 @@
-max_steps = 2000
+max_steps = 4000
 n_cars = 20
-method = "eudm"
+method = "mpdm"
+use_cfb = true
 
 physics_dt = 0.01
 replan_dt = 0.05
 nonego_policy_change_prob = 0.05
 nonego_policy_change_dt = 0.2
+lane_change_time = 2.0
 
 thread_limit = 7
 rng_seed = 0
 run_fast = false
-graphics_speedup = 4
-debug_car_i = 2
+graphics_speedup = 8
+debug_car_i = 16
 debug_steps_before = 20
 super_debug = false
+separation_debug = false
+intelligent_driver_debug = false
+# debugging_scenario = 3
+
 only_crashes_with_ego = true
 obstacles_only_for_ego = true
 true_belief_sample_only = false
-# debugging_scenario = 3
+
+[belief]
+different_lane_prob = 0.2
+different_longitudinal_prob = 0.6
+accelerate_delta_vel_thresh = 2.0
+accelerate_ahead_dist_thresh = 10.0
+decelerate_vel_thresh = 4.0
 
 [cost]
+efficiency_low_speed_cost = 1.0
+efficiency_high_speed_cost = 0.1
+efficiency_high_speed_tolerance = 1.0
 efficiency_weight = 1.0
 safety_weight = 500.0
-smoothness_weight = 15.0
+smoothness_weight = 10.0
 uncomfortable_dec_weight = 5.0
-curvature_change_weight = 5.0
+curvature_change_weight = 2.0
 safety_margin = 0.44 # bounded by lane width 3.7 - prius width 1.76 = 1.94
 uncomfortable_dec = 1.6
 large_curvature_change = 0.12
-discount_factor = 0.85 # per second, 0.85
+discount_factor = 0.8 # per second, 0.85
+
+[cfb]
+key_vehicle_base_dist = 10.0
+key_vehicle_dist_time = 2.0
+uncertainty_threshold = 0.3
+dt = 0.2
+horizon_t = 8.0
 
 [tree]
 dt = 0.2
@@ -45,7 +67,7 @@ samples_n = 16
 dt = 0.2
 layer_t = 2.0
 samples_n = 8
-search_depth = 5
+search_depth = 4
 
 [mcts]
 dt = 0.2

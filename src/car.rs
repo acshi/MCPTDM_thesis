@@ -79,9 +79,9 @@ pub struct Car {
 }
 
 impl Car {
-    pub fn new(car_i: usize, lane_i: i32) -> Self {
+    pub fn new(params: &Parameters, car_i: usize, lane_i: i32) -> Self {
         let lane_y = Road::get_lane_y(lane_i);
-        let policies = make_obstacle_vehicle_policy_choices();
+        let policies = make_obstacle_vehicle_policy_choices(params);
         Self {
             car_i,
             crashed: false,
@@ -114,17 +114,18 @@ impl Car {
             side_policy: Some(if lane_i == 0 {
                 policies[1].clone()
             } else {
-                policies[4].clone()
+                policies[3].clone()
             }),
         }
     }
 
-    pub fn random_new(car_i: usize, rng: &Rc<RefCell<StdRng>>) -> Self {
+    pub fn random_new(params: &Parameters, car_i: usize, rng: &Rc<RefCell<StdRng>>) -> Self {
         let mut rng = rng.borrow_mut();
 
         let lane_i = rng.gen_range(0..=1);
-        let mut car = Self::new(car_i, lane_i);
+        let mut car = Self::new(params, car_i, lane_i);
         car.preferred_vel = rng.gen_range(SPEED_LOW..SPEED_HIGH);
+        // car.vel = car.preferred_vel;
         car.x = rng.gen_range(0.0..ROAD_LENGTH) - ROAD_LENGTH / 2.0;
         car.preferred_accel = rng.gen_range(PREFERRED_ACCEL_LOW..PREFERRED_ACCEL_HIGH);
         car.preferred_steer_accel =
@@ -137,7 +138,7 @@ impl Car {
     pub fn sim_estimate(&self) -> Self {
         let mut sim_car = self.clone();
 
-        sim_car.preferred_vel = self.vel.max(PREFERRED_VEL_ESTIMATE_MIN);
+        sim_car.preferred_vel = self.vel.max(SPEED_LOW);
         sim_car.preferred_accel = PREFERRED_ACCEL_DEFAULT;
         sim_car.preferred_steer_accel = PREFERRED_STEER_ACCEL_DEFAULT;
         sim_car.preferred_follow_time = FOLLOW_TIME_DEFAULT;

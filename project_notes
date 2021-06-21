@@ -26,6 +26,8 @@ May's policies all have the ability to come to a sudden stop, but no reason for 
 His pure pursuit is simpler than mine, and avoids the circle intersection, doing some sort of curve integral to get the target point. Just not sure how they decide where to start counting!
 There are tons of potential reward functions... so Ed agrees I should just go with something, and try not to waste time messing with it much.
 
+Add as few knobs and whistles as possible, since complexity can grow fast.
+
 Misc. Notes:
 Stanley controller is similar to Pure Pursuit, but has some advantages.
 https://www.ri.cmu.edu/pub_files/2009/2/Automatic_Steering_Methods_for_Autonomous_Automobile_Path_Tracking.pdf
@@ -34,17 +36,26 @@ https://thomasfermi.github.io/Algorithms-for-Automated-Driving/Control/PurePursu
 
 Questions for Ed:
 It seems like my random obstacle car policy-changes are causing the ego vehicle to sometimes be in an impossible situation. Another vehicle can crash into it without it having a chance to escape!!! Partially this might be because I allow the other vehicle to maybe have better acceleration. What parameters should I randomize for the obstacle vehicles and how? Should the ego always be top-performing?
+(Probably doesn't matter too much)
 
 My policies carry some state. Some of which gets reset when you switch to that policy. So that means you could switch to the policy... that you are already on, and this would give different behavior. Either we embrace this, and treat it as a different policy choice, or we maybe find some way to avoid having that state? How does this work for lane changes or for "maintaining" speed? (maintaining _which_ speed!!)
+(cargo run --release rng_seed 2 :: method mpdm :: max_steps 2405 2406)
+(Ed says, yeah, try to think of some way that we can get rid of state and still get similar-ish behavior? Maybe you have a maintain policy that gets a little slower over time, and so you add another maintain policy that does a little bit of acceleration to compensate! Then you get both ways at least. On the other hand, it can be nice to just allow emergent behavior and not fight against it. Sure maybe allow a policy reset choice if it seems like this behavior is absolutely important! But check first. Emergent behavior shouldn't scare you! Again, any way to rephrase the policy? Maybe we try to make a certain amount of dy/dx based on speed, so that we store our progress in the physical world! Store state in the physical world as much as possible.)
+
+Should I try at all for a ring or double ring environment? Or keep it perfectly straight? A benefit to the ring is needing to slow down for the curves, and needing fewer vehicles to simulate.
+(Would be nice if not too much work, but maybe not too important)
+
+Since I don't have belief estimation, how about just a static set of beliefs based on similarity of the current policy to a new one?
+(Sounds good! Just be able to use ground-truth for debugging.)
+
+(MCTS can win because you can throw more policies at it!!!)
 
 Tasks:
-Overall for this week: Implement CFB; fix bugs to get "mostly reasonable" behavior with all the methods
+Overall for this week:
 
-Implement open-loop simulation of agents for either EUDM CFB, or for vehicles far enough away from the ego vehicle.
+Belief that uses a factor to decrease probability for policy change. (should fix CFB issues)
 
-Implement the rest of CFB
-
-Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
+recycle obstacle vehicles between front and back (faster performance, better results)
 
 A new idea: improve MCTS with progressive widening (I guess just adding new leaf nodes with different belief samples?) Or even a KR-UCT like approach that take advantage of the fact that policies with different longitudinal choices are more similar than ones with different lateral choices? Or even extend to continuous space with KR-UCT? Or use KR-UCT to make POMCP work?
 
@@ -56,7 +67,12 @@ POMCP proper? (maybe cut it)
 
 MAYBE SKIP: We need _something_ to improve our belief or we will be too scared of trying to pass vehicles... Something bayesian should be simple and work just fine with the forward simulator? Since we have so few possible policies? I guess the difficulty is the joint nature of the situation, though? Then there is also the different between our belief about their _current_ state, and our belief about their _future_ state. Vehicle X is definitely lane-keeping right now.... but it could start a lane-change soon...? I guess we would need to define a belief space capable of handling that future uncertainty? I think the POMCP simulator would expect that the forward simulations would include things like that as it goes simulating. MAYBE, the obstacle-vehicle versions of the policies, modified to be nicer, will make this an entirely moot point. That would be simpler, so let's go with that!!!
 
+MAYBE SKIP: Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
+
 Finished tasks:
+EUDM-style cost for velocity
+Lane-change policy with storing progress in our remaining dy to finish.
+Implement CFB
 Report same overall reward metrics as the EUDM paper, _separate_ from the optimization cost function.. For example, no discount is applied to these overall rewards.
 We need it to be possible to stop behind a vehicle and then still turn when it is safe to do so. Maybe we just need the intelligent driver model to only look at the target lane?
 We need obstacle vehicles to be a _little_ nicer about when they change lanes, or we _will_ end up getting hit by vehicles willy-nilly! (We can make them perform the lane-change more slowly and also check there is nothing too close in the lane we want to change into)
@@ -87,3 +103,11 @@ See if we can copy EUDM reward function, including constant weights and even how
 We can make car-car closest-points WAY faster by writing specific code for that.
 Get our testing setup and parameters to better match that used by the EUDM code: https://github.com/HKUST-Aerial-Robotics/eudm_planner/blob/master/eudm_planner/config/eudm_config.pb.txt
 Maybe switch cars to a structure of arrays kind of thing?
+
+Timeline:
+6/25/21 -- Rough paper outline 20%
+7/2/21 -- Form of final experiments determined through experimentation and full-system debugging
+7/9/21 -- Paper at 60%
+7/16/21 -- Paper at 80%, Ed reviews
+7/23/21 -- Paper at 100%, reviewing and editing
+7/30/21 -- (approx) due for submission

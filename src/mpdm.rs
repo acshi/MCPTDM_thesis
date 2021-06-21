@@ -10,46 +10,54 @@ use crate::{
     side_policies::{SidePolicy, SidePolicyTrait},
 };
 
-pub fn make_obstacle_vehicle_policy_choices() -> Vec<SidePolicy> {
+pub fn make_obstacle_vehicle_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
     let mut policy_choices = Vec::new();
 
     for &lane_i in &[0, 1] {
-        for long_policy in vec![
-            LongitudinalPolicy::Maintain,
-            LongitudinalPolicy::Accelerate,
-            LongitudinalPolicy::Decelerate,
-        ] {
+        for long_policy in [LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate] {
             policy_choices.push(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
                 policy_choices.len() as u32,
-                lane_i,
-                4.0,
+                Some(lane_i),
+                params.lane_change_time,
                 true,
                 long_policy,
             )));
         }
     }
 
+    policy_choices.push(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
+        policy_choices.len() as u32,
+        None,
+        params.lane_change_time,
+        true,
+        LongitudinalPolicy::Decelerate,
+    )));
+
     policy_choices
 }
 
-pub fn make_policy_choices() -> Vec<SidePolicy> {
+pub fn make_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
     let mut policy_choices = Vec::new();
 
     for &lane_i in &[0, 1] {
-        for long_policy in vec![
-            LongitudinalPolicy::Maintain,
-            LongitudinalPolicy::Accelerate,
-            LongitudinalPolicy::Decelerate,
-        ] {
+        for long_policy in [LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate] {
             policy_choices.push(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
                 policy_choices.len() as u32,
-                lane_i,
-                4.0,
+                Some(lane_i),
+                params.lane_change_time,
                 false,
                 long_policy,
             )));
         }
     }
+
+    policy_choices.push(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
+        policy_choices.len() as u32,
+        None,
+        params.lane_change_time,
+        false,
+        LongitudinalPolicy::Decelerate,
+    )));
 
     policy_choices
 }
@@ -90,7 +98,7 @@ pub fn mpdm_choose_policy(
         );
     }
 
-    let policy_choices = make_policy_choices();
+    let policy_choices = make_policy_choices(params);
     let mut best_cost = Cost::max_value();
     let mut best_policy = None;
 

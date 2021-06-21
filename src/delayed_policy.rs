@@ -43,7 +43,7 @@ impl DelayedPolicy {
     fn check_for_switch(&mut self, road: &Road) {
         let start_time = *self.start_time.get_or_insert(road.t);
         self.time_until_switch = (start_time + self.delay_time - road.t).max(0.0);
-        if self.time_until_switch == 0.0 {
+        if self.time_until_switch <= 0.001 {
             self.has_switched = true;
         }
     }
@@ -77,6 +77,16 @@ impl SidePolicyTrait for DelayedPolicy {
             self.policy_b.choose_follow_time(road, car_i)
         } else {
             self.policy_a.choose_follow_time(road, car_i)
+        }
+    }
+
+    fn choose_vel(&mut self, road: &Road, car_i: usize) -> f64 {
+        self.check_for_switch(road);
+
+        if self.has_switched {
+            self.policy_b.choose_vel(road, car_i)
+        } else {
+            self.policy_a.choose_vel(road, car_i)
         }
     }
 

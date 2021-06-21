@@ -13,6 +13,7 @@ use reward::Reward;
 use road::Road;
 use road_set::RoadSet;
 use rvx::Rvx;
+#[allow(unused)]
 use side_policies::SidePolicyTrait;
 
 use crate::{eudm::dcp_tree_choose_policy, mcts::mcts_choose_policy, tree::tree_choose_policy};
@@ -115,14 +116,7 @@ impl State {
                 check_for_duplicate_shapes(&self.traces);
             }
 
-            let old_policy_id = self.road.cars[0]
-                .side_policy
-                .as_ref()
-                .map(|p| p.policy_id());
-
-            if Some(policy.policy_id()) != old_policy_id {
-                self.road.cars[0].side_policy = Some(policy);
-            }
+            self.road.set_ego_policy(policy);
         }
 
         // random policy changes for the obstacle vehicles
@@ -130,7 +124,7 @@ impl State {
             (self.params.nonego_policy_change_dt / self.params.physics_dt).round() as u32;
         if self.timestep % policy_change_interval == 0 {
             let mut rng = self.rng.borrow_mut();
-            let policy_choices = make_obstacle_vehicle_policy_choices();
+            let policy_choices = make_obstacle_vehicle_policy_choices(&self.params);
 
             for c in self.road.cars[1..].iter_mut() {
                 if rng.gen_bool(self.params.nonego_policy_change_prob * dt) {
@@ -144,6 +138,7 @@ impl State {
         let last_ego_vel = self.road.cars[0].vel;
 
         // actual simulation
+        self.road.update_belief();
         self.road.update(dt);
 
         // final reporting reward (separate from cost function, though similar)
@@ -169,32 +164,34 @@ fn debugging_scenarios(params: &Parameters, road: &mut Road) {
     match params.debugging_scenario {
         Some(1) => {
             road.cars.truncate(1);
-            road.cars.push(Car::new(1, 1));
-            road.cars[1].side_policy = Some(make_obstacle_vehicle_policy_choices()[0].clone());
+            road.cars.push(Car::new(params, 1, 1));
+            road.cars[1].side_policy =
+                Some(make_obstacle_vehicle_policy_choices(params)[0].clone());
         }
         Some(2) => {
             road.cars.truncate(1);
             road.add_obstacle(5.0, 0);
-            road.cars.push(Car::new(2, 1));
-            road.cars[2].side_policy = Some(make_obstacle_vehicle_policy_choices()[0].clone());
+            road.cars.push(Car::new(params, 2, 1));
+            road.cars[2].side_policy =
+                Some(make_obstacle_vehicle_policy_choices(params)[0].clone());
         }
         Some(3) => {
             road.cars.clear();
-            let mut c = Car::new(0, 0);
+            let mut c = Car::new(params, 0, 0);
             c.vel = 15.0 * MPH_TO_MPS;
-            c.side_policy = Some(make_policy_choices()[0].clone());
+            c.side_policy = Some(make_policy_choices(params)[0].clone());
             road.last_ego = c.clone();
             road.cars.push(c);
 
-            let mut c = Car::new(1, 0);
+            let mut c = Car::new(params, 1, 0);
             c.x = 10.0;
             c.vel = 10.0 * MPH_TO_MPS;
-            c.side_policy = Some(make_obstacle_vehicle_policy_choices()[0].clone());
+            c.side_policy = Some(make_obstacle_vehicle_policy_choices(params)[0].clone());
             road.cars.push(c);
-            let mut c = Car::new(2, 1);
+            let mut c = Car::new(params, 2, 1);
             c.x = 10.0;
             c.vel = 10.0 * MPH_TO_MPS;
-            c.side_policy = Some(make_obstacle_vehicle_policy_choices()[3].clone());
+            c.side_policy = Some(make_obstacle_vehicle_policy_choices(params)[3].clone());
             road.cars.push(c);
         }
         _ => (),

@@ -202,7 +202,7 @@ pub fn mcts_choose_policy(
 ) -> (SidePolicy, Vec<rvx::Shape>) {
     let roads = road_set_for_scenario(params, true_road, rng, params.mcts.samples_n);
 
-    let policy_choices = make_policy_choices();
+    let policy_choices = make_policy_choices(params);
     let debug = true_road.debug
         && true_road.timesteps + params.debug_steps_before >= params.max_steps as usize;
 
@@ -217,14 +217,8 @@ pub fn mcts_choose_policy(
         inner: MctsNodeInner::Branch { sub_nodes: None },
     };
 
-    if params.true_belief_sample_only {
-        for mut road in itertools::repeat_n(true_road.sim_estimate(), params.mcts.samples_n) {
-            find_and_run_trial(&mut node, &mut road, rng);
-        }
-    } else {
-        for mut road in roads.into_iter() {
-            find_and_run_trial(&mut node, &mut road, rng);
-        }
+    for mut road in roads.into_iter().cycle().take(params.mcts.samples_n) {
+        find_and_run_trial(&mut node, &mut road, rng);
     }
 
     let mut best_score = Cost::max_value();

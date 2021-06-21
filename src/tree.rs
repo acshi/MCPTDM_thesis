@@ -102,7 +102,7 @@ pub fn tree_choose_policy(
     rng: &mut StdRng,
 ) -> (SidePolicy, Vec<rvx::Shape>) {
     let roads = road_set_for_scenario(params, true_road, rng, params.tree.samples_n);
-    let policy_choices = make_policy_choices();
+    let policy_choices = make_policy_choices(params);
     let debug = true_road.debug && true_road.timesteps >= (params.max_steps - 100) as usize;
 
     let node = ClassicTreeNode {

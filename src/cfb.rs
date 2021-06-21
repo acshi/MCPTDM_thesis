@@ -44,7 +44,7 @@ pub fn conditional_focused_branching(params: &Parameters, road: &Road, n: usize)
     // a light acceleration from just speeding off into stuff? Or the simulation making any sense at all?
     // I imagine that the uncertain and the ego vehicle must follow their real closed-loop policies for this to do any good.
 
-    let policies = make_obstacle_vehicle_policy_choices();
+    let policies = make_obstacle_vehicle_policy_choices(params);
 
     let base_safety = road.cost.safety;
     let open_loop_sims = uncertain_car_ids
@@ -110,7 +110,7 @@ pub fn conditional_focused_branching(params: &Parameters, road: &Road, n: usize)
         scenarios.push((probability, sim_road))
     }
 
-    // sort descending and choose just the most probably
+    // sort descending and choose just the most probable
     scenarios.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
     scenarios.truncate(n);
     let mut roads = scenarios.into_iter().map(|a| a.1).collect_vec();

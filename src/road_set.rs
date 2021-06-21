@@ -78,7 +78,12 @@ impl RoadSet {
         self.roads.iter().map(|r| r.cost).sum::<Cost>() / self.roads.len() as f64
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = Road> {
+    pub fn into_iter(self) -> impl Iterator<Item = Road> + Clone {
         self.roads.into_iter()
+    }
+
+    #[allow(unused)]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Road> {
+        self.roads.iter_mut()
     }
 }
