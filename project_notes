@@ -53,15 +53,13 @@ Since I don't have belief estimation, how about just a static set of beliefs bas
 Tasks:
 Overall for this week:
 
-Belief that uses a factor to decrease probability for policy change. (should fix CFB issues)
+Use different RNG for MCTS versus obstacle vehicle choices, so that the same rng seed produces a similar scenario regardless of method. This shouldn't necessarily change the asymptotic goodness of each method as we get more samples, but should make it converge faster with fewer samples.
 
-recycle obstacle vehicles between front and back (faster performance, better results)
+A new idea: unequal layer times??? Or just try making search depth deeper?
 
 A new idea: improve MCTS with progressive widening (I guess just adding new leaf nodes with different belief samples?) Or even a KR-UCT like approach that take advantage of the fact that policies with different longitudinal choices are more similar than ones with different lateral choices? Or even extend to continuous space with KR-UCT? Or use KR-UCT to make POMCP work?
 
 A new idea: a machine-learning approach that choose which paths of the tree to search?
-
-Belief estimation? Skip it to save time? Just give each the same belief? That's fair!
 
 POMCP proper? (maybe cut it)
 
@@ -70,6 +68,11 @@ MAYBE SKIP: We need _something_ to improve our belief or we will be too scared o
 MAYBE SKIP: Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
 
 Finished tasks:
+Truly fair comparison needs to account for computation time. We can sweep samples_n.
+Improve plotting so compare time and each metric, for each method. So for plotting, this means making it possible to draw a separate graph for each method.
+cache aabb values
+recycle obstacle vehicles between front and back (faster performance, better results)
+Belief that uses a factor to decrease probability for policy change. (should fix CFB issues)
 EUDM-style cost for velocity
 Lane-change policy with storing progress in our remaining dy to finish.
 Implement CFB

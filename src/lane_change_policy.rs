@@ -16,6 +16,7 @@ pub enum LongitudinalPolicy {
     Maintain,
     Accelerate,
     Decelerate,
+    AccDec(f64),
 }
 
 #[derive(Clone)]
@@ -65,15 +66,15 @@ impl LaneChangePolicy {
 
         let target_y = Road::get_lane_y(self.target_lane_i.unwrap_or_else(|| car.current_lane()));
 
-        let transition_left = (car.y - target_y).abs() / LANE_WIDTH;
+        let transition_left = (car.y() - target_y).abs() / LANE_WIDTH;
         let transition_dist = total_transition_dist * transition_left;
 
-        let target_x = car.x + transition_dist;
+        let target_x = car.x() + transition_dist;
         // let progress = (road.t - start_time) / self.transition_time;
 
         traj.clear();
         traj.extend_from_slice(&[
-            point!(car.x, car.y),
+            point!(car.x(), car.y()),
             point!(target_x, target_y),
             point!(target_x + 100.0, target_y), // then continue straight
         ]);
@@ -89,11 +90,15 @@ impl LaneChangePolicy {
 
         traj.clear();
         traj.extend_from_slice(&[
-            point!(car.x, car.y),
-            point!(car.x + transition_dist, Road::get_lane_y(lane_i)),
-            point!(car.x + 100.0, Road::get_lane_y(lane_i)),
+            point!(car.x(), car.y()),
+            point!(car.x() + transition_dist, Road::get_lane_y(lane_i)),
+            point!(car.x() + 100.0, Road::get_lane_y(lane_i)),
         ]);
     }
+}
+
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    a + t * (b - a)
 }
 
 impl SidePolicyTrait for LaneChangePolicy {
@@ -110,6 +115,13 @@ impl SidePolicyTrait for LaneChangePolicy {
             LongitudinalPolicy::Maintain => 0.6,
             LongitudinalPolicy::Accelerate => 0.2,
             LongitudinalPolicy::Decelerate => 1.0,
+            LongitudinalPolicy::AccDec(accdec) => {
+                if accdec > 0.0 {
+                    lerp(0.6, 0.2, (accdec / 10.0).min(1.0).max(0.0))
+                } else {
+                    lerp(0.6, 1.0, (-accdec / 10.0).min(1.0).max(0.0))
+                }
+            }
         }
     }
 
@@ -122,6 +134,13 @@ impl SidePolicyTrait for LaneChangePolicy {
                 .max(PREFERRED_VEL_ESTIMATE_MIN),
             LongitudinalPolicy::Accelerate => (car.vel + 10.0).max(PREFERRED_VEL_ESTIMATE_MIN),
             LongitudinalPolicy::Decelerate => (car.vel - 10.0).max(0.0),
+            LongitudinalPolicy::AccDec(accdec) => {
+                if accdec > 0.0 {
+                    (car.vel + accdec).max(PREFERRED_VEL_ESTIMATE_MIN)
+                } else {
+                    (car.vel + accdec).max(0.0)
+                }
+            }
         };
 
         target_vel
@@ -133,8 +152,8 @@ impl SidePolicyTrait for LaneChangePolicy {
             self.waiting_done = road.lane_definitely_clear_between(
                 car_i,
                 self.target_lane_i.unwrap_or_else(|| car.current_lane()),
-                car.x - car.length * 2.0,
-                car.x + car.length,
+                car.x() - car.length * 2.0,
+                car.x() + car.length,
             );
         }
         if self.waiting_done || !self.wait_for_clear {

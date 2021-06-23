@@ -39,8 +39,13 @@ pub fn make_obstacle_vehicle_policy_choices(params: &Parameters) -> Vec<SidePoli
 pub fn make_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
     let mut policy_choices = Vec::new();
 
+    let mut long_policies = vec![LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate];
+    for &accdec in params.extra_ego_accdec_policies.iter() {
+        long_policies.push(LongitudinalPolicy::AccDec(accdec));
+    }
+
     for &lane_i in &[0, 1] {
-        for long_policy in [LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate] {
+        for &long_policy in long_policies.iter() {
             policy_choices.push(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
                 policy_choices.len() as u32,
                 Some(lane_i),

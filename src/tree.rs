@@ -23,11 +23,12 @@ struct ClassicTreeNode<'a> {
 fn classic_tree_search(node: ClassicTreeNode) -> (ClassicTreeNode, SidePolicy) {
     let mut traces = Vec::new();
 
+    let base_depth = node.depth;
     let base_roads = &node.roads;
     let tree = &node.params.tree;
     let debug = node.debug;
 
-    if debug {
+    if debug && node.depth == 0 {
         eprintln!(
             "{}: Classic tree search policies and costs and policy {}",
             base_roads.timesteps(),
@@ -49,6 +50,13 @@ fn classic_tree_search(node: ClassicTreeNode) -> (ClassicTreeNode, SidePolicy) {
         // if debug && base_road.timesteps == 400 && _i == 2 {
         //     node.road.debug = true;
         // }
+
+        if debug {
+            for _ in 0..base_depth {
+                eprint!("    ");
+            }
+            eprintln_f!("{_i}: {sub_policy:?}:");
+        }
 
         node.roads.set_ego_policy(sub_policy);
         // if node.depth < 2 {
@@ -73,8 +81,11 @@ fn classic_tree_search(node: ClassicTreeNode) -> (ClassicTreeNode, SidePolicy) {
         };
 
         if debug {
+            for _ in 0..base_depth + 1 {
+                eprint!("    ");
+            }
             eprintln_f!(
-                "{_i}: {sub_policy:?}: {:7.2?} = {:7.2}",
+                "{:7.2?} = {:7.2}",
                 node.roads.cost(),
                 node.roads.cost().total()
             );
@@ -103,7 +114,8 @@ pub fn tree_choose_policy(
 ) -> (SidePolicy, Vec<rvx::Shape>) {
     let roads = road_set_for_scenario(params, true_road, rng, params.tree.samples_n);
     let policy_choices = make_policy_choices(params);
-    let debug = true_road.debug && true_road.timesteps >= (params.max_steps - 100) as usize;
+    let debug = true_road.debug
+        && true_road.timesteps + params.debug_steps_before >= params.max_steps as usize;
 
     let node = ClassicTreeNode {
         params,
@@ -115,5 +127,14 @@ pub fn tree_choose_policy(
     };
 
     let (final_node, policy) = classic_tree_search(node);
+
+    if debug {
+        let cost = final_node.roads.cost();
+        eprintln_f!(
+            "Choose policy with best_cost: {cost:.2?} = {:.2}: {policy:?}",
+            cost.total()
+        );
+    }
+
     (policy, final_node.traces)
 }

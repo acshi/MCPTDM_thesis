@@ -15,7 +15,7 @@ fn key_vehicles<'a>(params: &Parameters, road: &Road) -> Vec<usize> {
             continue;
         }
 
-        let dx = (ego.x - c.x).abs();
+        let dx = (ego.x() - c.x()).abs();
         // eprintln_f!("ego to {c.car_i}: {dx=:.2}, {dx_thresh=:.2}");
         if dx <= dx_thresh {
             car_ids.push(c.car_i);
@@ -27,14 +27,19 @@ fn key_vehicles<'a>(params: &Parameters, road: &Road) -> Vec<usize> {
 
 pub fn conditional_focused_branching(params: &Parameters, road: &Road, n: usize) -> RoadSet {
     let belief = road.belief.as_ref().unwrap();
+    let debug = params.cfb_debug && road.super_debug();
 
     let key_car_ids = key_vehicles(params, road);
-    // eprintln_f!("{key_car_ids=:?}");
+    if debug {
+        eprintln_f!("{key_car_ids=:?}");
+    }
     let uncertain_car_ids = key_car_ids
         .into_iter()
         .filter(|&car_i| belief.is_uncertain(car_i, params.cfb.uncertainty_threshold))
         .collect_vec();
-    // eprintln_f!("{uncertain_car_ids=:?}");
+    if debug {
+        eprintln_f!("{uncertain_car_ids=:?}");
+    }
 
     // For each car, perform an open-loop simulation with only that car, using each real policy.
     // I guess the ego-vehicle gets to keep using its real policy?
@@ -75,10 +80,40 @@ pub fn conditional_focused_branching(params: &Parameters, road: &Road, n: usize)
         })
         .collect_vec();
 
-    // eprintln!("Open loop sim results:");
-    // for open_loop_sim in open_loop_sims.iter() {
-    //     eprintln_f!("{open_loop_sim:.2?}");
-    // }
+    if debug {
+        eprintln!("Open loop sim results:");
+        for open_loop_sim in open_loop_sims.iter() {
+            eprintln_f!("{open_loop_sim:.2?}");
+        }
+    }
+
+    let mut sorted_open_sims = open_loop_sims.into_iter().filter_map(|a| a).collect_vec();
+
+    // only need to give special consideration to an obstacle vehicle if one policy is more dangerous than another
+    sorted_open_sims.retain(|(_, max_safety_cost, costs)| {
+        let min_safety_cost = *costs
+            .iter()
+            .min_by(|a, b| a.partial_cmp(b).unwrap())
+            .unwrap();
+        *max_safety_cost > min_safety_cost + params.cfb.dangerous_delta_threshold
+    });
+
+    if debug {
+        eprintln!("Potentially dangerous sims:");
+        for open_loop_sim in sorted_open_sims.iter() {
+            eprintln_f!("{open_loop_sim:.2?}");
+        }
+    }
+
+    sorted_open_sims.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    sorted_open_sims.truncate(params.cfb.max_n_for_cartesian_product);
+
+    if debug {
+        eprintln!("Choosing to consider all permutations of:");
+        for open_loop_sim in sorted_open_sims.iter() {
+            eprintln_f!("{open_loop_sim:.2?}");
+        }
+    }
 
     let mut sim_road = road.sim_estimate();
     // Each car (besides ego) defaults to the policy that is most likely for it
@@ -88,9 +123,8 @@ pub fn conditional_focused_branching(params: &Parameters, road: &Road, n: usize)
     }
 
     // for each risky car, produces an iter of tuples, of (car_i, each policy_i)
-    let risky_car_policies = open_loop_sims
+    let risky_car_policies = sorted_open_sims
         .iter()
-        .filter_map(|a| a.as_ref())
         .map(|a| a.0)
         .map(|car_i| (0..policies.len()).map(move |p_i| (car_i, p_i)));
 

@@ -8,14 +8,32 @@ const AHEAD_DIST_MIN: f64 = LANE_WIDTH + PRIUS_LENGTH * 0.2;
 const AHEAD_DIST_MAX: f64 = 20.0 * PRIUS_LENGTH;
 
 #[derive(Clone)]
-pub struct PurePursuitPolicy {
-    ahead_time: f64,
+struct PurePursuitPolicyDebug {
     target_x: f64,
     target_y: f64,
     car_x: f64,
     car_y: f64,
     ahead_dist: f64,
     trajectory: Vec<Point2<f64>>,
+}
+
+impl PurePursuitPolicyDebug {
+    fn new() -> Self {
+        Self {
+            target_x: 0.0,
+            target_y: 0.0,
+            trajectory: vec![Point2::new(0.0, 0.0)],
+            car_x: 0.0,
+            car_y: 0.0,
+            ahead_dist: 0.0,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct PurePursuitPolicy {
+    ahead_time: f64,
+    debug_info: Option<Box<PurePursuitPolicyDebug>>,
 }
 
 impl std::fmt::Debug for PurePursuitPolicy {
@@ -28,12 +46,7 @@ impl PurePursuitPolicy {
     pub fn new(ahead_time: f64) -> Self {
         Self {
             ahead_time,
-            target_x: 0.0,
-            target_y: 0.0,
-            trajectory: vec![Point2::new(0.0, 0.0)],
-            car_x: 0.0,
-            car_y: 0.0,
-            ahead_dist: 0.0,
+            debug_info: None,
         }
     }
 }
@@ -207,8 +220,8 @@ impl SideControlTrait for PurePursuitPolicy {
         // let car_rear_x = car.x - car.length * car.theta.cos();
         // let car_rear_y = car.y - car.length * car.theta.sin();
 
-        let car_ref_x = car.x;
-        let car_ref_y = car.y;
+        let car_ref_x = car.x();
+        let car_ref_y = car.y();
 
         let target_ahead_dist = (self.ahead_time * car.vel)
             .min(AHEAD_DIST_MAX)
@@ -243,34 +256,42 @@ impl SideControlTrait for PurePursuitPolicy {
 
         let target_steer = (2.0 * car.length * angle_to_target_sin / ahead_dist).atan();
 
-        self.target_x = target_x;
-        self.target_y = target_y;
-        self.car_x = car_ref_x;
-        self.car_y = car_ref_y;
-        self.ahead_dist = target_ahead_dist;
-        self.trajectory.clear();
-        self.trajectory.extend_from_slice(trajectory);
+        if self.debug_info.is_none() && road.debug && car.is_ego() {
+            self.debug_info = Some(Box::new(PurePursuitPolicyDebug::new()));
+        }
+
+        if let Some(info) = self.debug_info.as_mut() {
+            info.target_x = target_x;
+            info.target_y = target_y;
+            info.car_x = car_ref_x;
+            info.car_y = car_ref_y;
+            info.ahead_dist = target_ahead_dist;
+            info.trajectory.clear();
+            info.trajectory.extend_from_slice(trajectory);
+        }
 
         target_steer
     }
 
     fn draw(&self, r: &mut Rvx) {
-        r.draw(
-            Rvx::circle()
-                .scale(0.5)
-                .translate(&[self.target_x, self.target_y])
-                .color(RvxColor::WHITE),
-        );
+        if let Some(info) = self.debug_info.as_ref() {
+            r.draw(
+                Rvx::circle()
+                    .scale(0.5)
+                    .translate(&[info.target_x, info.target_y])
+                    .color(RvxColor::WHITE),
+            );
 
-        r.draw(
-            Rvx::circle()
-                .scale(self.ahead_dist)
-                .translate(&[self.car_x, self.car_y])
-                .color(RvxColor::WHITE.set_a(0.5)),
-        );
+            r.draw(
+                Rvx::circle()
+                    .scale(info.ahead_dist)
+                    .translate(&[info.car_x, info.car_y])
+                    .color(RvxColor::WHITE.set_a(0.5)),
+            );
 
-        for (a, b) in self.trajectory.iter().tuple_windows() {
-            r.draw(Rvx::line([a.x, a.y, b.x, b.y], 2.0).color(RvxColor::WHITE));
+            for (a, b) in info.trajectory.iter().tuple_windows() {
+                r.draw(Rvx::line([a.x, a.y, b.x, b.y], 2.0).color(RvxColor::WHITE));
+            }
         }
     }
 }

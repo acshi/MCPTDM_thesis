@@ -119,55 +119,55 @@ fn dcp_tree_search(
         }
     }
 
-    if roads.timesteps() == 2000 {
-        for delay in [2.0] {
-            let test_policy = SidePolicy::DelayedPolicy(DelayedPolicy::new(
-                operating_policy.clone(),
-                policy_choices[3].clone(),
-                delay,
-            ));
+    // if debug && roads.timesteps() == 2000 {
+    //     for delay in [2.0] {
+    //         let test_policy = SidePolicy::DelayedPolicy(DelayedPolicy::new(
+    //             operating_policy.clone(),
+    //             policy_choices[3].clone(),
+    //             delay,
+    //         ));
 
-            let mut roads = roads.clone();
-            roads.disable_car_traces();
-            roads.set_ego_policy(&test_policy);
-            for depth_level in 0..eudm.search_depth {
-                roads.take_update_steps(eudm.layer_t, eudm.dt);
+    //         let mut roads = roads.clone();
+    //         roads.disable_car_traces();
+    //         roads.set_ego_policy(&test_policy);
+    //         for depth_level in 0..eudm.search_depth {
+    //             roads.take_update_steps(eudm.layer_t, eudm.dt);
 
-                let cost = roads.cost();
-                eprintln_f!("\t{depth_level=:.2} {cost=:?} = {:.2}", cost.total());
-            }
+    //             let cost = roads.cost();
+    //             eprintln_f!("\t{depth_level=:.2} {cost=:?} = {:.2}", cost.total());
+    //         }
 
-            let cost = roads.cost();
-            eprintln_f!(
-                "Delay policy: {delay=:.2} produced {cost=:?} = {:.2}",
-                cost.total()
-            );
-        }
-        // for switch_depth in [1] {
-        //     let mut roads = roads.clone();
-        //     roads.disable_car_traces();
-        //     roads.set_ego_policy(&operating_policy.clone());
-        //     for depth_level in 0..switch_depth {
-        //         roads.take_update_steps(eudm.layer_t, eudm.dt);
+    //         let cost = roads.cost();
+    //         eprintln_f!(
+    //             "Delay policy: {delay=:.2} produced {cost=:?} = {:.2}",
+    //             cost.total()
+    //         );
+    //     }
+    //     for switch_depth in [1] {
+    //         let mut roads = roads.clone();
+    //         roads.disable_car_traces();
+    //         roads.set_ego_policy(&operating_policy.clone());
+    //         for depth_level in 0..switch_depth {
+    //             roads.take_update_steps(eudm.layer_t, eudm.dt);
 
-        //         let cost = roads.cost();
-        //         eprintln_f!("\t{depth_level=:.2} {cost=:?} = {:.2}", cost.total());
-        //     }
-        //     roads.set_ego_policy(&policy_choices[3]);
-        //     for depth_level in switch_depth..eudm.search_depth {
-        //         roads.take_update_steps(eudm.layer_t, eudm.dt);
+    //             let cost = roads.cost();
+    //             eprintln_f!("\t{depth_level=:.2} {cost=:?} = {:.2}", cost.total());
+    //         }
+    //         roads.set_ego_policy(&policy_choices[3]);
+    //         for depth_level in switch_depth..eudm.search_depth {
+    //             roads.take_update_steps(eudm.layer_t, eudm.dt);
 
-        //         let cost = roads.cost();
-        //         eprintln_f!("\t{depth_level=:.2} {cost=:?} = {:.2}", cost.total());
-        //     }
+    //             let cost = roads.cost();
+    //             eprintln_f!("\t{depth_level=:.2} {cost=:?} = {:.2}", cost.total());
+    //         }
 
-        //     let cost = roads.cost();
-        //     eprintln_f!(
-        //         "Direct search: {switch_depth=} produced {cost=:?} = {:.2}",
-        //         cost.total()
-        //     );
-        // }
-    }
+    //         let cost = roads.cost();
+    //         eprintln_f!(
+    //             "Direct search: {switch_depth=} produced {cost=:?} = {:.2}",
+    //             cost.total()
+    //         );
+    //     }
+    // }
 
     // will be Some if we should switch policies after one layer, and None to stay the same
     if let Some(best_sub_policy) = best_sub_policy {

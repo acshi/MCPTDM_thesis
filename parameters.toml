@@ -1,7 +1,8 @@
 max_steps = 4000
-n_cars = 20
+n_cars = 14
 method = "mpdm"
 use_cfb = true
+extra_ego_accdec_policies = []
 
 physics_dt = 0.01
 replan_dt = 0.05
@@ -9,20 +10,28 @@ nonego_policy_change_prob = 0.05
 nonego_policy_change_dt = 0.2
 lane_change_time = 2.0
 
-thread_limit = 7
+thread_limit = 8
 rng_seed = 0
 run_fast = false
 graphics_speedup = 8
 debug_car_i = 16
 debug_steps_before = 20
-super_debug = false
+super_debug = true
+ego_state_debug = false
 separation_debug = false
 intelligent_driver_debug = false
+belief_debug = false
+cfb_debug = false
 # debugging_scenario = 3
 
 only_crashes_with_ego = true
 obstacles_only_for_ego = true
 true_belief_sample_only = false
+
+[spawn]
+remove_ahead_beyond = 200.0
+remove_behind_beyond = 100.0
+place_ahead_beyond = 100.0
 
 [belief]
 different_lane_prob = 0.2
@@ -49,6 +58,8 @@ discount_factor = 0.8 # per second, 0.85
 key_vehicle_base_dist = 10.0
 key_vehicle_dist_time = 2.0
 uncertainty_threshold = 0.3
+dangerous_delta_threshold = 10.0
+max_n_for_cartesian_product = 4
 dt = 0.2
 horizon_t = 8.0
 
@@ -66,14 +77,14 @@ samples_n = 16
 [eudm]
 dt = 0.2
 layer_t = 2.0
-samples_n = 8
+samples_n = 16
 search_depth = 4
 
 [mcts]
 dt = 0.2
 layer_t = 2.0
 search_depth = 4
-samples_n = 32
+samples_n = 64
 prefer_same_policy = true
 choose_random_policy = true
 ucb_const = -1000.0

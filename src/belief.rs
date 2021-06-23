@@ -8,7 +8,7 @@ use crate::{lane_change_policy::LongitudinalPolicy, road::Road};
 
 fn predict_lane(road: &Road, car_i: usize) -> i32 {
     let car = &road.cars[car_i];
-    let predicted_y = car.y + car.vel * car.theta.sin() * road.params.lane_change_time;
+    let predicted_y = car.y() + car.vel * car.theta().sin() * road.params.lane_change_time;
     Road::get_lane_i(predicted_y).min(1).max(0)
 }
 
@@ -31,6 +31,13 @@ fn predict_long(road: &Road, car_i: usize) -> LongitudinalPolicy {
         LongitudinalPolicy::Decelerate
     } else {
         LongitudinalPolicy::Accelerate
+    }
+}
+
+fn normalize(belief: &mut [f64]) {
+    let sum: f64 = belief.iter().sum();
+    for val in belief.iter_mut() {
+        *val /= sum;
     }
 }
 
@@ -67,6 +74,15 @@ impl Belief {
                 belief.push(1.0);
             } else {
                 belief.push(road.params.belief.different_longitudinal_prob);
+            }
+
+            normalize(belief);
+
+            if road.params.belief_debug
+                && road.super_debug()
+                && road.params.debug_car_i == Some(car_i)
+            {
+                eprintln_f!("{road.timesteps}: Belief about {car_i}: {belief:.2?}");
             }
         }
     }

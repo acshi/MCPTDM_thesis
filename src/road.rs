@@ -1,4 +1,4 @@
-use std::{cell::RefCell, f64::consts::PI, rc::Rc, u32};
+use std::{f64::consts::PI, rc::Rc, u32};
 
 use itertools::Itertools;
 use nalgebra::{vector, Point2, Point3};
@@ -8,16 +8,12 @@ use parry2d_f64::{
     query::{self, ClosestPoints},
     shape::Shape,
 };
-use rand::prelude::StdRng;
+use rand::{prelude::StdRng, Rng};
 use rvx::{Rvx, RvxColor};
 
 use crate::{
-    arg_parameters::Parameters,
-    belief::Belief,
-    car::SPEED_DEFAULT,
-    cost::Cost,
-    mpdm::{make_obstacle_vehicle_policy_choices, make_policy_choices},
-    side_control::SideControlTrait,
+    arg_parameters::Parameters, belief::Belief, car::SPEED_DEFAULT, cost::Cost,
+    mpdm::make_obstacle_vehicle_policy_choices, side_control::SideControlTrait,
     side_policies::SidePolicy,
 };
 use crate::{car::PRIUS_MAX_STEER, forward_control::ForwardControlTrait};
@@ -29,7 +25,7 @@ use crate::car::{Car, BREAKING_ACCEL};
 pub const LANE_WIDTH: f64 = 3.7;
 pub const ROAD_DASH_LENGTH: f64 = 3.0;
 pub const ROAD_DASH_DIST: f64 = 9.0;
-pub const ROAD_LENGTH: f64 = 500.0;
+pub const ROAD_LENGTH: f64 = 400.0;
 
 pub const SIDE_MARGIN: f64 = 0.0;
 
@@ -44,6 +40,7 @@ pub struct Road {
     pub cost: Cost,
     pub ego_is_safe: bool,
     pub car_traces: Option<Vec<Vec<(Point3<f64>, u32)>>>,
+    pub last_reset_cost: Cost,
     pub trajectory_buffer: Vec<Point2<f64>>,
     pub debug: bool,
 }
@@ -69,13 +66,14 @@ impl Road {
             ego_is_safe: true,
             debug: !params.run_fast,
             car_traces: Some(Vec::new()),
+            last_reset_cost: Cost::new(1.0),
             trajectory_buffer: Vec::new(),
             params,
         };
 
         road.cars[0].preferred_vel = SPEED_DEFAULT;
-        road.cars[0].theta = PI / 16.0;
-        road.cars[0].y = Road::get_lane_y(0);
+        road.cars[0].set_theta(PI / 16.0);
+        road.cars[0].set_y(Road::get_lane_y(0));
         // road.set_ego_policy(make_policy_choices()[4].clone());
 
         road
@@ -94,23 +92,24 @@ impl Road {
     //     }
     // }
 
-    pub fn add_random_car(&mut self, rng: &Rc<RefCell<StdRng>>) {
+    pub fn add_random_car(&mut self, rng: &mut StdRng) {
         for _ in 0..100 {
-            let car = Car::random_new(&self.params, self.cars.len(), rng);
+            let mut car = Car::random_new(&self.params, self.cars.len(), rng);
+            car.vel = 0.0;
             if self.collides_any_car(&car) {
                 continue;
             }
             self.cars.push(car);
             return;
         }
-        panic!();
+        panic!("Could not place a car without it colliding... too many cars or bad collision detection?");
     }
 
     pub fn add_obstacle(&mut self, x: f64, lane_i: i32) {
         let mut car = Car::new(&self.params, self.cars.len(), lane_i);
-        car.x = x;
-        car.y += LANE_WIDTH / 4.0;
-        car.theta = PI / 2.0;
+        car.set_x(x);
+        car.set_y(car.y() + LANE_WIDTH / 4.0);
+        car.set_theta(PI / 2.0);
         car.vel = 0.0;
         car.preferred_vel = 0.0;
         car.crashed = true;
@@ -119,7 +118,7 @@ impl Road {
     }
 
     pub fn init_belief(&mut self) {
-        let n_policies = make_policy_choices(&self.params).len();
+        let n_policies = make_obstacle_vehicle_policy_choices(&self.params).len();
         self.belief = Some(Rc::new(Belief::uniform(self.cars.len(), n_policies)));
     }
 
@@ -141,6 +140,7 @@ impl Road {
             cost: self.cost.clone(),
             ego_is_safe: self.ego_is_safe,
             car_traces: None,
+            last_reset_cost: self.last_reset_cost.clone(),
             trajectory_buffer: Vec::new(),
             debug: self.debug,
         }
@@ -233,10 +233,10 @@ impl Road {
             if c.car_i == skip_car_i {
                 continue;
             }
-            if c.x + c.length / 2.0 < low_x || c.x - c.length / 2.0 > high_x {
+            if c.x() + c.length / 2.0 < low_x || c.x() - c.length / 2.0 > high_x {
                 continue;
             }
-            let small_theta = c.theta.abs() < 5.0 / 180.0 * PI;
+            let small_theta = c.theta().abs() < 5.0 / 180.0 * PI;
             if c.current_lane() != lane_i && small_theta {
                 continue;
             }
@@ -265,7 +265,7 @@ impl Road {
         let car_a = &self.cars[car_i1];
         let car_b = &self.cars[car_i2];
 
-        if (car_a.x - car_b.x).abs() > (car_a.length + car_b.length) / 2.0 {
+        if (car_a.x() - car_b.x()).abs() > (car_a.length + car_b.length) / 2.0 {
             return false;
         }
 
@@ -350,15 +350,15 @@ impl Road {
 
         let aabb = shape.compute_aabb(&no_rotation_pose);
         for (i, c) in self.cars.iter().enumerate() {
-            // fastest way to get to 'continue' (for performance)
-            if (c.x - car.x).abs() >= dist_thresh {
-                continue;
-            }
+            // if statements ordered in fastest way to get to 'continue' (for performance)
             // skip cars behind (or ahead of) this one
-            if AHEAD && c.x < car.x || !AHEAD && c.x > car.x {
+            if AHEAD && c.x() < car.x() || !AHEAD && c.x() > car.x() {
                 // if i == 0 && car_i == 14 {
                 //     eprintln_f!("Skipping {car_i} to ego: c.x {:.2} car.x {:.2}", c.x, car.x);
                 // }
+                continue;
+            }
+            if (c.x() - car.x()).abs() >= dist_thresh {
                 continue;
             }
             if i == car_i {
@@ -368,7 +368,7 @@ impl Road {
                 continue;
             }
 
-            let other_aabb = c.shape().compute_aabb(&c.pose());
+            let other_aabb = c.aabb();
             let side_sep = range_dist(
                 aabb.mins[1],
                 aabb.maxs[1],
@@ -414,7 +414,7 @@ impl Road {
             if i == car_i {
                 continue;
             }
-            if (c.x - car.x).abs() >= dist_thresh {
+            if (c.x() - car.x()).abs() >= dist_thresh {
                 continue;
             }
 
@@ -513,11 +513,14 @@ impl Road {
             }
         }
 
-        if self.super_debug() {
+        if self.params.ego_state_debug && self.super_debug() {
             let ego = &self.cars[0];
             eprintln!(
                 "{}: ego x: {:.2}, y: {:.2}, vel: {:.10}",
-                self.timesteps, ego.x, ego.y, ego.vel
+                self.timesteps,
+                ego.x(),
+                ego.y(),
+                ego.vel
             );
         }
 
@@ -527,7 +530,7 @@ impl Road {
             for (car_i, car) in self.cars.iter_mut().enumerate() {
                 if !car.crashed {
                     let policy_id = car.side_policy.as_ref().unwrap().policy_id();
-                    traces[car_i].push((point!(car.x, car.y, car.theta), policy_id));
+                    traces[car_i].push((point!(car.x(), car.y(), car.theta()), policy_id));
                 }
             }
         }
@@ -629,7 +632,7 @@ impl Road {
             self.cost.uncomfortable_dec +=
                 cparams.uncomfortable_dec_weight * dt * self.cost.discount;
         }
-        let curvature_change = (car.theta - self.last_ego.theta).abs() / dt;
+        let curvature_change = (car.theta() - self.last_ego.theta()).abs() / dt;
         if curvature_change >= cparams.large_curvature_change {
             self.cost.curvature_change += cparams.curvature_change_weight * dt * self.cost.discount;
         }
@@ -666,12 +669,12 @@ impl Road {
         );
 
         // adjust for ego car
-        r.set_translate_modifier(-self.cars[0].x, 0.0);
+        r.set_translate_modifier(-self.cars[0].x(), 0.0);
 
         // draw the dashes in the middle
         let dash_interval = ROAD_DASH_LENGTH + ROAD_DASH_DIST;
-        let dash_offset = (self.cars[0].x / dash_interval).round() * dash_interval;
-        for dash_i in -5..=5 {
+        let dash_offset = (self.cars[0].x() / dash_interval).round() * dash_interval;
+        for dash_i in -15..=15 {
             r.draw(
                 Rvx::square()
                     .scale_xy(&[ROAD_DASH_LENGTH, 0.2])
@@ -701,6 +704,7 @@ impl Road {
             self.car_traces = None;
         } else {
             self.car_traces = Some(Vec::new());
+            self.last_reset_cost = self.cost;
         }
     }
 
@@ -743,7 +747,7 @@ impl Road {
 
                 let base_line_color = if self.cars[0].crashed {
                     RvxColor::RED.scale_rgb(0.5)
-                } else if self.cost.safety > 0.0 {
+                } else if self.cost.safety > self.last_reset_cost.safety {
                     RvxColor::PINK
                 } else {
                     RvxColor::GREEN
@@ -819,5 +823,28 @@ impl Road {
 
     pub fn get_lane_i(y: f64) -> i32 {
         (y / LANE_WIDTH + 0.5).round() as i32
+    }
+
+    pub fn respawn_obstacle_cars(&mut self, rng: &mut StdRng) {
+        let remove_ahead_beyond = self.params.spawn.remove_ahead_beyond;
+        let remove_behind_beyond = self.params.spawn.remove_behind_beyond;
+        let place_ahead_beyond = self.params.spawn.place_ahead_beyond;
+
+        let ego_x = self.cars[0].x();
+        for car_i in 1..self.cars.len() {
+            let car_x = self.cars[car_i].x();
+            if car_x < ego_x - remove_behind_beyond || car_x > ego_x + remove_ahead_beyond {
+                loop {
+                    let mut new_car = Car::random_new(&self.params, car_i, rng);
+                    let new_dx = rng.gen_range(place_ahead_beyond..remove_ahead_beyond);
+                    new_car.set_x(ego_x + new_dx);
+
+                    if !self.collides_any_car(&new_car) {
+                        self.cars[car_i] = new_car;
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

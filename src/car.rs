@@ -1,7 +1,8 @@
-use std::{cell::RefCell, f64::consts::PI, rc::Rc};
+use std::f64::consts::PI;
 
 use nalgebra::vector;
 use parry2d_f64::{
+    bounding_volume::AABB,
     na::Isometry2,
     shape::{Cuboid, Shape},
 };
@@ -53,9 +54,9 @@ pub struct Car {
     pub crashed: bool,
 
     // front-referenced kinematic bicycle model
-    pub x: f64,
-    pub y: f64,
-    pub theta: f64,
+    x: f64,
+    y: f64,
+    theta: f64,
     pub vel: f64,
     pub steer: f64,
 
@@ -76,13 +77,20 @@ pub struct Car {
     pub forward_control: Option<ForwardControl>,
     pub side_control: Option<SideControl>,
     pub side_policy: Option<SidePolicy>,
+
+    // cached
+    shape: Cuboid,
+    pose: Isometry2<f64>,
+    aabb: AABB,
 }
 
 impl Car {
     pub fn new(params: &Parameters, car_i: usize, lane_i: i32) -> Self {
         let lane_y = Road::get_lane_y(lane_i);
         let policies = make_obstacle_vehicle_policy_choices(params);
-        Self {
+        let width = PRIUS_WIDTH;
+        let length = PRIUS_LENGTH;
+        let mut car = Self {
             car_i,
             crashed: false,
 
@@ -92,8 +100,8 @@ impl Car {
             vel: 0.0,
             steer: 0.0,
 
-            width: PRIUS_WIDTH,
-            length: PRIUS_LENGTH,
+            width,
+            length,
 
             preferred_vel: SPEED_DEFAULT,
             preferred_accel: PREFERRED_ACCEL_DEFAULT,
@@ -116,17 +124,22 @@ impl Car {
             } else {
                 policies[3].clone()
             }),
-        }
+
+            shape: Cuboid::new(vector!(length / 2.0, width / 2.0)),
+            pose: Isometry2::identity(),
+            aabb: AABB::new_invalid(),
+        };
+
+        car.update_geometry_cache();
+        car
     }
 
-    pub fn random_new(params: &Parameters, car_i: usize, rng: &Rc<RefCell<StdRng>>) -> Self {
-        let mut rng = rng.borrow_mut();
-
+    pub fn random_new(params: &Parameters, car_i: usize, rng: &mut StdRng) -> Self {
         let lane_i = rng.gen_range(0..=1);
         let mut car = Self::new(params, car_i, lane_i);
         car.preferred_vel = rng.gen_range(SPEED_LOW..SPEED_HIGH);
-        // car.vel = car.preferred_vel;
-        car.x = rng.gen_range(0.0..ROAD_LENGTH) - ROAD_LENGTH / 2.0;
+        car.vel = car.preferred_vel;
+        car.set_x(rng.gen_range(0.0..ROAD_LENGTH) - ROAD_LENGTH / 2.0);
         car.preferred_accel = rng.gen_range(PREFERRED_ACCEL_LOW..PREFERRED_ACCEL_HIGH);
         car.preferred_steer_accel =
             rng.gen_range(PREFERRED_STEER_ACCEL_LOW..PREFERRED_STEER_ACCEL_HIGH);
@@ -178,12 +191,22 @@ impl Car {
         FOLLOW_DIST_BASE + self.target_follow_time * self.vel
     }
 
+    fn update_geometry_cache(&mut self) {
+        let center_x = self.x - self.length / 2.0 * self.theta.cos();
+        let center_y = self.y - self.length / 2.0 * self.theta.sin();
+        self.pose = Isometry2::new(vector!(center_x, center_y), self.theta);
+
+        self.aabb = self.shape().compute_aabb(&self.pose());
+    }
+
     pub fn update(&mut self, dt: f64) {
         if !self.crashed {
             let theta = self.theta + self.steer;
             self.x += theta.cos() * self.vel * dt;
             self.y += theta.sin() * self.vel * dt;
             self.theta += self.vel * self.steer.sin() / self.length * dt;
+
+            self.update_geometry_cache();
         }
     }
 
@@ -308,14 +331,50 @@ impl Car {
         Road::get_lane_i(self.y)
     }
 
-    pub fn pose(&self) -> Isometry2<f64> {
-        let center_x = self.x - self.length / 2.0 * self.theta.cos();
-        let center_y = self.y - self.length / 2.0 * self.theta.sin();
-
-        Isometry2::new(vector!(center_x, center_y), self.theta)
+    pub fn shape(&self) -> impl Shape {
+        self.shape
     }
 
-    pub fn shape(&self) -> impl Shape {
-        Cuboid::new(vector!(self.length / 2.0, self.width / 2.0))
+    pub fn pose(&self) -> Isometry2<f64> {
+        // let center_x = self.x - self.length / 2.0 * self.theta.cos();
+        // let center_y = self.y - self.length / 2.0 * self.theta.sin();
+        // let pose = Isometry2::new(vector!(center_x, center_y), self.theta);
+        // assert_eq!(pose, self.pose);
+
+        self.pose
+    }
+
+    pub fn aabb(&self) -> AABB {
+        // let aabb = self.shape().compute_aabb(&self.pose());
+        // assert_eq!(aabb, self.aabb);
+
+        self.aabb
+    }
+
+    pub fn x(&self) -> f64 {
+        self.x
+    }
+
+    pub fn y(&self) -> f64 {
+        self.y
+    }
+
+    pub fn theta(&self) -> f64 {
+        self.theta
+    }
+
+    pub fn set_x(&mut self, x: f64) {
+        self.x = x;
+        self.update_geometry_cache();
+    }
+
+    pub fn set_y(&mut self, y: f64) {
+        self.y = y;
+        self.update_geometry_cache();
+    }
+
+    pub fn set_theta(&mut self, theta: f64) {
+        self.theta = theta;
+        self.update_geometry_cache();
     }
 }

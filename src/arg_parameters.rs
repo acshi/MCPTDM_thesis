@@ -9,7 +9,7 @@ use std::{
     time::Instant,
 };
 
-use atomic::Ordering::SeqCst;
+use atomic::Ordering;
 use itertools::Itertools;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
@@ -71,6 +71,8 @@ pub struct CfbParameters {
     pub key_vehicle_base_dist: f64,
     pub key_vehicle_dist_time: f64,
     pub uncertainty_threshold: f64,
+    pub dangerous_delta_threshold: f64,
+    pub max_n_for_cartesian_product: usize,
     pub dt: f64,
     pub horizon_t: f64,
 }
@@ -85,11 +87,19 @@ pub struct BeliefParameters {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct SpawnParameters {
+    pub remove_ahead_beyond: f64,
+    pub remove_behind_beyond: f64,
+    pub place_ahead_beyond: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct Parameters {
     pub max_steps: u32,
     pub n_cars: usize,
     pub method: String,
     pub use_cfb: bool,
+    pub extra_ego_accdec_policies: Vec<f64>,
 
     pub physics_dt: f64,
     pub replan_dt: f64,
@@ -104,14 +114,18 @@ pub struct Parameters {
     pub debug_car_i: Option<usize>,
     pub debug_steps_before: usize,
     pub super_debug: bool,
+    pub ego_state_debug: bool,
     pub separation_debug: bool,
     pub intelligent_driver_debug: bool,
+    pub belief_debug: bool,
+    pub cfb_debug: bool,
 
     pub only_crashes_with_ego: bool,
     pub obstacles_only_for_ego: bool,
     pub true_belief_sample_only: bool,
     pub debugging_scenario: Option<i32>,
 
+    pub spawn: SpawnParameters,
     pub belief: BeliefParameters,
     pub cost: CostParameters,
     pub cfb: CfbParameters,
@@ -141,23 +155,62 @@ fn create_scenarios(
 
     let mut scenarios = Vec::new();
     let (name, values) = &name_value_pairs[0];
+
+    if name.starts_with("tree.") && base_params.method != "tree"
+        || name.starts_with("mpdm.") && base_params.method != "mpdm"
+        || name.starts_with("eudm.") && base_params.method != "eudm"
+        || name.starts_with("mcts.") && base_params.method != "mcts"
+    {
+        return create_scenarios(&base_params, &name_value_pairs[1..]);
+    }
+
     for value in values.iter() {
-        let mut params = base_params.clone();
-        match name.as_str() {
-            "method" => params.method = value.parse().unwrap(),
-            "use_cfb" => params.use_cfb = value.parse().unwrap(),
-            "max_steps" => params.max_steps = value.parse().unwrap(),
-            "n_cars" => params.n_cars = value.parse().unwrap(),
-            "discount_factor" => params.cost.discount_factor = value.parse().unwrap(),
-            "rng_seed" => params.rng_seed = value.parse().unwrap(),
-            "run_fast" => params.run_fast = value.parse().unwrap(),
-            "thread_limit" => params.thread_limit = value.parse().unwrap(),
-            _ => panic!("{} is not a valid parameter!", name),
+        let mut value_set = vec![value.to_owned()];
+
+        // Do we have a numeric range? special-case handle that!
+        let range_parts = value.split("-").collect_vec();
+        if range_parts.len() == 2 {
+            let low: Option<usize> = range_parts[0].parse().ok();
+            let high: Option<usize> = range_parts[1].parse().ok();
+            if let (Some(low), Some(high)) = (low, high) {
+                if low < high {
+                    value_set.clear();
+                    for v in low..=high {
+                        value_set.push(v.to_string());
+                    }
+                }
+            }
         }
-        if name_value_pairs.len() > 1 {
-            scenarios.append(&mut create_scenarios(&params, &name_value_pairs[1..]));
-        } else {
-            scenarios.push(params);
+
+        for val in value_set {
+            let mut params = base_params.clone();
+            match name.as_str() {
+                "method" => params.method = val.parse().unwrap(),
+                "use_cfb" => params.use_cfb = val.parse().unwrap(),
+                "extra_ego_accdec_policies" => {
+                    params.extra_ego_accdec_policies = val
+                        .split(",")
+                        .filter(|v| !v.is_empty())
+                        .map(|v| v.parse::<f64>().unwrap())
+                        .collect_vec()
+                }
+                "max_steps" => params.max_steps = val.parse().unwrap(),
+                "n_cars" => params.n_cars = val.parse().unwrap(),
+                "discount_factor" => params.cost.discount_factor = val.parse().unwrap(),
+                "rng_seed" => params.rng_seed = val.parse().unwrap(),
+                "run_fast" => params.run_fast = val.parse().unwrap(),
+                "thread_limit" => params.thread_limit = val.parse().unwrap(),
+                "tree.samples_n" => params.tree.samples_n = val.parse().unwrap(),
+                "mpdm.samples_n" => params.mpdm.samples_n = val.parse().unwrap(),
+                "eudm.samples_n" => params.eudm.samples_n = val.parse().unwrap(),
+                "mcts.samples_n" => params.mcts.samples_n = val.parse().unwrap(),
+                _ => panic!("{} is not a valid parameter!", name),
+            }
+            if name_value_pairs.len() > 1 {
+                scenarios.append(&mut create_scenarios(&params, &name_value_pairs[1..]));
+            } else {
+                scenarios.push(params);
+            }
         }
     }
 
@@ -169,8 +222,22 @@ fn create_scenarios(
     }
 
     for s in scenarios.iter_mut() {
+        let samples_n = match s.method.as_str() {
+            "tree" => s.tree.samples_n,
+            "mpdm" => s.mpdm.samples_n,
+            "eudm" => s.eudm.samples_n,
+            "mcts" => s.mcts.samples_n,
+            _ => panic!("Unknown method {}", s.method),
+        };
+
+        let extra_ego_accdec = s
+            .extra_ego_accdec_policies
+            .iter()
+            .map(|a| a.to_string())
+            .join(",");
+
         s.scenario_name = Some(format_f!(
-            "_method_{s.method}_use_cfb_{s.use_cfb}_max_steps_{s.max_steps}_n_cars_{s.n_cars}_discount_factor_{s.cost.discount_factor}_rng_seed_{s.rng_seed}_"
+            "_method_{s.method}_samples_n_{samples_n}_use_cfb_{s.use_cfb}_extra_ego_accdec_policies_{extra_ego_accdec}_max_steps_{s.max_steps}_n_cars_{s.n_cars}_discount_factor_{s.cost.discount_factor}_rng_seed_{s.rng_seed}_"
         ));
     }
 
@@ -292,7 +359,7 @@ pub fn run_parallel_scenarios() {
                     .unwrap()
                     .contains_key(&scenario_name)
                 {
-                    n_scenarios_completed.fetch_add(1, SeqCst);
+                    n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
                     return;
                 }
 
@@ -300,8 +367,12 @@ pub fn run_parallel_scenarios() {
                 let (cost, reward) = run_with_parameters(scenario.clone());
                 let seconds = start_time.elapsed().as_secs_f64();
 
-                n_scenarios_completed.fetch_add(1, SeqCst);
-                print!("{}/{}: ", n_scenarios_completed.load(SeqCst), n_scenarios);
+                n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
+                print!(
+                    "{}/{}: ",
+                    n_scenarios_completed.load(Ordering::Relaxed),
+                    n_scenarios
+                );
                 println_f!("{cost} {reward} {seconds:6.2}");
                 writeln_f!(
                     file.lock().unwrap(),
