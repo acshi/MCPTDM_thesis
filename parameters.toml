@@ -1,7 +1,7 @@
 max_steps = 4000
 n_cars = 14
 method = "mpdm"
-use_cfb = true
+use_cfb = false
 extra_ego_accdec_policies = []
 
 physics_dt = 0.01

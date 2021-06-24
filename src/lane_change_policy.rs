@@ -152,8 +152,8 @@ impl SidePolicyTrait for LaneChangePolicy {
             self.waiting_done = road.lane_definitely_clear_between(
                 car_i,
                 self.target_lane_i.unwrap_or_else(|| car.current_lane()),
-                car.x() - car.length * 2.0,
-                car.x() + car.length,
+                car.x() - 0.5 * car.length - car.length,
+                car.x() + 0.5 * car.length,
             );
         }
         if self.waiting_done || !self.wait_for_clear {
