@@ -1,4 +1,8 @@
-use std::{f64::consts::PI, rc::Rc, time::Duration};
+use std::{
+    f64::consts::PI,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use arg_parameters::Parameters;
 
@@ -102,6 +106,8 @@ impl State {
     fn update(&mut self, dt: f64) {
         let replan_interval = (self.params.replan_dt / self.params.physics_dt).round() as u32;
 
+        let real_time_start = Instant::now();
+
         // method chooses the ego policy
         let policy_rng = &mut self.policy_rng;
         if self.timesteps % replan_interval == 0 && !self.road.cars[0].crashed {
@@ -166,6 +172,9 @@ impl State {
             self.reward.curvature_change += dt;
         }
         // eprintln_f!("{accel=:.2} {curvature_change=:.2}");
+
+        let timestep_time = real_time_start.elapsed().as_secs_f64();
+        self.reward.max_timestep_time = self.reward.max_timestep_time.max(timestep_time);
 
         self.timesteps += 1;
     }
