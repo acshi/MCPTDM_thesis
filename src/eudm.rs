@@ -199,7 +199,8 @@ pub fn dcp_tree_choose_policy(
     rng: &mut StdRng,
 ) -> (SidePolicy, Vec<rvx::Shape>) {
     let roads = road_set_for_scenario(params, true_road, rng, params.eudm.samples_n);
-    let debug = true_road.debug
+    let debug = params.policy_report_debug
+        && true_road.debug
         && true_road.timesteps + params.debug_steps_before >= params.max_steps as usize;
     let policy_choices = make_policy_choices(params);
     dcp_tree_search(params, &policy_choices, roads, debug)

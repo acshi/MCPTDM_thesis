@@ -618,12 +618,12 @@ impl Road {
         let last_policy_id = self.last_ego.policy_id();
         if policy_id != last_policy_id {
             self.cost.smoothness += cparams.smoothness_weight * self.cost.discount;
-            if self.debug {
+            if self.debug && self.params.ego_policy_change_debug {
                 eprintln_f!(
                     "{}: policy change from {last_policy_id} to {policy_id}",
                     self.timesteps
                 );
-                eprintln!("New policy:\n{:?}", self.ego_policy().operating_policy());
+                eprintln!("New policy: {:?}", self.ego_policy().operating_policy());
             }
         }
 

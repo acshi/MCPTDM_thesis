@@ -239,7 +239,7 @@ pub fn mcts_choose_policy(
     let mut traces = Vec::new();
     collect_traces(&mut node, &mut traces);
 
-    if debug {
+    if debug && params.policy_report_debug {
         print_report(&node);
     }
 

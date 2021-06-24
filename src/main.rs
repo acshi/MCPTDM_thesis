@@ -55,12 +55,13 @@ const AHEAD_TIME_DEFAULT: f64 = 0.6;
 
 struct State {
     scenario_rng: StdRng,
+    respawn_rng: StdRng,
     policy_rng: StdRng,
     params: Rc<Parameters>,
     road: Road,
     traces: Vec<rvx::Shape>,
     r: Option<Rvx>,
-    timestep: u32,
+    timesteps: u32,
     reward: Reward,
 }
 
@@ -103,7 +104,7 @@ impl State {
 
         // method chooses the ego policy
         let policy_rng = &mut self.policy_rng;
-        if self.timestep % replan_interval == 0 {
+        if self.timesteps % replan_interval == 0 {
             let (policy, traces) = match self.params.method.as_str() {
                 "mpdm" => mpdm_choose_policy(&self.params, &self.road, policy_rng),
                 "eudm" => dcp_tree_choose_policy(&self.params, &self.road, policy_rng),
@@ -122,7 +123,8 @@ impl State {
         // random policy changes for the obstacle vehicles
         let policy_change_interval =
             (self.params.nonego_policy_change_dt / self.params.physics_dt).round() as u32;
-        if self.timestep % policy_change_interval == 0 {
+        let timesteps = self.timesteps;
+        if self.timesteps % policy_change_interval == 0 {
             let rng = &mut self.scenario_rng;
             let policy_choices = make_obstacle_vehicle_policy_choices(&self.params);
 
@@ -130,8 +132,14 @@ impl State {
                 if rng.gen_bool(
                     self.params.nonego_policy_change_prob * self.params.nonego_policy_change_dt,
                 ) {
-                    c.side_policy =
-                        Some(policy_choices[rng.gen_range(0..policy_choices.len())].clone());
+                    let new_policy_i = rng.gen_range(0..policy_choices.len());
+                    let new_policy = policy_choices[new_policy_i].clone();
+
+                    if self.road.debug {
+                        eprintln_f!("{timesteps}: {c.car_i} switching to policy {new_policy_i}: {new_policy:?}");
+                    }
+
+                    c.side_policy = Some(new_policy);
                 }
             }
         }
@@ -142,7 +150,7 @@ impl State {
         // actual simulation
         self.road.update_belief();
         self.road.update(dt);
-        self.road.respawn_obstacle_cars(&mut self.scenario_rng);
+        self.road.respawn_obstacle_cars(&mut self.respawn_rng);
 
         // final reporting reward (separate from cost function, though similar)
         self.reward.avg_vel += self.road.cars[0].vel * dt;
@@ -159,7 +167,7 @@ impl State {
         }
         // eprintln_f!("{accel=:.2} {curvature_change=:.2}");
 
-        self.timestep += 1;
+        self.timesteps += 1;
     }
 }
 
@@ -219,10 +227,11 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
 
     let mut state = State {
         scenario_rng,
+        respawn_rng: StdRng::from_seed(full_seed),
         policy_rng: StdRng::from_seed(full_seed),
         road,
         r: None,
-        timestep: 0,
+        timesteps: 0,
         params,
         traces: Vec::new(),
         reward: Default::default(),

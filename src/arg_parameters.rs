@@ -114,11 +114,13 @@ pub struct Parameters {
     pub debug_car_i: Option<usize>,
     pub debug_steps_before: usize,
     pub super_debug: bool,
+    pub ego_policy_change_debug: bool,
     pub ego_state_debug: bool,
     pub separation_debug: bool,
     pub intelligent_driver_debug: bool,
     pub belief_debug: bool,
     pub cfb_debug: bool,
+    pub policy_report_debug: bool,
 
     pub only_crashes_with_ego: bool,
     pub obstacles_only_for_ego: bool,
@@ -204,6 +206,13 @@ fn create_scenarios(
                 "mpdm.samples_n" => params.mpdm.samples_n = val.parse().unwrap(),
                 "eudm.samples_n" => params.eudm.samples_n = val.parse().unwrap(),
                 "mcts.samples_n" => params.mcts.samples_n = val.parse().unwrap(),
+                "mpdm.forward_t" => params.mpdm.forward_t = val.parse().unwrap(),
+                "tree.search_depth" => params.tree.search_depth = val.parse().unwrap(),
+                "eudm.search_depth" => params.eudm.search_depth = val.parse().unwrap(),
+                "mcts.search_depth" => params.mcts.search_depth = val.parse().unwrap(),
+                "tree.layer_t" => params.tree.layer_t = val.parse().unwrap(),
+                "eudm.layer_t" => params.eudm.layer_t = val.parse().unwrap(),
+                "mcts.layer_t" => params.mcts.layer_t = val.parse().unwrap(),
                 _ => panic!("{} is not a valid parameter!", name),
             }
             if name_value_pairs.len() > 1 {
@@ -230,6 +239,22 @@ fn create_scenarios(
             _ => panic!("Unknown method {}", s.method),
         };
 
+        let search_depth = match s.method.as_str() {
+            "tree" => format_f!("search_depth_{s.tree.search_depth}"),
+            "mpdm" => "".to_owned(),
+            "eudm" => format_f!("search_depth_{s.eudm.search_depth}"),
+            "mcts" => format_f!("search_depth_{s.mcts.search_depth}"),
+            _ => panic!("Unknown method {}", s.method),
+        };
+
+        let layer_forward_t = match s.method.as_str() {
+            "tree" => format_f!("layer_t_{s.tree.layer_t}"),
+            "mpdm" => format_f!("forward_t_{s.mpdm.forward_t}"),
+            "eudm" => format_f!("layer_t_{s.eudm.layer_t}"),
+            "mcts" => format_f!("layer_t_{s.mcts.layer_t}"),
+            _ => panic!("Unknown method {}", s.method),
+        };
+
         let extra_ego_accdec = s
             .extra_ego_accdec_policies
             .iter()
@@ -237,7 +262,10 @@ fn create_scenarios(
             .join(",");
 
         s.scenario_name = Some(format_f!(
-            "_method_{s.method}_samples_n_{samples_n}_use_cfb_{s.use_cfb}_extra_ego_accdec_policies_{extra_ego_accdec}_max_steps_{s.max_steps}_n_cars_{s.n_cars}_discount_factor_{s.cost.discount_factor}_rng_seed_{s.rng_seed}_"
+            "_method_{s.method}_use_cfb_{s.use_cfb}_extra_ego_accdec_policies_{extra_ego_accdec}\
+             _samples_n_{samples_n}_{search_depth}_{layer_forward_t}\
+             _max_steps_{s.max_steps}_n_cars_{s.n_cars}\
+             _discount_factor_{s.cost.discount_factor}_rng_seed_{s.rng_seed}_"
         ));
     }
 
