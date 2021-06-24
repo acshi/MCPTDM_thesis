@@ -104,7 +104,7 @@ impl State {
 
         // method chooses the ego policy
         let policy_rng = &mut self.policy_rng;
-        if self.timesteps % replan_interval == 0 {
+        if self.timesteps % replan_interval == 0 && !self.road.cars[0].crashed {
             let (policy, traces) = match self.params.method.as_str() {
                 "mpdm" => mpdm_choose_policy(&self.params, &self.road, policy_rng),
                 "eudm" => dcp_tree_choose_policy(&self.params, &self.road, policy_rng),

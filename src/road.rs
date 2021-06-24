@@ -462,7 +462,7 @@ impl Road {
         min_dist
     }
 
-    pub fn update(&mut self, dt: f64) {
+    fn update_inner(&mut self, dt: f64) {
         let mut trajectory = std::mem::replace(&mut self.trajectory_buffer, Vec::new());
 
         for car_i in 0..self.cars.len() {
@@ -574,12 +574,18 @@ impl Road {
             }
         }
 
+        self.trajectory_buffer = trajectory;
+    }
+
+    pub fn update(&mut self, dt: f64) {
+        if !self.cars[0].crashed {
+            self.update_inner(dt);
+        }
+
         self.t += dt;
         self.timesteps += 1;
 
         self.update_cost(dt);
-
-        self.trajectory_buffer = trajectory;
     }
 
     fn update_cost(&mut self, dt: f64) {

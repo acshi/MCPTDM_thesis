@@ -98,11 +98,14 @@ class FigureKind:
                 sub_results = mode.filter(results, mode_val)
             sub_results = self.filter_extra(sub_results, extra_filters)
             value_sets = self.collect_vals(sub_results, result_name)
-            if len(value_sets) == 0 or len(value_sets[0]) == 0:
+            if len(value_sets) == 0:
+                print(
+                    f"Data completely missing for {result_name} with {extra_filters}")
                 continue
             for i, vals in enumerate(value_sets):
                 if len(vals) == 0:
-                    print(f"{mode_val} has 0 data points for {self.ticks[i]}")
+                    print(
+                        f"{mode_val} has 0 data points for '{self.ticks[i]}'")
                     vals.append(np.nan)
             has_any = True
             means = [np.mean(vals) for vals in value_sets]
@@ -176,7 +179,7 @@ cfb_kind = FigureKind("use_cfb", ["false", "true"])
 seconds_kind = FigureKind("seconds", None)
 
 extra_accdec_kind = FigureKind("extra_ego_accdec_policies", [
-                               "", "-1", "1", "-2", "2", "-5", "5", "-1,1", "-2,2", "-5,5", "-1,-2,1,2", "-2,-5,2,5", "-1,-2,-5,1,2,5"])
+                               "-1", "1", "-2", "2", "-1,1", "-2,2", "1,2", "-1,-2", "-1,-2,-5,1,2,5"])
 
 results = []
 with open("results.cache", "r") as f:
@@ -207,17 +210,17 @@ with open("results.cache", "r") as f:
 method_mode = FigureMode("method", ["tree", "mpdm", "eudm", "mcts"])
 cfb_mode = FigureMode("use_cfb", ["false", "true"])
 
-# seconds_kind.plot(results, "efficiency", mode=method_mode)
-# seconds_kind.plot(results, "cost", mode=method_mode)
-# seconds_kind.plot(results, "safety", mode=method_mode)
-# seconds_kind.plot(results, "ud", mode=method_mode)
-# seconds_kind.plot(results, "cc", mode=method_mode)
+seconds_kind.plot(results, "efficiency", mode=method_mode)
+seconds_kind.plot(results, "cost", mode=method_mode)
+seconds_kind.plot(results, "safety", mode=method_mode)
+seconds_kind.plot(results, "ud", mode=method_mode)
+seconds_kind.plot(results, "cc", mode=method_mode)
 
-extra_accdec_kind.plot(results, "efficiency", mode=method_mode)
-extra_accdec_kind.plot(results, "cost", mode=method_mode)
-extra_accdec_kind.plot(results, "safety", mode=method_mode)
-extra_accdec_kind.plot(results, "ud", mode=method_mode)
-extra_accdec_kind.plot(results, "cc", mode=method_mode)
+# extra_accdec_kind.plot(results, "efficiency", mode=method_mode)
+# extra_accdec_kind.plot(results, "cost", mode=method_mode)
+# extra_accdec_kind.plot(results, "safety", mode=method_mode)
+# extra_accdec_kind.plot(results, "ud", mode=method_mode)
+# extra_accdec_kind.plot(results, "cc", mode=method_mode)
 
 # extra_accdec_kind.plot(results, "efficiency")
 # extra_accdec_kind.plot(results, "cost")
