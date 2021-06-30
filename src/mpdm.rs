@@ -78,6 +78,7 @@ fn evaluate_policy(
     let mpdm = &params.mpdm;
     roads.reset_car_traces();
     roads.take_update_steps(mpdm.forward_t, mpdm.dt);
+
     (roads.cost(), roads.make_traces(0, false))
 }
 

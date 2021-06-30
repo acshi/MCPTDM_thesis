@@ -34,7 +34,7 @@ https://www.ri.cmu.edu/pub_files/2009/2/Automatic_Steering_Methods_for_Autonomou
 https://dingyan89.medium.com/three-methods-of-vehicle-lateral-control-pure-pursuit-stanley-and-mpc-db8cc1d32081
 https://thomasfermi.github.io/Algorithms-for-Automated-Driving/Control/PurePursuit.html
 
-Questions for Ed:
+Questions for Ed (PRIOR):
 It seems like my random obstacle car policy-changes are causing the ego vehicle to sometimes be in an impossible situation. Another vehicle can crash into it without it having a chance to escape!!! Partially this might be because I allow the other vehicle to maybe have better acceleration. What parameters should I randomize for the obstacle vehicles and how? Should the ego always be top-performing?
 (Probably doesn't matter too much)
 
@@ -50,24 +50,47 @@ Since I don't have belief estimation, how about just a static set of beliefs bas
 
 (MCTS can win because you can throw more policies at it!!!)
 
+Questions for Ed:
+So far, it looks like CFB has two big effects: increasing average speed, reducing computation time
+EUDM vs MCTS: MCTS has a _much higher_ average speed, and EUDM performs more safely. MCTS has many fewer uncomfortable decelerations, while EUDM has many fewer curvature changes. (Basically they make different decisions about how agressively to pass).
+Search depth doesn't seem to matter too much, but EUDM benefits from having it at 5 instead of 4 (maybe a fluke result?).
+
+SO, what do we try to really praise in the paper? Safety and efficiency both seem very important, but EUDM and MCTS get different results, here. Both seem to be fast enough.
+
+Adding more policies doesn't seem to do much good, and generally makes things less safe... (by diluting the search space?)
+
+MAYBE we get best results with CFB=off and with search depth of 5 or 6!!?? And extra policies don't... really matter?
+
+Turn it into an optimization problem instead of an inference problem? Then we can sample however we like! Just trying to find the initial condition that results in the most "interesting outcome" = cost * probability of the initial condition... For MCTS we can try just using Max(cost*probability) instead of average the way we are now. Then it doesn't matter how we "sample". Performance as a function of the number of samples, we should be able to see the number of samples along with some point where we cross over and beat EUDM performance.
+
+MCTS should try using a variant of CFB that samples over the unimportant vehicles.
+
+Tell the story in terms of how what we really want to do is similar to tree search with infinite samples, but we can't because that is infeasible. We can talk about how MPDM tries to solve this, then talk about how EUDM expands the search space, and then say that we think even more flexibility is justified and that we do this with MCTS. Talk about how their CFB is a useful heuristic for improving our ability to sample the space and then how we modify it for MCTS.
+
 Tasks:
-Overall for this week:
+Overall for this week: Have my MCTS method fixed to the point that more samples only helps. Get paper to 20%.
 
-Use different RNG for MCTS versus obstacle vehicle choices, so that the same rng seed produces a similar scenario regardless of method. This shouldn't necessarily change the asymptotic goodness of each method as we get more samples, but should make it converge faster with fewer samples.
+With these changes, we expect to see MCTS not do worse when we use more samples. Also use fewer samples to check for trends!!
 
+Once everything else looks good with samples_n, we can try seeing what we get for additional policies, etc...
+
+MAYBE SKIP:
 A new idea: unequal layer times??? Or just try making search depth deeper?
 
 A new idea: improve MCTS with progressive widening (I guess just adding new leaf nodes with different belief samples?) Or even a KR-UCT like approach that take advantage of the fact that policies with different longitudinal choices are more similar than ones with different lateral choices? Or even extend to continuous space with KR-UCT? Or use KR-UCT to make POMCP work?
 
-A new idea: a machine-learning approach that choose which paths of the tree to search?
+A new idea: a machine-learning approach that chooses which paths of the tree to search?
 
 POMCP proper? (maybe cut it)
 
-MAYBE SKIP: We need _something_ to improve our belief or we will be too scared of trying to pass vehicles... Something bayesian should be simple and work just fine with the forward simulator? Since we have so few possible policies? I guess the difficulty is the joint nature of the situation, though? Then there is also the different between our belief about their _current_ state, and our belief about their _future_ state. Vehicle X is definitely lane-keeping right now.... but it could start a lane-change soon...? I guess we would need to define a belief space capable of handling that future uncertainty? I think the POMCP simulator would expect that the forward simulations would include things like that as it goes simulating. MAYBE, the obstacle-vehicle versions of the policies, modified to be nicer, will make this an entirely moot point. That would be simpler, so let's go with that!!!
-
-MAYBE SKIP: Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
+Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
 
 Finished tasks:
+Alternative MCTS formulation where it samples from CFB, and so assigns equal weights to each sample.
+Have MCTS sample from the CFB-selected scenarios different policies for all the unimportant vehicles.
+Have MCTS use propagate up max(cost * probability weight) instead of avg(cost).
+Is maybe EUDM going slower because the target_vel is just slower most of the time? It has very low optimization cost. Nope!!
+Use different RNG for MCTS versus obstacle vehicle choices, so that the same rng seed produces a similar scenario regardless of method. This shouldn't necessarily change the asymptotic goodness of each method as we get more samples, but should make it converge faster with fewer samples.
 Truly fair comparison needs to account for computation time. We can sweep samples_n.
 Improve plotting so compare time and each metric, for each method. So for plotting, this means making it possible to draw a separate graph for each method.
 cache aabb values

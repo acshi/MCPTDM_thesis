@@ -6,12 +6,18 @@ use std::{
 
 use arg_parameters::Parameters;
 
+use belief::Belief;
 use car::{Car, MPH_TO_MPS};
 use cfb::conditional_focused_branching;
+use itertools::Itertools;
 use mpdm::{make_obstacle_vehicle_policy_choices, make_policy_choices, mpdm_choose_policy};
 
 use cost::Cost;
-use rand::{prelude::StdRng, Rng, SeedableRng};
+use rand::{
+    distributions::WeightedIndex,
+    prelude::{Distribution, StdRng},
+    Rng, SeedableRng,
+};
 use rate_timer::RateTimer;
 use reward::Reward;
 use road::Road;
@@ -141,8 +147,8 @@ impl State {
                     let new_policy_i = rng.gen_range(0..policy_choices.len());
                     let new_policy = policy_choices[new_policy_i].clone();
 
-                    if self.road.debug {
-                        eprintln_f!("{timesteps}: {c.car_i} switching to policy {new_policy_i}: {new_policy:?}");
+                    if self.road.debug && self.params.obstacle_car_debug {
+                        eprintln_f!("{timesteps}: obstacle car {c.car_i} switching to policy {new_policy_i}: {new_policy:?}");
                     }
 
                     c.side_policy = Some(new_policy);
@@ -291,6 +297,41 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
     (state.road.cost, state.reward)
 }
 
+fn sample_from_road_set(base_set: RoadSet, rng: &mut StdRng, n: usize) -> RoadSet {
+    let weights = base_set.inner().iter().map(|r| r.cost.weight).collect_vec();
+    let weighted_distribution = WeightedIndex::new(weights).unwrap();
+
+    let samples = (0..n)
+        .map(|_| {
+            let road_i = weighted_distribution.sample(rng);
+            let mut road = base_set.inner()[road_i].clone();
+            road.cost.weight = 1.0; // sampled, so weight is already taken into account
+            road
+        })
+        .collect_vec();
+
+    RoadSet::new(samples)
+}
+
+fn randomize_unimportant_vehicle_policies(
+    params: &Parameters,
+    roads: &mut RoadSet,
+    belief: &Belief,
+    selected_ids: &[usize],
+    rng: &mut StdRng,
+) {
+    let policies = make_obstacle_vehicle_policy_choices(params);
+    let sampled_belief = belief.sample(rng);
+
+    for road in roads.iter_mut() {
+        for car in road.cars[1..].iter_mut() {
+            if !selected_ids.contains(&car.car_i) {
+                car.side_policy = Some(policies[sampled_belief[car.car_i]].clone());
+            }
+        }
+    }
+}
+
 fn road_set_for_scenario(
     params: &Parameters,
     true_road: &Road,
@@ -298,7 +339,22 @@ fn road_set_for_scenario(
     n: usize,
 ) -> RoadSet {
     if params.use_cfb {
-        conditional_focused_branching(params, true_road, n)
+        let (base_set, selected_ids) = conditional_focused_branching(params, true_road, n);
+        if params.cfb.sample_from_base_set {
+            let mut roads = sample_from_road_set(base_set, rng, n);
+            if params.cfb.sample_unimportant_vehicle_policies {
+                randomize_unimportant_vehicle_policies(
+                    params,
+                    &mut roads,
+                    true_road.belief.as_ref().unwrap(),
+                    &selected_ids,
+                    rng,
+                );
+            }
+            roads
+        } else {
+            base_set
+        }
     } else {
         RoadSet::new_samples(true_road, rng, n)
     }

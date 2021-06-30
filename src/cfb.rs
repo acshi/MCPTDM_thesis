@@ -25,7 +25,11 @@ fn key_vehicles<'a>(params: &Parameters, road: &Road) -> Vec<usize> {
     car_ids
 }
 
-pub fn conditional_focused_branching(params: &Parameters, road: &Road, n: usize) -> RoadSet {
+pub fn conditional_focused_branching(
+    params: &Parameters,
+    road: &Road,
+    n: usize,
+) -> (RoadSet, Vec<usize>) {
     let belief = road.belief.as_ref().unwrap();
     let debug = params.cfb_debug && road.super_debug();
 
@@ -108,6 +112,8 @@ pub fn conditional_focused_branching(params: &Parameters, road: &Road, n: usize)
     sorted_open_sims.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     sorted_open_sims.truncate(params.cfb.max_n_for_cartesian_product);
 
+    let selected_important_car_ids = sorted_open_sims.iter().map(|a| a.0).collect_vec();
+
     if debug {
         eprintln!("Choosing to consider all permutations of:");
         for open_loop_sim in sorted_open_sims.iter() {
@@ -147,11 +153,19 @@ pub fn conditional_focused_branching(params: &Parameters, road: &Road, n: usize)
     // sort descending and choose just the most probable
     scenarios.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
     scenarios.truncate(n);
-    let mut roads = scenarios.into_iter().map(|a| a.1).collect_vec();
+    let mut roads = scenarios
+        .into_iter()
+        .map(|(w, mut r)| {
+            if params.cfb.set_cost_weights {
+                r.cost.weight = w;
+            }
+            r
+        })
+        .collect_vec();
 
     if roads.is_empty() {
         roads.push(sim_road);
     }
 
-    RoadSet::new(roads)
+    (RoadSet::new(roads), selected_important_car_ids)
 }

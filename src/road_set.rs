@@ -56,7 +56,7 @@ impl RoadSet {
     #[allow(unused)]
     pub fn disable_car_traces(&mut self) {
         for road in self.roads.iter_mut() {
-            road.car_traces = None;
+            road.disable_car_traces();
         }
     }
 
@@ -76,6 +76,19 @@ impl RoadSet {
 
     pub fn cost(&self) -> Cost {
         self.roads.iter().map(|r| r.cost).sum::<Cost>() / self.roads.len() as f64
+    }
+
+    #[allow(unused)]
+    pub fn debug_cost(&self) -> Cost {
+        eprintln!("Debug cost:");
+        for (i, road) in self.roads.iter().enumerate() {
+            eprintln_f!("{i}: {road.cost:?}");
+        }
+        self.cost()
+    }
+
+    pub fn inner(&self) -> &[Road] {
+        &self.roads
     }
 
     pub fn into_iter(self) -> impl Iterator<Item = Road> + Clone {

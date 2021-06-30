@@ -62,11 +62,11 @@ impl Road {
             last_ego: ego_car.clone(),
             cars: vec![ego_car],
             belief: None,
-            cost: Cost::new(1.0),
+            cost: Cost::new(1.0, 1.0),
             ego_is_safe: true,
             debug: !params.run_fast,
             car_traces: Some(Vec::new()),
-            last_reset_cost: Cost::new(1.0),
+            last_reset_cost: Cost::new(1.0, 1.0),
             trajectory_buffer: Vec::new(),
             params,
         };
@@ -606,11 +606,6 @@ impl Road {
                 * self.cost.discount;
         }
 
-        self.cost.efficiency += cparams.efficiency_weight
-            * (car.preferred_vel - car.vel).abs()
-            * dt
-            * self.cost.discount;
-
         let min_dist = self.min_unsafe_dist(0);
         if min_dist.is_some() {
             self.cost.safety += cparams.safety_weight * dt * self.cost.discount;
@@ -712,6 +707,11 @@ impl Road {
             self.car_traces = Some(Vec::new());
             self.last_reset_cost = self.cost;
         }
+    }
+
+    #[allow(unused)]
+    pub fn disable_car_traces(&mut self) {
+        self.car_traces = None;
     }
 
     pub fn make_traces(&self, depth_level: u32, include_obstacle_cars: bool) -> Vec<rvx::Shape> {

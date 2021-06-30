@@ -8,11 +8,13 @@ pub struct Cost {
 
     pub discount: f64,
     pub discount_factor: f64,
+
+    pub weight: f64,
 }
 
 impl std::fmt::Display for Cost {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = self;
+        let s = self.normalize();
         write_f!(f, "{s.efficiency:8.2} {s.safety:8.2} {s.smoothness:8.2} {s.uncomfortable_dec:8.2} {s.curvature_change:8.2}")
     }
 }
@@ -22,13 +24,13 @@ impl std::fmt::Debug for Cost {
         let s = self;
         write_f!(
             f,
-            "eff: {s.efficiency:8.2}, safe: {s.safety:8.2}, smooth: {s.smoothness:8.2}, ud: {s.uncomfortable_dec:8.2}, cc: {s.curvature_change:8.2}"
+            "eff: {s.efficiency:8.2}, safe: {s.safety:8.2}, smooth: {s.smoothness:8.2}, ud: {s.uncomfortable_dec:8.2}, cc: {s.curvature_change:8.2}, w: {s.weight}"
         )
     }
 }
 
 impl Cost {
-    pub fn new(discount_factor: f64) -> Self {
+    pub fn new(discount_factor: f64, weight: f64) -> Self {
         Self {
             efficiency: 0.0,
             safety: 0.0,
@@ -37,6 +39,7 @@ impl Cost {
             curvature_change: 0.0,
             discount: 1.0,
             discount_factor,
+            weight,
         }
     }
 
@@ -49,15 +52,33 @@ impl Cost {
             curvature_change: 0.0,
             discount: 1.0,
             discount_factor: 1.0,
+            weight: 1.0,
         }
     }
 
-    pub fn total(&self) -> f64 {
+    pub fn normalize(&self) -> Self {
+        Self {
+            efficiency: self.efficiency * self.weight,
+            safety: self.safety * self.weight,
+            smoothness: self.smoothness * self.weight,
+            uncomfortable_dec: self.uncomfortable_dec * self.weight,
+            curvature_change: self.curvature_change * self.weight,
+            discount: 1.0,
+            discount_factor: 1.0,
+            weight: 1.0,
+        }
+    }
+
+    fn unweighted_total(&self) -> f64 {
         self.efficiency
             + self.safety
             + self.smoothness
             + self.uncomfortable_dec
             + self.curvature_change
+    }
+
+    pub fn total(&self) -> f64 {
+        self.weight * self.unweighted_total()
     }
 
     pub fn update_discount(&mut self, dt: f64) {
@@ -67,7 +88,7 @@ impl Cost {
 
 impl Default for Cost {
     fn default() -> Self {
-        Self::new(1.0)
+        Self::new(1.0, 1.0)
     }
 }
 
@@ -79,7 +100,7 @@ impl PartialOrd for Cost {
 
 impl std::iter::Sum for Cost {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        let mut sum = Cost::new(1.0);
+        let mut sum = Cost::new(1.0, 1.0);
         for r in iter {
             sum += r;
         }
@@ -99,6 +120,7 @@ impl std::ops::Mul<f64> for Cost {
             curvature_change: self.curvature_change * rhs,
             discount: self.discount,
             discount_factor: self.discount_factor,
+            weight: self.weight,
         }
     }
 }
@@ -115,6 +137,7 @@ impl std::ops::Div<f64> for Cost {
             curvature_change: self.curvature_change / rhs,
             discount: self.discount,
             discount_factor: self.discount_factor,
+            weight: self.weight,
         }
     }
 }
@@ -133,24 +156,23 @@ impl std::ops::Add for Cost {
     type Output = Cost;
 
     fn add(self, rhs: Self) -> Self::Output {
+        let a = self.normalize();
+        let b = rhs.normalize();
         Self {
-            efficiency: self.efficiency + rhs.efficiency,
-            safety: self.safety + rhs.safety,
-            smoothness: self.smoothness + rhs.smoothness,
-            uncomfortable_dec: self.uncomfortable_dec + rhs.uncomfortable_dec,
-            curvature_change: self.curvature_change + rhs.curvature_change,
+            efficiency: a.efficiency + b.efficiency,
+            safety: a.safety + b.safety,
+            smoothness: a.smoothness + b.smoothness,
+            uncomfortable_dec: a.uncomfortable_dec + b.uncomfortable_dec,
+            curvature_change: a.curvature_change + b.curvature_change,
             discount: self.discount,
             discount_factor: self.discount_factor,
+            weight: 1.0,
         }
     }
 }
 
 impl std::ops::AddAssign for Cost {
     fn add_assign(&mut self, rhs: Self) {
-        self.efficiency += rhs.efficiency;
-        self.safety += rhs.safety;
-        self.smoothness += rhs.smoothness;
-        self.uncomfortable_dec += rhs.uncomfortable_dec;
-        self.curvature_change += rhs.curvature_change;
+        *self = *self + rhs;
     }
 }

@@ -41,6 +41,7 @@ pub struct MctsParameters {
     pub prefer_same_policy: bool,
     pub choose_random_policy: bool,
     pub ucb_const: f64,
+    pub bubble_up_max_weighted_leaf: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -75,6 +76,9 @@ pub struct CfbParameters {
     pub max_n_for_cartesian_product: usize,
     pub dt: f64,
     pub horizon_t: f64,
+    pub set_cost_weights: bool,
+    pub sample_from_base_set: bool,
+    pub sample_unimportant_vehicle_policies: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -120,6 +124,7 @@ pub struct Parameters {
     pub intelligent_driver_debug: bool,
     pub belief_debug: bool,
     pub cfb_debug: bool,
+    pub obstacle_car_debug: bool,
     pub policy_report_debug: bool,
 
     pub only_crashes_with_ego: bool,

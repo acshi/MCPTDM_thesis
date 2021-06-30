@@ -40,12 +40,12 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
 
     if let Some(policy) = node.policy.as_ref() {
         road.set_ego_policy(policy.clone());
-        road.reset_car_traces();
-        // if node.depth < 2 {
-        //     road.reset_car_traces();
-        // } else {
-        //     road.disable_car_traces();
-        // }
+        // road.reset_car_traces();
+        if node.depth < 4 {
+            road.reset_car_traces();
+        } else {
+            road.disable_car_traces();
+        }
         road.take_update_steps(mcts.layer_t, mcts.dt);
         node.traces
             .append(&mut road.make_traces(node.depth - 1, false));
@@ -139,18 +139,23 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
             }
 
             node.n_trials = sub_nodes.iter().map(|n| n.n_trials).sum::<usize>();
-            node.expected_score = Some(
-                sub_nodes
-                    .iter()
-                    .filter_map(|n| n.expected_score)
-                    .min_by(|a, b| a.total().partial_cmp(&b.total()).unwrap())
-                    .unwrap(),
-            );
+            node.expected_score = sub_nodes
+                .iter()
+                .filter_map(|n| n.expected_score)
+                .min_by(|a, b| a.total().partial_cmp(&b.total()).unwrap());
         }
         MctsNodeInner::Leaf { scores } => {
             scores.push(road.cost);
             node.n_trials = scores.len();
-            node.expected_score = Some(scores.iter().copied().sum::<Cost>() / node.n_trials as f64);
+            if mcts.bubble_up_max_weighted_leaf {
+                node.expected_score = scores
+                    .iter()
+                    .max_by(|a, b| a.partial_cmp(&b).unwrap())
+                    .copied();
+            } else {
+                node.expected_score =
+                    Some(scores.iter().copied().sum::<Cost>() / node.n_trials as f64);
+            }
         }
     }
 }

@@ -1,7 +1,7 @@
 max_steps = 4000
 n_cars = 14
 method = "mpdm"
-use_cfb = false
+use_cfb = true
 extra_ego_accdec_policies = []
 
 physics_dt = 0.01
@@ -23,6 +23,7 @@ separation_debug = false
 intelligent_driver_debug = false
 belief_debug = false
 cfb_debug = false
+obstacle_car_debug = false
 policy_report_debug = false
 # debugging_scenario = 3
 
@@ -64,6 +65,9 @@ dangerous_delta_threshold = 10.0
 max_n_for_cartesian_product = 4
 dt = 0.2
 horizon_t = 8.0
+set_cost_weights = true
+sample_from_base_set = true
+sample_unimportant_vehicle_policies = true
 
 [tree]
 dt = 0.2
@@ -73,20 +77,21 @@ samples_n = 8
 
 [mpdm]
 dt = 0.2
-forward_t = 8.0
+forward_t = 10.0
 samples_n = 16
 
 [eudm]
 dt = 0.2
 layer_t = 2.0
 samples_n = 16
-search_depth = 4
+search_depth = 5
 
 [mcts]
 dt = 0.2
 layer_t = 2.0
-search_depth = 4
+search_depth = 5
 samples_n = 128
 prefer_same_policy = true
 choose_random_policy = true
 ucb_const = -1000.0
+bubble_up_max_weighted_leaf = true

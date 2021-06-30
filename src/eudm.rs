@@ -45,7 +45,11 @@ fn dcp_tree_search(
     {
         let mut ongoing_roads = roads.clone();
         for depth_level in 0..eudm.search_depth {
-            ongoing_roads.reset_car_traces();
+            if depth_level < 4 {
+                ongoing_roads.reset_car_traces();
+            } else {
+                ongoing_roads.disable_car_traces();
+            }
             ongoing_roads.take_update_steps(eudm.layer_t, eudm.dt);
             traces.append(&mut ongoing_roads.make_traces(depth_level, false));
         }
@@ -68,7 +72,11 @@ fn dcp_tree_search(
     init_policy_roads.set_ego_policy(&operating_policy);
 
     for switch_depth in 1..=eudm.search_depth {
-        init_policy_roads.reset_car_traces();
+        if switch_depth < 4 {
+            init_policy_roads.reset_car_traces();
+        } else {
+            init_policy_roads.disable_car_traces();
+        }
         init_policy_roads.take_update_steps(eudm.layer_t, eudm.dt);
         traces.append(&mut init_policy_roads.make_traces(switch_depth - 1, false));
 
@@ -96,7 +104,11 @@ fn dcp_tree_search(
                 roads.set_ego_policy(sub_policy);
 
                 for depth_level in switch_depth..eudm.search_depth {
-                    roads.reset_car_traces();
+                    if depth_level < 4 {
+                        roads.reset_car_traces();
+                    } else {
+                        roads.disable_car_traces();
+                    }
                     roads.take_update_steps(eudm.layer_t, eudm.dt);
                     traces.append(&mut roads.make_traces(depth_level, false));
                 }
