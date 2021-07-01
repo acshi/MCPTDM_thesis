@@ -1,6 +1,6 @@
-max_steps = 4000
-n_cars = 14
-method = "mpdm"
+max_steps = 6000
+n_cars = 13
+method = "mcts"
 use_cfb = true
 extra_ego_accdec_policies = []
 
@@ -14,7 +14,7 @@ thread_limit = 8
 rng_seed = 0
 run_fast = false
 graphics_speedup = 8
-debug_car_i = 6
+debug_car_i = 3
 debug_steps_before = 20
 super_debug = true
 ego_policy_change_debug = false
@@ -23,10 +23,12 @@ separation_debug = false
 intelligent_driver_debug = false
 belief_debug = false
 cfb_debug = false
-obstacle_car_debug = false
-policy_report_debug = false
+obstacle_car_debug = true
+policy_report_debug = true
+ego_traces_debug = false
 # debugging_scenario = 3
 
+only_ego_crashes_in_forward_sims = true
 only_crashes_with_ego = true
 obstacles_only_for_ego = true
 true_belief_sample_only = false
@@ -38,10 +40,11 @@ place_ahead_beyond = 100.0
 
 [belief]
 different_lane_prob = 0.2
-different_longitudinal_prob = 0.6
+different_longitudinal_prob = 0.8
 accelerate_delta_vel_thresh = 2.0
 accelerate_ahead_dist_thresh = 10.0
 decelerate_vel_thresh = 4.0
+finished_waiting_dy = 0.5
 
 [cost]
 efficiency_low_speed_cost = 1.0
@@ -77,21 +80,21 @@ samples_n = 8
 
 [mpdm]
 dt = 0.2
-forward_t = 10.0
+forward_t = 8.0
 samples_n = 16
 
 [eudm]
 dt = 0.2
 layer_t = 2.0
 samples_n = 16
-search_depth = 5
+search_depth = 4
 
 [mcts]
 dt = 0.2
 layer_t = 2.0
-search_depth = 5
-samples_n = 128
+search_depth = 4
+samples_n = 64
 prefer_same_policy = true
 choose_random_policy = true
-ucb_const = -1000.0
+ucb_const = -100.0
 bubble_up_max_weighted_leaf = true

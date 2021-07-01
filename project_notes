@@ -67,10 +67,19 @@ MCTS should try using a variant of CFB that samples over the unimportant vehicle
 
 Tell the story in terms of how what we really want to do is similar to tree search with infinite samples, but we can't because that is infeasible. We can talk about how MPDM tries to solve this, then talk about how EUDM expands the search space, and then say that we think even more flexibility is justified and that we do this with MCTS. Talk about how their CFB is a useful heuristic for improving our ability to sample the space and then how we modify it for MCTS.
 
-Tasks:
-Overall for this week: Have my MCTS method fixed to the point that more samples only helps. Get paper to 20%.
+Some decisions:
+Increasing search depth appears to NOT actually help. Let's keep it at 4 and 8 seconds.
+Decided to have no placed obstacles, since cars can get a break policy and become obstacles on their own well enough!
+Run simulations for a total of 60 seconds, since that feels clean and easy to understand.
 
-With these changes, we expect to see MCTS not do worse when we use more samples. Also use fewer samples to check for trends!!
+Tasks:
+Overall for this week: Have my MCTS method fixed to the point that more samples only helps. Finalize setup. Get paper to 20%.
+
+We are getting into trouble because the obstacle vehicle policy waiting_done makes it not stateless, and so we are systematically mispredicting other vehicles. Let's move the logic for when it is okay to change lanes out of the main policy. We can put it into a meta policy!
+
+Why does EUDM get such a low cost, yet have poor efficiency, high decelerations, (good safety), _very_ low curvature change. I guess it just avoids turning much at all? Should we modify our cost formulation at all?
+
+OKAY, so let's try to finalize parameter choices. Let's keep efficiency set at 1.0 for scale, then safety, smoothness, uc, cc, and then finally discount factor. Then MCTS' UCB constant. We can do them in isolation, one at a time.
 
 Once everything else looks good with samples_n, we can try seeing what we get for additional policies, etc...
 
@@ -86,6 +95,7 @@ POMCP proper? (maybe cut it)
 Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
 
 Finished tasks:
+With these changes, we expect to see MCTS not do worse when we use more samples. Also use fewer samples to check for trends!!
 Alternative MCTS formulation where it samples from CFB, and so assigns equal weights to each sample.
 Have MCTS sample from the CFB-selected scenarios different policies for all the unimportant vehicles.
 Have MCTS use propagate up max(cost * probability weight) instead of avg(cost).

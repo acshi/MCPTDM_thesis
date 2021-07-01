@@ -12,8 +12,8 @@ use rand::{prelude::StdRng, Rng};
 use rvx::{Rvx, RvxColor};
 
 use crate::{
-    arg_parameters::Parameters, belief::Belief, car::SPEED_DEFAULT, cost::Cost,
-    mpdm::make_obstacle_vehicle_policy_choices, side_control::SideControlTrait,
+    arg_parameters::Parameters, belief::Belief, cost::Cost,
+    mpdm::make_obstacle_vehicle_policy_belief_states, side_control::SideControlTrait,
     side_policies::SidePolicy,
 };
 use crate::{car::PRIUS_MAX_STEER, forward_control::ForwardControlTrait};
@@ -43,6 +43,7 @@ pub struct Road {
     pub last_reset_cost: Cost,
     pub trajectory_buffer: Vec<Point2<f64>>,
     pub debug: bool,
+    pub is_truth: bool,
 }
 
 fn range_dist(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> f64 {
@@ -56,7 +57,7 @@ impl Road {
     pub fn new(params: Rc<Parameters>) -> Self {
         let ego_car = Car::new(&params, 0, 0);
 
-        let mut road = Self {
+        let road = Self {
             t: 0.0,
             timesteps: 0,
             last_ego: ego_car.clone(),
@@ -69,11 +70,12 @@ impl Road {
             last_reset_cost: Cost::new(1.0, 1.0),
             trajectory_buffer: Vec::new(),
             params,
+            is_truth: true,
         };
 
-        road.cars[0].preferred_vel = SPEED_DEFAULT;
-        road.cars[0].set_theta(PI / 16.0);
-        road.cars[0].set_y(Road::get_lane_y(0));
+        // road.cars[0].preferred_vel = SPEED_DEFAULT;
+        // road.cars[0].set_theta(PI / 16.0);
+        // road.cars[0].set_y(Road::get_lane_y(0));
         // road.set_ego_policy(make_policy_choices()[4].clone());
 
         road
@@ -118,7 +120,7 @@ impl Road {
     }
 
     pub fn init_belief(&mut self) {
-        let n_policies = make_obstacle_vehicle_policy_choices(&self.params).len();
+        let n_policies = make_obstacle_vehicle_policy_belief_states(&self.params).len();
         self.belief = Some(Rc::new(Belief::uniform(self.cars.len(), n_policies)));
     }
 
@@ -126,6 +128,15 @@ impl Road {
         let mut belief_rc = self.belief.take().unwrap();
         let belief = Rc::get_mut(&mut belief_rc).expect("update_belief should only be called when it has exclusive access to the top-level road");
         belief.update(&self);
+
+        if self.super_debug() && self.params.obstacle_car_debug {
+            if let Some(debug_car_i) = self.params.debug_car_i {
+                let s = &self;
+                let bel = belief.get_all(debug_car_i);
+                eprintln_f!("{s.timesteps}: belief about {s.params.debug_car_i:?}: {bel:.2?}")
+            }
+        }
+
         self.belief = Some(belief_rc);
     }
 
@@ -143,6 +154,7 @@ impl Road {
             last_reset_cost: self.last_reset_cost.clone(),
             trajectory_buffer: Vec::new(),
             debug: self.debug,
+            is_truth: false,
         }
     }
 
@@ -171,7 +183,7 @@ impl Road {
 
     pub fn sample_belief(&self, rng: &mut StdRng) -> Self {
         let belief = self.belief.clone().unwrap();
-        let policies = make_obstacle_vehicle_policy_choices(&self.params);
+        let policies = make_obstacle_vehicle_policy_belief_states(&self.params);
 
         let mut road = self.sim_estimate();
 
@@ -466,44 +478,45 @@ impl Road {
         let mut trajectory = std::mem::replace(&mut self.trajectory_buffer, Vec::new());
 
         for car_i in 0..self.cars.len() {
-            if !self.cars[car_i].crashed {
-                // policy
-                {
-                    let mut policy = self.cars[car_i].side_policy.take().unwrap();
-                    self.cars[car_i].target_lane_i = policy.choose_target_lane(self, car_i);
-                    self.cars[car_i].target_follow_time = policy.choose_follow_time(self, car_i);
-                    self.cars[car_i].target_vel = policy.choose_vel(self, car_i);
-                    policy.choose_trajectory(self, car_i, &mut trajectory);
-                    self.cars[car_i].side_policy = Some(policy);
-                }
+            if self.cars[car_i].crashed {
+                continue;
+            }
+            // policy
+            {
+                let mut policy = self.cars[car_i].side_policy.take().unwrap();
+                self.cars[car_i].target_lane_i = policy.choose_target_lane(self, car_i);
+                self.cars[car_i].target_follow_time = policy.choose_follow_time(self, car_i);
+                self.cars[car_i].target_vel = policy.choose_vel(self, car_i);
+                policy.choose_trajectory(self, car_i, &mut trajectory);
+                self.cars[car_i].side_policy = Some(policy);
+            }
 
-                // forward control
-                {
-                    let mut control = self.cars[car_i].forward_control.take().unwrap();
-                    let mut accel = control.choose_accel(self, car_i);
+            // forward control
+            {
+                let mut control = self.cars[car_i].forward_control.take().unwrap();
+                let mut accel = control.choose_accel(self, car_i);
 
-                    let car = &mut self.cars[car_i];
-                    accel = accel.max(-BREAKING_ACCEL).min(car.preferred_vel);
-                    car.vel = (car.vel + accel * dt).max(0.0).min(car.preferred_vel);
-                    self.cars[car_i].forward_control = Some(control);
-                }
+                let car = &mut self.cars[car_i];
+                accel = accel.max(-BREAKING_ACCEL).min(car.preferred_vel);
+                car.vel = (car.vel + accel * dt).max(0.0).min(car.preferred_vel);
+                self.cars[car_i].forward_control = Some(control);
+            }
 
-                // side control
-                {
-                    let mut control = self.cars[car_i].side_control.take().unwrap();
-                    let target_steer = control.choose_steer(self, car_i, &trajectory);
+            // side control
+            {
+                let mut control = self.cars[car_i].side_control.take().unwrap();
+                let target_steer = control.choose_steer(self, car_i, &trajectory);
 
-                    let car = &mut self.cars[car_i];
-                    let target_steer_accel = (target_steer - car.steer) / dt;
-                    let steer_accel = target_steer_accel
-                        .max(-car.preferred_steer_accel)
-                        .min(car.preferred_steer_accel);
+                let car = &mut self.cars[car_i];
+                let target_steer_accel = (target_steer - car.steer) / dt;
+                let steer_accel = target_steer_accel
+                    .max(-car.preferred_steer_accel)
+                    .min(car.preferred_steer_accel);
 
-                    car.steer = (car.steer + steer_accel * dt)
-                        .max(-PRIUS_MAX_STEER)
-                        .min(PRIUS_MAX_STEER);
-                    self.cars[car_i].side_control = Some(control);
-                }
+                car.steer = (car.steer + steer_accel * dt)
+                    .max(-PRIUS_MAX_STEER)
+                    .min(PRIUS_MAX_STEER);
+                self.cars[car_i].side_control = Some(control);
             }
         }
 
@@ -550,8 +563,16 @@ impl Road {
                         eprintln!();
                     }
 
-                    self.cars[i1].crashed = true;
-                    self.cars[i2].crashed = true;
+                    if self.is_truth || !self.params.only_ego_crashes_in_forward_sims || i1 == 0 {
+                        self.cars[i1].crashed = true;
+                    }
+                    if self.is_truth || !self.params.only_ego_crashes_in_forward_sims || i2 == 0 {
+                        self.cars[i2].crashed = true;
+                        if self.params.debug_car_i == Some(i2) {
+                            let s = &self;
+                            eprintln_f!("{s.timesteps}: {i2=}, {s.is_truth=}");
+                        }
+                    }
                 }
             }
         } else {
@@ -568,8 +589,12 @@ impl Road {
                         eprintln!();
                     }
 
-                    self.cars[i1].crashed = true;
-                    self.cars[i2].crashed = true;
+                    if self.is_truth || !self.params.only_ego_crashes_in_forward_sims || i1 == 0 {
+                        self.cars[i1].crashed = true;
+                    }
+                    if self.is_truth || !self.params.only_ego_crashes_in_forward_sims || i2 == 0 {
+                        self.cars[i2].crashed = true;
+                    }
                 }
             }
         }
@@ -578,7 +603,7 @@ impl Road {
     }
 
     pub fn update(&mut self, dt: f64) {
-        if !self.cars[0].crashed {
+        if !(self.is_truth && self.cars[0].crashed) {
             self.update_inner(dt);
         }
 
@@ -748,7 +773,7 @@ impl Road {
                 .copied()
                 .collect_vec();
 
-            if car_i == 0 {
+            if car_i == 0 && self.params.ego_traces_debug {
                 // eprintln!("Points in trace: {}", trace.len());
 
                 let base_line_color = if self.cars[0].crashed {

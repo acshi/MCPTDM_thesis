@@ -30,6 +30,7 @@ translations["false"] = "Normal"
 translations["true"] = "CFB"
 translations["seconds"] = "Computation time (s)"
 translations["search_depth"] = "Search depth"
+translations["samples_n"] = "# Samples"
 translations[None] = "Average"
 
 
@@ -235,7 +236,7 @@ search_depth_kind = FigureKind("search_depth", [3, 4, 5, 6, 7])
 cfb_kind = FigureKind("use_cfb", ["false", "true"])
 seconds_kind = FigureKind("seconds", None, xlim=(0, 1.0))
 
-samples_n_kind = FigureKind("samples_n", [128, 256, 512])
+samples_n_kind = FigureKind("samples_n", [8, 16, 32, 64, 128, 256, 512])
 
 # extra_accdec_kind = FigureKind("extra_ego_accdec_policies", [
 #                                "-1", "1", "-2", "2", "-1,1", "-2,2", "1,2", "-1,-2", "-1,-2,-3,1,2,3"])
@@ -243,34 +244,40 @@ samples_n_kind = FigureKind("samples_n", [128, 256, 512])
 extra_accdec_kind = FigureKind("extra_ego_accdec_policies", [
                                "", "-1,-2,1,2", "-1,-2,-3,1,2,3"])
 
-method_mode = FigureMode("method", ["tree", "mpdm", "eudm", "mcts"])
+method_mode = FigureMode("method", ["fixed", "tree", "mpdm", "eudm", "mcts"])
 cfb_mode = FigureMode("use_cfb", ["false", "true"])
 
 metrics = ["efficiency", "safety", "seconds"]
 
-for use_cfb in ["false", "true"]:
-    for samples_n in [128, 256, 512]:
-        evaluate_conditions(results, metrics, [
-                            ("method", "mcts"), ("search_depth", 8), ("layer_t", "1"), ("samples_n", samples_n), ("use_cfb", use_cfb)])
-print("layer_t 2")
-for use_cfb in ["false", "true"]:
-    for search_depth in [4, 5, 6, 7]:
-        evaluate_conditions(results, metrics, [
-                            ("method", "mcts"), ("search_depth", search_depth), ("layer_t", "2"), ("samples_n", 128), ("use_cfb", use_cfb)])
+print(max(results, key=lambda entry: entry["safety"]))
 
-print("eudm")
-for use_cfb in ["false", "true"]:
-    for search_depth in [4, 5, 6, 7]:
-        evaluate_conditions(results, metrics, [
-                            ("method", "eudm"), ("search_depth", search_depth), ("use_cfb", use_cfb)])
+# for use_cfb in ["false", "true"]:
+#     for samples_n in [128, 256, 512]:
+#         evaluate_conditions(results, metrics, [
+#                             ("method", "mcts"), ("search_depth", 8), ("layer_t", "1"), ("samples_n", samples_n), ("use_cfb", use_cfb)])
+# print("layer_t 2")
+# for use_cfb in ["false", "true"]:
+#     for search_depth in [4, 5, 6, 7]:
+#         evaluate_conditions(results, metrics, [
+#                             ("method", "mcts"), ("search_depth", search_depth), ("layer_t", "2"), ("samples_n", 128), ("use_cfb", use_cfb)])
+
+# print("eudm")
+# for use_cfb in ["false", "true"]:
+#     for search_depth in [4, 5, 6, 7]:
+#         evaluate_conditions(results, metrics, [
+#                             ("method", "eudm"), ("search_depth", search_depth), ("use_cfb", use_cfb)])
 
 
-samples_filters = ["_method_mcts_", "_use_cfb_true_"]
-samples_n_kind.plot(results, "efficiency", filters=samples_filters)
-samples_n_kind.plot(results, "cost", filters=samples_filters)
-samples_n_kind.plot(results, "safety", filters=samples_filters)
-samples_n_kind.plot(results, "ud", filters=samples_filters)
-samples_n_kind.plot(results, "cc", filters=samples_filters)
+# samples_filters = ["_method_mcts_", "_use_cfb_true_"]
+# samples_n_kind.plot(results, "efficiency", filters=samples_filters)
+# samples_n_kind.plot(results, "cost", filters=samples_filters)
+# samples_n_kind.plot(results, "safety", filters=samples_filters)
+# samples_n_kind.plot(results, "ud", filters=samples_filters)
+# samples_n_kind.plot(results, "cc", filters=samples_filters)
+# samples_n_kind.plot(results, "seconds", filters=samples_filters)
+
+# cargo run --release rng_seed 0-63 :: method mpdm mcts eudm :: mcts.search_depth 4-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: use_cfb false true :: thread_limit 24 && cargo run --release rng_seed 0-15 :: method tree :: tree.samples_n 1 2 4 8 :: use_cfb false true :: thread_limit 24
+# cargo run --release rng_seed 64-127 :: method mpdm mcts eudm :: mcts.search_depth 4-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: use_cfb false true :: thread_limit 24 && cargo run --release rng_seed 16-31 :: method tree :: tree.samples_n 1 2 4 8 :: use_cfb false true :: thread_limit 24
 
 # seconds_kind.plot(results, "efficiency", mode=method_mode)
 # seconds_kind.plot(results, "cost", mode=method_mode)
@@ -285,12 +292,13 @@ samples_n_kind.plot(results, "cc", filters=samples_filters)
 # seconds_kind.plot(results, "cc", mode=cfb_mode)
 
 # mcts_filter = ["_method_mcts_", "_use_cfb_true_"]
-# samples_mode = FigureMode("samples_n", ["128", "256", "512"])
-# search_depth_kind.plot(results, "efficiency", mode=samples_mode, filters=mcts_filter)
-# search_depth_kind.plot(results, "cost", mode=samples_mode, filters=mcts_filter)
-# search_depth_kind.plot(results, "safety", mode=samples_mode, filters=mcts_filter)
-# search_depth_kind.plot(results, "ud", mode=samples_mode, filters=mcts_filter)
-# search_depth_kind.plot(results, "cc", mode=samples_mode, filters=mcts_filter)
+# samples_mode = None  # FigureMode("samples_n", ["8", "16", "32", "64", "128", "256", "512"])
+# mcts_search_depth_kind = FigureKind("search_depth", [4, 5, 6, 7])
+# mcts_search_depth_kind.plot(results, "efficiency", mode=samples_mode, filters=mcts_filter)
+# mcts_search_depth_kind.plot(results, "cost", mode=samples_mode, filters=mcts_filter)
+# mcts_search_depth_kind.plot(results, "safety", mode=samples_mode, filters=mcts_filter)
+# mcts_search_depth_kind.plot(results, "ud", mode=samples_mode, filters=mcts_filter)
+# mcts_search_depth_kind.plot(results, "cc", mode=samples_mode, filters=mcts_filter)
 
 # search_depth_kind.plot(results, "efficiency", mode=method_mode)
 # search_depth_kind.plot(results, "cost", mode=method_mode)

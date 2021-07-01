@@ -8,7 +8,15 @@ use crate::{lane_change_policy::LongitudinalPolicy, road::Road};
 
 fn predict_lane(road: &Road, car_i: usize) -> i32 {
     let car = &road.cars[car_i];
-    let predicted_y = car.y() + car.vel * car.theta().sin() * road.params.lane_change_time;
+    let predicted_y =
+        car.y() + car.vel * (car.theta() + car.steer).sin() * road.params.lane_change_time;
+    if road.super_debug() && road.params.debug_car_i == Some(car_i) {
+        eprintln_f!(
+            "{predicted_y=:.2} car_y: {:.2} {car.vel=:.2} sin: {:.2}",
+            car.y(),
+            (car.theta() + car.steer).sin()
+        );
+    }
     Road::get_lane_i(predicted_y).min(1).max(0)
 }
 
@@ -34,6 +42,13 @@ fn predict_long(road: &Road, car_i: usize) -> LongitudinalPolicy {
     }
 }
 
+fn predict_finished_waiting(road: &Road, car_i: usize) -> bool {
+    let car = &road.cars[car_i];
+    let lane_y = Road::get_lane_y(car.current_lane());
+    let dy = (lane_y - car.y()).abs();
+    dy > road.params.belief.finished_waiting_dy
+}
+
 fn normalize(belief: &mut [f64]) {
     let sum: f64 = belief.iter().sum();
     for val in belief.iter_mut() {
@@ -53,21 +68,60 @@ impl Belief {
     }
 
     pub fn update(&mut self, road: &Road) {
+        let belief_p = &road.params.belief;
         for (car_i, belief) in self.belief.iter_mut().enumerate().skip(1) {
             let pred_lane = predict_lane(road, car_i);
             let pred_long = predict_long(road, car_i);
+            let pred_finished_waiting = predict_finished_waiting(road, car_i);
+
+            if road.super_debug()
+                && road.params.obstacle_car_debug
+                && road.params.debug_car_i == Some(car_i)
+            {
+                eprintln_f!("{pred_lane=} {pred_long=:?} {pred_finished_waiting=}");
+            }
 
             belief.clear();
             for &lane_i in &[0, 1] {
                 for long_policy in [LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate] {
-                    let mut prob = 1.0;
-                    if lane_i != pred_lane {
-                        prob *= road.params.belief.different_lane_prob;
+                    for wait_for_clear in [false, true] {
+                        let mut prob = 1.0;
+                        if lane_i != pred_lane {
+                            prob *= belief_p.different_lane_prob;
+                        }
+                        if long_policy != pred_long {
+                            prob *= belief_p.different_longitudinal_prob;
+                        }
+                        // wait_for_clear && pred_finished_waiting: already making lane change
+                        // !wait_for_clear && pred_finished_waiting: already making lane change
+                        // wait_for_clear && !pred_finished_waiting: still need to wait
+                        // !wait_for_clear && !pred_finished_waiting: will start lane change
+                        let would_lane_change = pred_finished_waiting || !wait_for_clear;
+                        let current_lane_i = road.cars[car_i].current_lane();
+                        let wants_lane_change = lane_i != current_lane_i;
+                        let will_lane_change = would_lane_change && wants_lane_change;
+                        // either we can make the lane change, and might as well use wait_for_clear=false
+                        // or we still need to wait and so use wait_for_clear=true
+                        // the other scenarios are superfluous, or inaccurate
+                        if will_lane_change && wait_for_clear {
+                            prob = 0.0;
+                        }
+                        if wants_lane_change && !will_lane_change && !wait_for_clear {
+                            prob = 0.0;
+                        }
+                        // waiting... to _not_ change lanes is also pointless
+                        if !wants_lane_change && wait_for_clear {
+                            prob = 0.0;
+                        }
+                        belief.push(prob);
+
+                        if road.super_debug()
+                            && road.params.obstacle_car_debug
+                            && road.params.debug_car_i == Some(car_i)
+                        {
+                            eprintln_f!("{road.timesteps}: {car_i=} {lane_i=} {long_policy=:?} {wait_for_clear=}: {prob=:.2}");
+                        }
                     }
-                    if long_policy != pred_long {
-                        prob *= road.params.belief.different_longitudinal_prob;
-                    }
-                    belief.push(prob);
                 }
             }
             if LongitudinalPolicy::Decelerate == pred_long {
@@ -97,6 +151,10 @@ impl Belief {
     pub fn get(&self, car_i: usize, policy_id: usize) -> f64 {
         assert_ne!(car_i, 0);
         self.belief[car_i][policy_id]
+    }
+
+    pub fn get_all(&self, car_i: usize) -> &[f64] {
+        &self.belief[car_i]
     }
 
     pub fn get_most_likely(&self, car_i: usize) -> usize {

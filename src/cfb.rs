@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
 use crate::{
-    arg_parameters::Parameters, mpdm::make_obstacle_vehicle_policy_choices, road::Road,
+    arg_parameters::Parameters, mpdm::make_obstacle_vehicle_policy_belief_states, road::Road,
     road_set::RoadSet,
 };
 
@@ -53,7 +53,7 @@ pub fn conditional_focused_branching(
     // a light acceleration from just speeding off into stuff? Or the simulation making any sense at all?
     // I imagine that the uncertain and the ego vehicle must follow their real closed-loop policies for this to do any good.
 
-    let policies = make_obstacle_vehicle_policy_choices(params);
+    let policies = make_obstacle_vehicle_policy_belief_states(params);
 
     let base_safety = road.cost.safety;
     let open_loop_sims = uncertain_car_ids

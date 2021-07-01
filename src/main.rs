@@ -118,6 +118,7 @@ impl State {
         let policy_rng = &mut self.policy_rng;
         if self.timesteps % replan_interval == 0 && !self.road.cars[0].crashed {
             let (policy, traces) = match self.params.method.as_str() {
+                "fixed" => (self.road.ego_policy().clone(), Vec::new()),
                 "mpdm" => mpdm_choose_policy(&self.params, &self.road, policy_rng),
                 "eudm" => dcp_tree_choose_policy(&self.params, &self.road, policy_rng),
                 "tree" => tree_choose_policy(&self.params, &self.road, policy_rng),
@@ -234,7 +235,7 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
 
     let mut road = Road::new(params.clone());
     road.add_obstacle(100.0, 0);
-    while road.cars.len() < params.n_cars {
+    while road.cars.len() < params.n_cars + 1 {
         road.add_random_car(&mut scenario_rng);
     }
     road.init_belief();

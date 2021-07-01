@@ -96,6 +96,11 @@ impl RoadSet {
     }
 
     #[allow(unused)]
+    pub fn iter(&self) -> impl Iterator<Item = &Road> + Clone {
+        self.roads.iter()
+    }
+
+    #[allow(unused)]
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Road> {
         self.roads.iter_mut()
     }

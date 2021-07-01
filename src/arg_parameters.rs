@@ -88,6 +88,7 @@ pub struct BeliefParameters {
     pub accelerate_delta_vel_thresh: f64,
     pub accelerate_ahead_dist_thresh: f64,
     pub decelerate_vel_thresh: f64,
+    pub finished_waiting_dy: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -126,7 +127,9 @@ pub struct Parameters {
     pub cfb_debug: bool,
     pub obstacle_car_debug: bool,
     pub policy_report_debug: bool,
+    pub ego_traces_debug: bool,
 
+    pub only_ego_crashes_in_forward_sims: bool,
     pub only_crashes_with_ego: bool,
     pub obstacles_only_for_ego: bool,
     pub true_belief_sample_only: bool,
@@ -237,14 +240,16 @@ fn create_scenarios(
 
     for s in scenarios.iter_mut() {
         let samples_n = match s.method.as_str() {
-            "tree" => s.tree.samples_n,
-            "mpdm" => s.mpdm.samples_n,
-            "eudm" => s.eudm.samples_n,
-            "mcts" => s.mcts.samples_n,
+            "fixed" => "".to_owned(),
+            "tree" => format_f!("samples_n_{s.tree.samples_n}"),
+            "mpdm" => format_f!("samples_n_{s.mpdm.samples_n}"),
+            "eudm" => format_f!("samples_n_{s.eudm.samples_n}"),
+            "mcts" => format_f!("samples_n_{s.mcts.samples_n}"),
             _ => panic!("Unknown method {}", s.method),
         };
 
         let search_depth = match s.method.as_str() {
+            "fixed" => "".to_owned(),
             "tree" => format_f!("search_depth_{s.tree.search_depth}"),
             "mpdm" => "".to_owned(),
             "eudm" => format_f!("search_depth_{s.eudm.search_depth}"),
@@ -253,6 +258,7 @@ fn create_scenarios(
         };
 
         let layer_forward_t = match s.method.as_str() {
+            "fixed" => "".to_owned(),
             "tree" => format_f!("layer_t_{s.tree.layer_t}"),
             "mpdm" => format_f!("forward_t_{s.mpdm.forward_t}"),
             "eudm" => format_f!("layer_t_{s.eudm.layer_t}"),
@@ -268,7 +274,7 @@ fn create_scenarios(
 
         s.scenario_name = Some(format_f!(
             "_method_{s.method}_use_cfb_{s.use_cfb}_extra_ego_accdec_policies_{extra_ego_accdec}\
-             _samples_n_{samples_n}_{search_depth}_{layer_forward_t}\
+             _{samples_n}_{search_depth}_{layer_forward_t}\
              _max_steps_{s.max_steps}_n_cars_{s.n_cars}\
              _discount_factor_{s.cost.discount_factor}_rng_seed_{s.rng_seed}_"
         ));

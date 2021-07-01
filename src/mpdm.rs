@@ -13,7 +13,7 @@ use crate::{
 pub fn make_obstacle_vehicle_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
     let mut policy_choices = Vec::new();
 
-    for &lane_i in &[0, 1] {
+    for lane_i in [0, 1] {
         for long_policy in [LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate] {
             policy_choices.push(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
                 policy_choices.len() as u32,
@@ -22,6 +22,34 @@ pub fn make_obstacle_vehicle_policy_choices(params: &Parameters) -> Vec<SidePoli
                 true,
                 long_policy,
             )));
+        }
+    }
+
+    policy_choices.push(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
+        policy_choices.len() as u32,
+        None,
+        params.lane_change_time,
+        true,
+        LongitudinalPolicy::Decelerate,
+    )));
+
+    policy_choices
+}
+
+pub fn make_obstacle_vehicle_policy_belief_states(params: &Parameters) -> Vec<SidePolicy> {
+    let mut policy_choices = Vec::new();
+
+    for lane_i in [0, 1] {
+        for long_policy in [LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate] {
+            for wait_for_clear in [false, true] {
+                policy_choices.push(SidePolicy::LaneChangePolicy(LaneChangePolicy::new(
+                    policy_choices.len() as u32,
+                    Some(lane_i),
+                    params.lane_change_time,
+                    wait_for_clear,
+                    long_policy,
+                )));
+            }
         }
     }
 
