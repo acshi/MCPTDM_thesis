@@ -10,7 +10,10 @@ use belief::Belief;
 use car::{Car, MPH_TO_MPS};
 use cfb::conditional_focused_branching;
 use itertools::Itertools;
-use mpdm::{make_obstacle_vehicle_policy_choices, make_policy_choices, mpdm_choose_policy};
+use mpdm::{
+    make_obstacle_vehicle_policy_belief_states, make_obstacle_vehicle_policy_choices,
+    make_policy_choices, mpdm_choose_policy,
+};
 
 use cost::Cost;
 use rand::{
@@ -234,7 +237,7 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
     let mut scenario_rng = StdRng::from_seed(full_seed);
 
     let mut road = Road::new(params.clone());
-    road.add_obstacle(100.0, 0);
+    // road.add_obstacle(100.0, 0);
     while road.cars.len() < params.n_cars + 1 {
         road.add_random_car(&mut scenario_rng);
     }
@@ -321,7 +324,7 @@ fn randomize_unimportant_vehicle_policies(
     selected_ids: &[usize],
     rng: &mut StdRng,
 ) {
-    let policies = make_obstacle_vehicle_policy_choices(params);
+    let policies = make_obstacle_vehicle_policy_belief_states(params);
     let sampled_belief = belief.sample(rng);
 
     for road in roads.iter_mut() {

@@ -89,6 +89,7 @@ pub struct BeliefParameters {
     pub accelerate_ahead_dist_thresh: f64,
     pub decelerate_vel_thresh: f64,
     pub finished_waiting_dy: f64,
+    pub skips_waiting_prob: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]

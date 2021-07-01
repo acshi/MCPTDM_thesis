@@ -568,10 +568,6 @@ impl Road {
                     }
                     if self.is_truth || !self.params.only_ego_crashes_in_forward_sims || i2 == 0 {
                         self.cars[i2].crashed = true;
-                        if self.params.debug_car_i == Some(i2) {
-                            let s = &self;
-                            eprintln_f!("{s.timesteps}: {i2=}, {s.is_truth=}");
-                        }
                     }
                 }
             }

@@ -61,7 +61,7 @@ impl Belief {
     }
 
     pub fn update(&mut self, road: &Road) {
-        let belief_p = &road.params.belief;
+        let bparams = &road.params.belief;
         for (car_i, belief) in self.belief.iter_mut().enumerate().skip(1) {
             let pred_lane = predict_lane(road, car_i);
             let pred_long = predict_long(road, car_i);
@@ -80,10 +80,10 @@ impl Belief {
                     for wait_for_clear in [false, true] {
                         let mut prob = 1.0;
                         if lane_i != pred_lane {
-                            prob *= belief_p.different_lane_prob;
+                            prob *= bparams.different_lane_prob;
                         }
                         if long_policy != pred_long {
-                            prob *= belief_p.different_longitudinal_prob;
+                            prob *= bparams.different_longitudinal_prob;
                         }
                         // wait_for_clear && pred_finished_waiting: already making lane change
                         // !wait_for_clear && pred_finished_waiting: already making lane change
@@ -99,12 +99,14 @@ impl Belief {
                         if will_lane_change && wait_for_clear {
                             prob = 0.0;
                         }
-                        if wants_lane_change && !will_lane_change && !wait_for_clear {
-                            prob = 0.0;
-                        }
                         // waiting... to _not_ change lanes is also pointless
                         if !wants_lane_change && wait_for_clear {
                             prob = 0.0;
+                        }
+                        // the chance that the vehicle effectively skips checking for it to be clear before turning
+                        // in practice, this would more mean that noise prevented us from telling that they already started turning(?)
+                        if !pred_finished_waiting && !wait_for_clear {
+                            prob *= bparams.skips_waiting_prob;
                         }
                         belief.push(prob);
 
@@ -112,7 +114,7 @@ impl Belief {
                             && road.params.obstacle_car_debug
                             && road.params.debug_car_i == Some(car_i)
                         {
-                            eprintln_f!("{road.timesteps}: {car_i=} {lane_i=} {long_policy=:?} {wait_for_clear=}: {prob=:.2}");
+                            eprintln_f!("{road.timesteps}: {car_i=} {lane_i=} {long_policy=:?} {wait_for_clear=}: {prob=:.2}, would: {would_lane_change}, wants: {wants_lane_change}, will: {will_lane_change}");
                         }
                     }
                 }
