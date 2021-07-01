@@ -53,7 +53,7 @@ efficiency_high_speed_cost = 0.1
 efficiency_high_speed_tolerance = 1.0
 efficiency_weight = 1.0
 safety_weight = 500.0
-smoothness_weight = 10.0
+smoothness_weight = 0.0
 uncomfortable_dec_weight = 5.0
 curvature_change_weight = 2.0
 safety_margin = 0.44 # bounded by lane width 3.7 - prius width 1.76 = 1.94
