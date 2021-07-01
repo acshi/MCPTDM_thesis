@@ -222,6 +222,11 @@ fn create_scenarios(
                 "tree.layer_t" => params.tree.layer_t = val.parse().unwrap(),
                 "eudm.layer_t" => params.eudm.layer_t = val.parse().unwrap(),
                 "mcts.layer_t" => params.mcts.layer_t = val.parse().unwrap(),
+                "smoothness" => params.cost.smoothness_weight = val.parse().unwrap(),
+                "safety" => params.cost.safety_weight = val.parse().unwrap(),
+                "ud" => params.cost.uncomfortable_dec_weight = val.parse().unwrap(),
+                "cc" => params.cost.curvature_change_weight = val.parse().unwrap(),
+                "safety_margin" => params.cost.safety_margin = val.parse().unwrap(),
                 _ => panic!("{} is not a valid parameter!", name),
             }
             if name_value_pairs.len() > 1 {
