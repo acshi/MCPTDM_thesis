@@ -278,11 +278,26 @@ fn create_scenarios(
             .map(|a| a.to_string())
             .join(",");
 
+        // "smoothness" => params.cost.smoothness_weight = val.parse().unwrap(),
+        // "safety" => params.cost.safety_weight = val.parse().unwrap(),
+        // "ud" => params.cost.uncomfortable_dec_weight = val.parse().unwrap(),
+        // "cc" => params.cost.curvature_change_weight = val.parse().unwrap(),
+        // "safety_margin" => params.cost.safety_margin = val.parse().unwrap(),
+
         s.scenario_name = Some(format_f!(
-            "_method_{s.method}_use_cfb_{s.use_cfb}_extra_ego_accdec_policies_{extra_ego_accdec}\
+            "_method_{s.method}\
+             _use_cfb_{s.use_cfb}\
+             _extra_ego_accdec_policies_{extra_ego_accdec}\
              _{samples_n}_{search_depth}_{layer_forward_t}\
-             _max_steps_{s.max_steps}_n_cars_{s.n_cars}\
-             _discount_factor_{s.cost.discount_factor}_rng_seed_{s.rng_seed}_"
+             _max_steps_{s.max_steps}\
+             _n_cars_{s.n_cars}\
+             _smoothness_{s.cost.smoothness_weight}\
+             _safety_{s.cost.safety_weight}\
+             _ud_{s.cost.uncomfortable_dec_weight}\
+             _cc_{s.cost.curvature_change_weight}\
+             _safety_margin_{s.cost.safety_margin}\
+             _discount_factor_{s.cost.discount_factor}\
+             _rng_seed_{s.rng_seed}_"
         ));
     }
 
