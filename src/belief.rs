@@ -10,13 +10,6 @@ fn predict_lane(road: &Road, car_i: usize) -> i32 {
     let car = &road.cars[car_i];
     let predicted_y =
         car.y() + car.vel * (car.theta() + car.steer).sin() * road.params.lane_change_time;
-    if road.super_debug() && road.params.debug_car_i == Some(car_i) {
-        eprintln_f!(
-            "{predicted_y=:.2} car_y: {:.2} {car.vel=:.2} sin: {:.2}",
-            car.y(),
-            (car.theta() + car.steer).sin()
-        );
-    }
     Road::get_lane_i(predicted_y).min(1).max(0)
 }
 

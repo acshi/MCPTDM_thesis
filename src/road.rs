@@ -603,6 +603,11 @@ impl Road {
     }
 
     pub fn update(&mut self, dt: f64) {
+        // skip work if we have a weight of zero!
+        if self.cost.weight == 0.0 {
+            return;
+        }
+
         if !(self.is_truth && self.cars[0].crashed) {
             self.update_inner(dt);
         }

@@ -75,8 +75,6 @@ Run simulations for a total of 60 seconds, since that feels clean and easy to un
 Tasks:
 Overall for this week: Have my MCTS method fixed to the point that more samples only helps. Finalize setup. Get paper to 20%.
 
-We are getting into trouble because the obstacle vehicle policy waiting_done makes it not stateless, and so we are systematically mispredicting other vehicles. Let's move the logic for when it is okay to change lanes out of the main policy. We can put it into a meta policy!
-
 Why does EUDM get such a low cost, yet have poor efficiency, high decelerations, (good safety), _very_ low curvature change. I guess it just avoids turning much at all? Should we modify our cost formulation at all?
 
 OKAY, so let's try to finalize parameter choices. Let's keep efficiency set at 1.0 for scale, then safety, smoothness, uc, cc, and then finally discount factor. Then MCTS' UCB constant. We can do them in isolation, one at a time.
@@ -95,6 +93,7 @@ POMCP proper? (maybe cut it)
 Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
 
 Finished tasks:
+We are getting into trouble because the obstacle vehicle policy waiting_done makes it not stateless, and so we are systematically mispredicting other vehicles. We want obstacle vehicles to not be extremely reckless, so they check their immediate area before _starting_ to turn. We want the ego vehicle to not be constantly scared because it has an obstacle-car model that says they may lane-change at any time. The POMDP of this would consider there to essentially be multiple policies here then, one that has checked and started turning, and one that hasn't.
 With these changes, we expect to see MCTS not do worse when we use more samples. Also use fewer samples to check for trends!!
 Alternative MCTS formulation where it samples from CFB, and so assigns equal weights to each sample.
 Have MCTS sample from the CFB-selected scenarios different policies for all the unimportant vehicles.
