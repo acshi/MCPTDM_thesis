@@ -77,7 +77,7 @@ Overall for this week: Have my MCTS method fixed to the point that more samples 
 
 Why does EUDM get such a low cost, yet have poor efficiency, high decelerations, (good safety), _very_ low curvature change. I guess it just avoids turning much at all? Should we modify our cost formulation at all?
 
-OKAY, so let's try to finalize parameter choices. Let's keep efficiency set at 1.0 for scale, then safety, smoothness, uc, cc, and then finally discount factor. Then MCTS' UCB constant. We can do them in isolation, one at a time.
+OKAY, so let's try to finalize parameter choices. Let's keep efficiency set at 1.0 for scale, then smoothness, safety, uc, cc, and then finally discount factor. Then MCTS' UCB constant. We can do them in isolation, one at a time.
 
 Once everything else looks good with samples_n, we can try seeing what we get for additional policies, etc...
 

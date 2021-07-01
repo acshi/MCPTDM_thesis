@@ -17,14 +17,14 @@ graphics_speedup = 8
 debug_car_i = 7
 debug_steps_before = 20
 super_debug = true
-ego_policy_change_debug = false
+ego_policy_change_debug = true
 ego_state_debug = false
 separation_debug = false
 intelligent_driver_debug = false
 belief_debug = false
 cfb_debug = false
 obstacle_car_debug = false
-policy_report_debug = false
+policy_report_debug = true
 ego_traces_debug = true
 # debugging_scenario = 3
 

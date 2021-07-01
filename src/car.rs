@@ -175,12 +175,16 @@ impl Car {
         car
     }
 
-    pub fn policy_id(&self) -> u32 {
+    pub fn operating_policy_id(&self) -> u32 {
         self.side_policy
             .as_ref()
             .unwrap()
             .operating_policy()
             .policy_id()
+    }
+
+    pub fn full_policy_id(&self) -> u32 {
+        self.side_policy.as_ref().unwrap().policy_id()
     }
 
     pub fn is_ego(&self) -> bool {

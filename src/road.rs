@@ -641,8 +641,8 @@ impl Road {
         }
         self.ego_is_safe = min_dist.is_none();
 
-        let policy_id = car.policy_id();
-        let last_policy_id = self.last_ego.policy_id();
+        let policy_id = car.operating_policy_id();
+        let last_policy_id = self.last_ego.operating_policy_id();
         if policy_id != last_policy_id {
             self.cost.smoothness += cparams.smoothness_weight * self.cost.discount;
             if self.debug && self.params.ego_policy_change_debug {
@@ -651,6 +651,15 @@ impl Road {
                     self.timesteps
                 );
                 eprintln!("New policy: {:?}", self.ego_policy().operating_policy());
+            }
+        } else if self.debug && self.params.ego_policy_change_debug {
+            let policy_id = car.full_policy_id();
+            let last_policy_id = self.last_ego.full_policy_id();
+            if policy_id != last_policy_id {
+                eprintln_f!(
+                    "{}: full policy id has changed from {last_policy_id} to {policy_id}",
+                    self.timesteps
+                );
             }
         }
 
