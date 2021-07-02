@@ -51,33 +51,25 @@ Since I don't have belief estimation, how about just a static set of beliefs bas
 (MCTS can win because you can throw more policies at it!!!)
 
 Questions for Ed:
-So far, it looks like CFB has two big effects: increasing average speed, reducing computation time
-EUDM vs MCTS: MCTS has a _much higher_ average speed, and EUDM performs more safely. MCTS has many fewer uncomfortable decelerations, while EUDM has many fewer curvature changes. (Basically they make different decisions about how agressively to pass).
-Search depth doesn't seem to matter too much, but EUDM benefits from having it at 5 instead of 4 (maybe a fluke result?).
-
-SO, what do we try to really praise in the paper? Safety and efficiency both seem very important, but EUDM and MCTS get different results, here. Both seem to be fast enough.
-
-Adding more policies doesn't seem to do much good, and generally makes things less safe... (by diluting the search space?)
-
-MAYBE we get best results with CFB=off and with search depth of 5 or 6!!?? And extra policies don't... really matter?
-
-Turn it into an optimization problem instead of an inference problem? Then we can sample however we like! Just trying to find the initial condition that results in the most "interesting outcome" = cost * probability of the initial condition... For MCTS we can try just using Max(cost*probability) instead of average the way we are now. Then it doesn't matter how we "sample". Performance as a function of the number of samples, we should be able to see the number of samples along with some point where we cross over and beat EUDM performance.
-
-MCTS should try using a variant of CFB that samples over the unimportant vehicles.
-
 Tell the story in terms of how what we really want to do is similar to tree search with infinite samples, but we can't because that is infeasible. We can talk about how MPDM tries to solve this, then talk about how EUDM expands the search space, and then say that we think even more flexibility is justified and that we do this with MCTS. Talk about how their CFB is a useful heuristic for improving our ability to sample the space and then how we modify it for MCTS.
 
+MCTS is currently at a safety disadvantage vs. other methods because it currently information that can be shared is not. If some cost is encurred at a depth of 1, it really ought to be applied to the entire subtree. Currently, we are acting as if all costs are fully dependent on all actions to full depth. Is there a principled way of fusing information like this? I figure maybe we can keep track of these intermediate values, and then do a max operation?
+
 Some decisions:
-Increasing search depth appears to NOT actually help. Let's keep it at 4 and 8 seconds.
+Increasing search depth appears to NOT actually help. Let's keep it at depth 4 and 8 seconds total.
 Decided to have no placed obstacles, since cars can get a break policy and become obstacles on their own well enough!
 Run simulations for a total of 60 seconds, since that feels clean and easy to understand.
+As long as the smoothness weight isn't too high... it doesn't make much a difference! let's try setting to 0
+Safety weight of 100 and above seem to all be about as good, but efficiency goes down for the higher ones, and safety isn't any better.
+Uncomfortable deceleration weight of 5 seems about ideal, or close enough already anyway
+Likewise the large curvature change weight of 2 seems reasonable, with little sensitivity.
 
 Tasks:
 Overall for this week: Have my MCTS method fixed to the point that more samples only helps. Finalize setup. Get paper to 20%.
 
 Why does EUDM get such a low cost, yet have poor efficiency, high decelerations, (good safety), _very_ low curvature change. I guess it just avoids turning much at all? Should we modify our cost formulation at all?
 
-OKAY, so let's try to finalize parameter choices. Let's keep efficiency set at 1.0 for scale, then smoothness, safety, uc, cc, and then finally discount factor. Then MCTS' UCB constant. We can do them in isolation, one at a time.
+OKAY, so let's try to finalize parameter choices. Let's keep efficiency set at 1.0 for scale, then smoothness, safety, uc, cc, safety margin, and then finally discount factor. Then MCTS' UCB constant. We can do them in isolation, one at a time.
 
 Once everything else looks good with samples_n, we can try seeing what we get for additional policies, etc...
 

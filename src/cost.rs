@@ -84,6 +84,24 @@ impl Cost {
     pub fn update_discount(&mut self, dt: f64) {
         self.discount *= self.discount_factor.powf(dt);
     }
+
+    #[allow(unused)]
+    pub fn max(&self, other: &Self) -> Self {
+        if self > other {
+            *self
+        } else {
+            *other
+        }
+    }
+
+    #[allow(unused)]
+    pub fn min(&self, other: &Self) -> Self {
+        if self < other {
+            *self
+        } else {
+            *other
+        }
+    }
 }
 
 impl Default for Cost {

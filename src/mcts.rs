@@ -4,7 +4,7 @@ use rand::prelude::{SliceRandom, StdRng};
 use crate::{
     arg_parameters::Parameters,
     cost::Cost,
-    mpdm::make_policy_choices,
+    mpdm::{make_obstacle_vehicle_policy_belief_states, make_policy_choices},
     road::Road,
     road_set_for_scenario,
     side_policies::{SidePolicy, SidePolicyTrait},
@@ -29,7 +29,9 @@ struct MctsNode<'a> {
 
     depth: u32,
     n_trials: usize,
-    expected_score: Option<Cost>,
+    expected_cost: Option<Cost>,
+
+    intermediate_costs: Vec<Cost>,
 
     inner: MctsNodeInner<'a>,
 }
@@ -47,6 +49,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
             road.disable_car_traces();
         }
         road.take_update_steps(mcts.layer_t, mcts.dt);
+        node.intermediate_costs.push(road.cost);
         node.traces
             .append(&mut road.make_traces(node.depth - 1, false));
     }
@@ -75,7 +78,8 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
                             traces: Vec::new(),
                             depth: sub_depth,
                             n_trials: 0,
-                            expected_score: None,
+                            expected_cost: None,
+                            intermediate_costs: Vec::new(),
                             inner: sub_inner.clone(),
                         })
                         .collect(),
@@ -130,7 +134,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
                     .map(|(i, node)| {
                         let upper_margin = mcts.ucb_const * (ln_t / node.n_trials as f64).sqrt();
                         // eprintln!("n: {} expected: {} margin: {}", a.scores.len(), a.mean_score, upper_margin);
-                        (node.expected_score.unwrap().total() + upper_margin, i)
+                        (node.expected_cost.unwrap().total() + upper_margin, i)
                     })
                     .min_by(|a, b| a.partial_cmp(b).unwrap())
                     .unwrap();
@@ -139,21 +143,29 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
             }
 
             node.n_trials = sub_nodes.iter().map(|n| n.n_trials).sum::<usize>();
-            node.expected_score = sub_nodes
+            node.expected_cost = sub_nodes
                 .iter()
-                .filter_map(|n| n.expected_score)
-                .min_by(|a, b| a.total().partial_cmp(&b.total()).unwrap());
+                .filter_map(|n| n.expected_cost)
+                .min_by(|a, b| a.partial_cmp(b).unwrap());
+
+            let intermediate_cost = node
+                .intermediate_costs
+                .iter()
+                .max_by(|a, b| a.partial_cmp(b).unwrap());
+            if let (Some(a), Some(b)) = (node.expected_cost, intermediate_cost) {
+                node.expected_cost = Some(a.max(b));
+            }
         }
         MctsNodeInner::Leaf { scores } => {
             scores.push(road.cost);
             node.n_trials = scores.len();
             if mcts.bubble_up_max_weighted_leaf {
-                node.expected_score = scores
+                node.expected_cost = scores
                     .iter()
                     .max_by(|a, b| a.partial_cmp(&b).unwrap())
                     .copied();
             } else {
-                node.expected_score =
+                node.expected_cost =
                     Some(scores.iter().copied().sum::<Cost>() / node.n_trials as f64);
             }
         }
@@ -181,7 +193,7 @@ fn print_report(node: &MctsNode) {
             eprint!("    ");
         }
         let policy_id = node.policy.as_ref().map(|p| p.policy_id());
-        let expected_score = node.expected_score.unwrap();
+        let expected_score = node.expected_cost.unwrap();
         let score = expected_score.total();
         eprintln_f!(
             "n_trials: {node.n_trials}, policy: {policy_id:?}, score: {score:.2}, cost: {expected_score=:.2?}"
@@ -205,7 +217,16 @@ pub fn mcts_choose_policy(
     true_road: &Road,
     rng: &mut StdRng,
 ) -> (SidePolicy, Vec<rvx::Shape>) {
-    let roads = road_set_for_scenario(params, true_road, rng, params.mcts.samples_n);
+    let mut roads = road_set_for_scenario(params, true_road, rng, params.mcts.samples_n);
+    // TODO REMOVE
+    if true_road.super_debug() {
+        if let Some(debug_car_i) = params.debug_car_i {
+            let policy_belief_choices = make_obstacle_vehicle_policy_belief_states(params);
+            for road in roads.iter_mut() {
+                road.cars[debug_car_i].side_policy = Some(policy_belief_choices[4].clone());
+            }
+        }
+    }
 
     let policy_choices = make_policy_choices(params);
     let debug = true_road.debug
@@ -218,7 +239,8 @@ pub fn mcts_choose_policy(
         traces: Vec::new(),
         depth: 0,
         n_trials: 0,
-        expected_score: None,
+        expected_cost: None,
+        intermediate_costs: Vec::new(),
         inner: MctsNodeInner::Branch { sub_nodes: None },
     };
 
@@ -230,7 +252,7 @@ pub fn mcts_choose_policy(
     let mut best_policy = None;
     if let MctsNodeInner::Branch { sub_nodes } = &node.inner {
         for sub_node in sub_nodes.as_ref().unwrap().iter() {
-            if let Some(score) = sub_node.expected_score {
+            if let Some(score) = sub_node.expected_cost {
                 if score < best_score {
                     best_score = score;
                     best_policy = sub_node.policy.clone();

@@ -120,13 +120,17 @@ impl State {
         // method chooses the ego policy
         let policy_rng = &mut self.policy_rng;
         if self.timesteps % replan_interval == 0 && !self.road.cars[0].crashed {
-            let (policy, traces) = match self.params.method.as_str() {
-                "fixed" => (self.road.ego_policy().clone(), Vec::new()),
-                "mpdm" => mpdm_choose_policy(&self.params, &self.road, policy_rng),
-                "eudm" => dcp_tree_choose_policy(&self.params, &self.road, policy_rng),
-                "tree" => tree_choose_policy(&self.params, &self.road, policy_rng),
-                "mcts" => mcts_choose_policy(&self.params, &self.road, policy_rng),
-                _ => panic!("invalid method '{}'", self.params.method),
+            let (policy, traces) = if false && self.road.super_debug() {
+                mpdm_choose_policy(&self.params, &self.road, policy_rng)
+            } else {
+                match self.params.method.as_str() {
+                    "fixed" => (self.road.ego_policy().clone(), Vec::new()),
+                    "mpdm" => mpdm_choose_policy(&self.params, &self.road, policy_rng),
+                    "eudm" => dcp_tree_choose_policy(&self.params, &self.road, policy_rng),
+                    "tree" => tree_choose_policy(&self.params, &self.road, policy_rng),
+                    "mcts" => mcts_choose_policy(&self.params, &self.road, policy_rng),
+                    _ => panic!("invalid method '{}'", self.params.method),
+                }
             };
             self.traces = traces;
             if false {
