@@ -40,7 +40,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
     let params = node.params;
     let mcts = &params.mcts;
 
-    if let Some(policy) = node.policy.as_ref() {
+    if let Some(ref policy) = node.policy {
         road.set_ego_policy(policy.clone());
         // road.reset_car_traces();
         if node.depth < 4 {
@@ -91,7 +91,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
             // choose a node to recurse down into! First, try keeping the policy the same
             let mut has_run_trial = false;
             if mcts.prefer_same_policy {
-                if let Some(policy) = node.policy.as_ref() {
+                if let Some(ref policy) = node.policy {
                     let policy_id = policy.policy_id();
                     if sub_nodes[policy_id as usize].n_trials == 0 {
                         find_and_run_trial(&mut sub_nodes[policy_id as usize], road, rng);
@@ -148,13 +148,9 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
                 .filter_map(|n| n.expected_cost)
                 .min_by(|a, b| a.partial_cmp(b).unwrap());
 
-            let intermediate_cost = node
-                .intermediate_costs
-                .iter()
-                .max_by(|a, b| a.partial_cmp(b).unwrap());
-            if let (Some(a), Some(b)) = (node.expected_cost, intermediate_cost) {
-                node.expected_cost = Some(a.max(b));
-            }
+            let intermediate_cost = node.intermediate_costs.iter().copied().sum::<Cost>()
+                / node.intermediate_costs.len() as f64;
+            node.expected_cost = node.expected_cost.map(|a| a.max(&intermediate_cost));
         }
         MctsNodeInner::Leaf { scores } => {
             scores.push(road.cost);
@@ -202,7 +198,7 @@ fn print_report(node: &MctsNode) {
 
     match &node.inner {
         MctsNodeInner::Branch { sub_nodes } => {
-            if let Some(sub_nodes) = sub_nodes.as_ref() {
+            if let Some(ref sub_nodes) = sub_nodes {
                 for sub_node in sub_nodes.iter() {
                     print_report(sub_node);
                 }

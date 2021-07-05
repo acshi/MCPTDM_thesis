@@ -274,7 +274,7 @@ impl SideControlTrait for PurePursuitPolicy {
     }
 
     fn draw(&self, r: &mut Rvx) {
-        if let Some(info) = self.debug_info.as_ref() {
+        if let Some(ref info) = self.debug_info {
             r.draw(
                 Rvx::circle()
                     .scale(0.5)

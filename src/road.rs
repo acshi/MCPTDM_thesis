@@ -347,7 +347,7 @@ impl Road {
         let mut min_dist = f64::MAX;
         let mut min_car_i = None;
 
-        let dist_thresh = car.vel * 100.0 + car.length;
+        let dist_thresh = car.vel * 100.0 + 2.0 * car.length;
 
         let pose = self.cars[car_i].pose();
         let shape = self.cars[car_i].shape();

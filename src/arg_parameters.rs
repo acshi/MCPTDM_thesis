@@ -14,7 +14,7 @@ use itertools::Itertools;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
 
-use crate::{cost::Cost, run_with_parameters};
+use crate::run_with_parameters;
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct EudmParameters {
@@ -383,17 +383,7 @@ pub fn run_parallel_scenarios() {
                 let line = line.unwrap();
                 let parts = line.split_ascii_whitespace().collect_vec();
                 let scenario_name = parts[0].to_owned();
-                let compute_time: f64 = parts[1].parse().unwrap();
-                let efficiency: f64 = parts[2].parse().unwrap();
-                let safety: f64 = parts[3].parse().unwrap();
-                let smoothness: f64 = parts[4].parse().unwrap();
-                let cost = Cost {
-                    efficiency,
-                    safety,
-                    smoothness,
-                    ..Default::default()
-                };
-                cumulative_results.insert(scenario_name, (compute_time, cost));
+                cumulative_results.insert(scenario_name, ());
             }
         }
     }
@@ -440,10 +430,7 @@ pub fn run_parallel_scenarios() {
                 )
                 .unwrap();
 
-                cumulative_results
-                    .lock()
-                    .unwrap()
-                    .insert(scenario_name, (seconds, cost));
+                cumulative_results.lock().unwrap().insert(scenario_name, ());
             });
             if result.is_err() {
                 eprintln!(

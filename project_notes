@@ -64,8 +64,14 @@ Safety weight of 100 and above seem to all be about as good, but efficiency goes
 Uncomfortable deceleration weight of 5 seems about ideal, or close enough already anyway
 Likewise the large curvature change weight of 2 seems reasonable, with little sensitivity.
 
+hyper-parameter optimization for each method, at least of the discount factor, to optimize the evaluatuation results for that method, since what gives the best result for the evaluation may not be the same as for the cost function.
+
 Tasks:
-Overall for this week: Have my MCTS method fixed to the point that more samples only helps. Finalize setup. Get paper to 20%.
+Overall for this week:
+
+random game trees to try to justify the "cost of node = max( average of downward partcicles, min(children))" and then also of reducing variance by subtracting off the mean of previous nodes in the search and keeping track of the marginal cost for each action instead. See if this can make us more sample-efficient! Do a bit of literature search to try to see if someone else has done this before.
+
+reform our cost function to not be discrete anywhere. use a sigmoid for safety. penalize all accelerations. the EUDM evaluation metrics can be kept on the side for reference, but not used in the cost function itself.
 
 Why does EUDM get such a low cost, yet have poor efficiency, high decelerations, (good safety), _very_ low curvature change. I guess it just avoids turning much at all? Should we modify our cost formulation at all?
 

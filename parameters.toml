@@ -98,4 +98,4 @@ samples_n = 64
 prefer_same_policy = true
 choose_random_policy = true
 ucb_const = -100.0
-bubble_up_max_weighted_leaf = true
+bubble_up_max_weighted_leaf = false
