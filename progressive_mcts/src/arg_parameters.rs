@@ -34,7 +34,7 @@ impl Parameters {
         Self {
             search_depth: 4,
             n_actions: 4,
-            ucb_const: -10000.0,
+            ucb_const: -3000.0,
             rng_seed: 0,
             samples_n: 8,
             bound_mode: CostBoundMode::Normal,
@@ -57,6 +57,13 @@ fn create_scenarios(
     let mut scenarios = Vec::new();
     let (name, values) = &name_value_pairs[0];
 
+    if name.starts_with("normal.") && base_params.bound_mode != CostBoundMode::Normal
+        || name.starts_with("lower_bound.") && base_params.bound_mode != CostBoundMode::LowerBound
+        || name.starts_with("marginal.") && base_params.bound_mode != CostBoundMode::Marginal
+    {
+        return create_scenarios(&base_params, &name_value_pairs[1..]);
+    }
+
     for value in values.iter() {
         let mut value_set = vec![value.to_owned()];
 
@@ -77,14 +84,19 @@ fn create_scenarios(
 
         for val in value_set {
             let mut params = base_params.clone();
-            match name.as_str() {
-                "thread_limit" => params.thread_limit = val.parse().unwrap(),
-                "samples_n" => params.samples_n = val.parse().unwrap(),
-                "bound_mode" => params.bound_mode = val.parse().unwrap(),
-                "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
-                "ucb_const" => params.ucb_const = val.parse().unwrap(),
-                "rng_seed" => params.rng_seed = val.parse().unwrap(),
-                _ => panic!("{} is not a valid parameter!", name),
+
+            if name.ends_with(".ucb_const") {
+                params.ucb_const = val.parse().unwrap();
+            } else {
+                match name.as_str() {
+                    "thread_limit" => params.thread_limit = val.parse().unwrap(),
+                    "samples_n" => params.samples_n = val.parse().unwrap(),
+                    "bound_mode" => params.bound_mode = val.parse().unwrap(),
+                    "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
+                    "ucb_const" => params.ucb_const = val.parse().unwrap(),
+                    "rng_seed" => params.rng_seed = val.parse().unwrap(),
+                    _ => panic!("{} is not a valid parameter!", name),
+                }
             }
             if name_value_pairs.len() > 1 {
                 scenarios.append(&mut create_scenarios(&params, &name_value_pairs[1..]));
