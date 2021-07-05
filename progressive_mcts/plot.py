@@ -246,10 +246,14 @@ if False:
 
 
 samples_n_kind = FigureKind("samples_n", [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048])
-
 use_low_bound_mode = FigureMode("bound_mode", ["normal", "lower_bound", "marginal"])
 
-# cargo run --release rng_seed 0-127 :: samples_n 8 16 32 64 128 256 512 :: use_low_bound false true :: thread_limit 8
+# cargo run --release rng_seed 0-2047 :: samples_n 4 8 16 32 64 128 256 512 1024 2048 :: bound_mode normal lower_bound marginal :: thread_limit 24
+if True:
+    for metric in all_metrics:
+        samples_n_kind.plot(results, metric, filters=[], mode=use_low_bound_mode)
+
+# cargo run --release rng_seed 0-2047 :: portion_bernoulli 0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1 :: samples_n 64 :: bound_mode normal lower_bound marginal :: thread_limit 24
 if True:
     for metric in all_metrics:
         samples_n_kind.plot(results, metric, filters=[], mode=use_low_bound_mode)

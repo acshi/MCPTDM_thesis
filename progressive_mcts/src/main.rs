@@ -5,7 +5,7 @@ use fstrings::{eprintln_f, format_args_f, format_f, println_f, write_f};
 use itertools::Itertools;
 use rand::{
     prelude::{IteratorRandom, SliceRandom, StdRng},
-    SeedableRng,
+    Rng, SeedableRng,
 };
 use rand_distr::{Bernoulli, Distribution, Normal};
 
@@ -113,7 +113,13 @@ struct ProblemScenario {
 }
 
 impl ProblemScenario {
-    fn inner_new(depth: u32, max_depth: u32, n_actions: u32, rng: &mut StdRng) -> Self {
+    fn inner_new(
+        depth: u32,
+        max_depth: u32,
+        n_actions: u32,
+        portion_bernoulli: f64,
+        rng: &mut StdRng,
+    ) -> Self {
         Self {
             distribution: if depth == 0 {
                 None
@@ -126,14 +132,22 @@ impl ProblemScenario {
                 // let p = rng.gen_range(0.0..=0.5);
                 // let mag = rng.gen_range(0.0..=1000.0);
                 // Some(CostDistribution::bernoulli(p, mag))
-
                 let p = (0..=10).map(|i| i as f64 * 0.1).choose(rng).unwrap();
                 let mag = 1000.0;
-                Some(CostDistribution::bernoulli(p, mag))
+
+                if rng.gen_bool(portion_bernoulli) {
+                    Some(CostDistribution::bernoulli(p, mag))
+                } else {
+                    let mean = p * mag;
+                    let std_dev = (p * (1.0 - p)).sqrt() * mag;
+                    Some(CostDistribution::normal(mean, std_dev))
+                }
             },
             children: if depth < max_depth {
                 (0..n_actions)
-                    .map(|_| Self::inner_new(depth + 1, max_depth, n_actions, rng))
+                    .map(|_| {
+                        Self::inner_new(depth + 1, max_depth, n_actions, portion_bernoulli, rng)
+                    })
                     .collect()
             } else {
                 Vec::new()
@@ -142,8 +156,8 @@ impl ProblemScenario {
         }
     }
 
-    fn new(max_depth: u32, n_actions: u32, rng: &mut StdRng) -> Self {
-        Self::inner_new(0, max_depth, n_actions, rng)
+    fn new(max_depth: u32, n_actions: u32, portion_bernoulli: f64, rng: &mut StdRng) -> Self {
+        Self::inner_new(0, max_depth, n_actions, portion_bernoulli, rng)
     }
 }
 
@@ -417,7 +431,12 @@ fn run_with_parameters(params: Parameters) -> RunResults {
     full_seed[0..8].copy_from_slice(&params.rng_seed.to_le_bytes());
     let mut rng = StdRng::from_seed(full_seed);
 
-    let scenario = ProblemScenario::new(params.search_depth, params.n_actions, &mut rng);
+    let scenario = ProblemScenario::new(
+        params.search_depth,
+        params.n_actions,
+        params.portion_bernoulli,
+        &mut rng,
+    );
     let sim = Simulator::new(&scenario);
 
     for _ in 0..params.samples_n {

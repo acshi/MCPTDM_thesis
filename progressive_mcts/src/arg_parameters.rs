@@ -23,6 +23,7 @@ pub(crate) struct Parameters {
     pub samples_n: usize,
 
     pub bound_mode: CostBoundMode,
+    pub portion_bernoulli: f64,
 
     pub thread_limit: usize,
     pub scenario_name: Option<String>,
@@ -35,8 +36,9 @@ impl Parameters {
             n_actions: 4,
             ucb_const: -10000.0,
             rng_seed: 0,
-            samples_n: 10,
+            samples_n: 8,
             bound_mode: CostBoundMode::Normal,
+            portion_bernoulli: 1.0,
 
             thread_limit: 1,
             scenario_name: None,
@@ -79,6 +81,7 @@ fn create_scenarios(
                 "thread_limit" => params.thread_limit = val.parse().unwrap(),
                 "samples_n" => params.samples_n = val.parse().unwrap(),
                 "bound_mode" => params.bound_mode = val.parse().unwrap(),
+                "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
                 "ucb_const" => params.ucb_const = val.parse().unwrap(),
                 "rng_seed" => params.rng_seed = val.parse().unwrap(),
                 _ => panic!("{} is not a valid parameter!", name),
@@ -95,6 +98,7 @@ fn create_scenarios(
         s.scenario_name = Some(format_f!(
             "_samples_n_{s.samples_n}\
              _bound_mode_{s.bound_mode}\
+             _portion_bernoulli_{s.portion_bernoulli}\
              _ucb_const_{s.ucb_const}\
              _rng_seed_{s.rng_seed}_"
         ));
@@ -117,7 +121,7 @@ pub fn run_parallel_scenarios() {
     {
         if arg == "--help" || arg == "help" {
             eprintln!("Usage: (<param name> [param value]* ::)*");
-            eprintln!("For example: uwb_limit 8 12 16 24 32 :: forward_sim_steps 1000 :: rng_seed 0 1 2 3 4");
+            eprintln!("For example: limit 8 12 16 24 32 :: steps 1000 :: rng_seed 0 1 2 3 4");
             eprintln!("Valid parameters and their default values:");
             let params_str = format!("{:?}", parameters_default)
                 .replace(", file_name: None", "")
@@ -172,17 +176,20 @@ pub fn run_parallel_scenarios() {
     let n_scenarios_completed = AtomicUsize::new(0);
     let cumulative_results = Mutex::new(BTreeMap::new());
 
+    // only use the cache file to prevent recalculation when running a batch
     let cache_filename = "results.cache";
-    // read the existing cache file
-    {
-        let mut cumulative_results = cumulative_results.lock().unwrap();
-        if let Ok(file) = File::open(cache_filename) {
-            let file = BufReader::new(file);
-            for line in file.lines() {
-                let line = line.unwrap();
-                let parts = line.split_ascii_whitespace().collect_vec();
-                let scenario_name = parts[0].to_owned();
-                cumulative_results.insert(scenario_name, ());
+    if n_scenarios > 1 {
+        // read the existing cache file
+        {
+            let mut cumulative_results = cumulative_results.lock().unwrap();
+            if let Ok(file) = File::open(cache_filename) {
+                let file = BufReader::new(file);
+                for line in file.lines() {
+                    let line = line.unwrap();
+                    let parts = line.split_ascii_whitespace().collect_vec();
+                    let scenario_name = parts[0].to_owned();
+                    cumulative_results.insert(scenario_name, ());
+                }
             }
         }
     }

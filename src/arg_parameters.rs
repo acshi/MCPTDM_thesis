@@ -318,7 +318,7 @@ pub fn run_parallel_scenarios() {
     {
         if arg == "--help" || arg == "help" {
             eprintln!("Usage: (<param name> [param value]* ::)*");
-            eprintln!("For example: uwb_limit 8 12 16 24 32 :: forward_sim_steps 1000 :: rng_seed 0 1 2 3 4");
+            eprintln!("For example: limit 8 12 16 24 32 :: steps 1000 :: rng_seed 0 1 2 3 4");
             eprintln!("Valid parameters and their default values:");
             let params_str = format!("{:?}", parameters_default)
                 .replace(", file_name: None", "")
