@@ -76,6 +76,7 @@ fn create_scenarios(
 
     if name.starts_with("ucb.") && base_params.selection_mode != ChildSelectionMode::UCB
         || name.starts_with("ucbv.") && base_params.selection_mode != ChildSelectionMode::UCBV
+        || name.starts_with("ucbd.") && base_params.selection_mode != ChildSelectionMode::UCBd
     {
         return create_scenarios(&base_params, &name_value_pairs[1..]);
     }
@@ -112,6 +113,7 @@ fn create_scenarios(
                     "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
                     "ucb_const" => params.ucb_const = val.parse().unwrap(),
                     "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
+                    "ucbd.ucbd_const" => params.ucbd_const = val.parse().unwrap(),
                     "rng_seed" => params.rng_seed = val.parse().unwrap(),
                     "print_report" => params.print_report = val.parse().unwrap(),
                     _ => panic!("{} is not a valid parameter!", name),
