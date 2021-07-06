@@ -12,17 +12,19 @@ use fstrings::{format_args_f, format_f, println_f, writeln_f};
 use itertools::Itertools;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use crate::{run_with_parameters, CostBoundMode};
+use crate::{run_with_parameters, ChildSelectionMode, CostBoundMode};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Parameters {
     pub search_depth: u32,
     pub n_actions: u32,
     pub ucb_const: f64,
+    pub ucbv_const: f64,
     pub rng_seed: u64,
     pub samples_n: usize,
 
     pub bound_mode: CostBoundMode,
+    pub selection_mode: ChildSelectionMode,
     pub portion_bernoulli: f64,
 
     pub thread_limit: usize,
@@ -35,9 +37,11 @@ impl Parameters {
             search_depth: 4,
             n_actions: 4,
             ucb_const: -3000.0,
+            ucbv_const: 0.001,
             rng_seed: 0,
             samples_n: 8,
             bound_mode: CostBoundMode::Normal,
+            selection_mode: ChildSelectionMode::UCB,
             portion_bernoulli: 1.0,
 
             thread_limit: 1,
@@ -60,6 +64,12 @@ fn create_scenarios(
     if name.starts_with("normal.") && base_params.bound_mode != CostBoundMode::Normal
         || name.starts_with("lower_bound.") && base_params.bound_mode != CostBoundMode::LowerBound
         || name.starts_with("marginal.") && base_params.bound_mode != CostBoundMode::Marginal
+    {
+        return create_scenarios(&base_params, &name_value_pairs[1..]);
+    }
+
+    if name.starts_with("ucb.") && base_params.selection_mode != ChildSelectionMode::UCB
+        || name.starts_with("ucbv.") && base_params.selection_mode != ChildSelectionMode::UCBV
     {
         return create_scenarios(&base_params, &name_value_pairs[1..]);
     }
@@ -92,8 +102,10 @@ fn create_scenarios(
                     "thread_limit" => params.thread_limit = val.parse().unwrap(),
                     "samples_n" => params.samples_n = val.parse().unwrap(),
                     "bound_mode" => params.bound_mode = val.parse().unwrap(),
+                    "selection_mode" => params.selection_mode = val.parse().unwrap(),
                     "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
                     "ucb_const" => params.ucb_const = val.parse().unwrap(),
+                    "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
                     "rng_seed" => params.rng_seed = val.parse().unwrap(),
                     _ => panic!("{} is not a valid parameter!", name),
                 }
@@ -107,11 +119,18 @@ fn create_scenarios(
     }
 
     for s in scenarios.iter_mut() {
+        let ucbv_const = match s.selection_mode {
+            ChildSelectionMode::UCB => "".to_string(),
+            ChildSelectionMode::UCBV => format!("_ucbv_const_{}", s.ucbv_const),
+        };
+
         s.scenario_name = Some(format_f!(
             "_samples_n_{s.samples_n}\
              _bound_mode_{s.bound_mode}\
+             _selection_mode_{s.selection_mode}\
              _portion_bernoulli_{s.portion_bernoulli}\
              _ucb_const_{s.ucb_const}\
+             {ucbv_const}\
              _rng_seed_{s.rng_seed}_"
         ));
     }
