@@ -483,7 +483,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         find_and_run_trial(&mut node, &mut sim.clone(), &mut rng);
     }
 
-    if true {
+    if false {
         print_report(&scenario, &node, 0.0);
     }
 
