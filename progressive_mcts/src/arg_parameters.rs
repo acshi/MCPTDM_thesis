@@ -113,7 +113,10 @@ fn create_scenarios(
                     "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
                     "ucb_const" => params.ucb_const = val.parse().unwrap(),
                     "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
-                    "ucbd.ucbd_const" => params.ucbd_const = val.parse().unwrap(),
+                    "ucbd.ucbd_const" => {
+                        params.ucbd_const = val.parse().unwrap();
+                        assert!(params.ucbd_const <= 1.0);
+                    }
                     "rng_seed" => params.rng_seed = val.parse().unwrap(),
                     "print_report" => params.print_report = val.parse().unwrap(),
                     _ => panic!("{} is not a valid parameter!", name),

@@ -357,6 +357,10 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                             let a = (1.0 + n) / (n * n);
                             let b = (total_n * (1.0 + n).sqrt() / params.ucbd_const).ln();
                             let upper_margin = params.ucb_const * (a * (1.0 + 2.0 * b)).sqrt();
+                            if !upper_margin.is_finite() {
+                                eprintln_f!("{a=} {b=} {upper_margin=} {n=} {total_n=}");
+                                panic!();
+                            }
                             mean_cost + upper_margin
                         }
                     };
