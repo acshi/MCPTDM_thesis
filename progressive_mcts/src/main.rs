@@ -60,6 +60,7 @@ impl std::str::FromStr for CostBoundMode {
 enum ChildSelectionMode {
     UCB,
     UCBV,
+    UCBd,
 }
 
 impl std::fmt::Display for ChildSelectionMode {
@@ -67,6 +68,7 @@ impl std::fmt::Display for ChildSelectionMode {
         match self {
             Self::UCB => write!(f, "ucb"),
             Self::UCBV => write!(f, "ucbv"),
+            Self::UCBd => write!(f, "ucbd"),
         }
     }
 }
@@ -78,6 +80,7 @@ impl std::str::FromStr for ChildSelectionMode {
         match s.to_ascii_lowercase().as_str() {
             "ucb" => Ok(Self::UCB),
             "ucbv" => Ok(Self::UCBV),
+            "ucbd" => Ok(Self::UCBd),
             _ => Err(format_f!("Invalid ChildSelectionMode '{s}'")),
         }
     }
@@ -328,7 +331,8 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
 
         // Everything has been explored at least once: UCB time!
         if !has_run_trial {
-            let ln_t = (node.n_trials as f64).ln();
+            let total_n = node.n_trials as f64;
+            let ln_t = total_n.ln();
             let (_best_ucb, chosen_i) = sub_nodes
                 .iter()
                 .enumerate()
@@ -346,6 +350,13 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                             let upper_margin = params.ucb_const
                                 * (params.ucbv_const * (variance * ln_t_over_n).sqrt()
                                     + ln_t_over_n);
+                            mean_cost + upper_margin
+                        }
+                        ChildSelectionMode::UCBd => {
+                            let n = node.n_trials as f64;
+                            let a = (1.0 + n) / (n * n);
+                            let b = (total_n * (1.0 + n).sqrt() / params.ucbd_const).ln();
+                            let upper_margin = params.ucb_const * (a * (1.0 + 2.0 * b)).sqrt();
                             mean_cost + upper_margin
                         }
                     };
@@ -483,7 +494,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         find_and_run_trial(&mut node, &mut sim.clone(), &mut rng);
     }
 
-    if false {
+    if params.print_report {
         print_report(&scenario, &node, 0.0);
     }
 

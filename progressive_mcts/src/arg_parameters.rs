@@ -20,6 +20,7 @@ pub(crate) struct Parameters {
     pub n_actions: u32,
     pub ucb_const: f64,
     pub ucbv_const: f64,
+    pub ucbd_const: f64,
     pub rng_seed: u64,
     pub samples_n: usize,
 
@@ -29,6 +30,8 @@ pub(crate) struct Parameters {
 
     pub thread_limit: usize,
     pub scenario_name: Option<String>,
+
+    pub print_report: bool,
 }
 
 impl Parameters {
@@ -38,6 +41,7 @@ impl Parameters {
             n_actions: 4,
             ucb_const: -3000.0,
             ucbv_const: 0.001,
+            ucbd_const: 1.0,
             rng_seed: 0,
             samples_n: 8,
             bound_mode: CostBoundMode::Normal,
@@ -46,6 +50,8 @@ impl Parameters {
 
             thread_limit: 1,
             scenario_name: None,
+
+            print_report: false,
         }
     }
 }
@@ -107,6 +113,7 @@ fn create_scenarios(
                     "ucb_const" => params.ucb_const = val.parse().unwrap(),
                     "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
                     "rng_seed" => params.rng_seed = val.parse().unwrap(),
+                    "print_report" => params.print_report = val.parse().unwrap(),
                     _ => panic!("{} is not a valid parameter!", name),
                 }
             }
@@ -120,8 +127,13 @@ fn create_scenarios(
 
     for s in scenarios.iter_mut() {
         let ucbv_const = match s.selection_mode {
-            ChildSelectionMode::UCB => "".to_string(),
             ChildSelectionMode::UCBV => format!("_ucbv_const_{}", s.ucbv_const),
+            _ => "".to_string(),
+        };
+
+        let ucbd_const = match s.selection_mode {
+            ChildSelectionMode::UCBd => format!("_ucbd_const_{}", s.ucbd_const),
+            _ => "".to_string(),
         };
 
         s.scenario_name = Some(format_f!(
@@ -131,6 +143,7 @@ fn create_scenarios(
              _portion_bernoulli_{s.portion_bernoulli}\
              _ucb_const_{s.ucb_const}\
              {ucbv_const}\
+             {ucbd_const}\
              _rng_seed_{s.rng_seed}_"
         ));
     }
