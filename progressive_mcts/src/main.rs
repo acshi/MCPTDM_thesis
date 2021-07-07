@@ -128,7 +128,7 @@ impl CostDistribution {
 
     fn sample(&self, rng: &mut StdRng) -> f64 {
         match self {
-            CostDistribution::Normal { d } => d.sample(rng),
+            CostDistribution::Normal { d } => d.sample(rng).max(0.0).min(2.0 * d.mean()),
             CostDistribution::Bernoulli { d, p: _, magnitude } => {
                 if d.sample(rng) {
                     *magnitude
@@ -370,9 +370,21 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                             mean_cost + upper_margin
                         }
                         ChildSelectionMode::KLUCB => {
-                            let scaled_mean = 1.0 - mean_cost / params.klucb_max_cost; //.min(1.0).max(0.0);
-                            assert!(scaled_mean >= 0.0);
-                            assert!(scaled_mean <= 1.0);
+                            let scaled_mean =
+                                (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
+
+                            // assert!(
+                            //     scaled_mean >= 0.0,
+                            //     "got mean cost: {:8.2} and costs: {:8.2?}",
+                            //     mean_cost,
+                            //     node.costs
+                            // );
+                            // assert!(
+                            //     scaled_mean <= 1.0,
+                            //     "got mean cost: {:8.2} and costs: {:8.2?}",
+                            //     mean_cost,
+                            //     node.costs
+                            // );
 
                             let index =
                                 -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * ln_t_over_n);
@@ -428,13 +440,15 @@ fn print_report(scenario: &ProblemScenario, node: &MctsNode, mut true_intermedia
 
         let intermediate_cost = node.intermediate_cost();
         let marginal_cost = node.marginal_cost();
-        let variance = node.variance();
+        let _variance = node.variance();
 
         eprintln_f!(
-            "n_trials: {node.n_trials}, {policy=:?}, {cost=:6.1}, {variance=:6.1}, \
+            "n_trials: {node.n_trials}, {policy=:?}, {cost=:6.1}, \
              interm = {intermediate_cost:6.1?}, marginal = {marginal_cost:6.1?}, \
-             true = {additional_true_cost:6.1} ({true_intermediate_cost:6.1}), \\" //  {node.costs=:?}"
-                                                                                   //{node.intermediate_costs=:?}, {node.marginal_costs=:?}, \
+             true = {additional_true_cost:6.1} ({true_intermediate_cost:6.1}), \
+             {node.marginal_costs=:.2?}, \
+             {node.intermediate_costs=:.2?}, \
+             {node.costs=:.2?}" //,
         );
     }
     if let Some(sub_nodes) = &node.sub_nodes {
