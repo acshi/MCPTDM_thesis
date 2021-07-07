@@ -45,8 +45,8 @@ impl Parameters {
             ucbd_const: 1.0,
             klucb_max_cost: 4000.0,
             rng_seed: 0,
-            samples_n: 8,
-            bound_mode: CostBoundMode::Normal,
+            samples_n: 64,
+            bound_mode: CostBoundMode::Marginal,
             selection_mode: ChildSelectionMode::UCB,
             portion_bernoulli: 1.0,
 

@@ -1,3 +1,5 @@
+// This file based on SMPyBandits/SMPyBandits/Policies/kullback.py from https://github.com/SMPyBandits/SMPyBandits
+
 fn kl_diverg(p: f64, q: f64) -> f64 {
     if p == 0.0 && q == 0.0 || p == 1.0 && q == 1.0 {
         return 0.0;
@@ -40,7 +42,6 @@ pub fn klucb_bernoulli(x: f64, max_divergence: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
     use approx::assert_abs_diff_eq;
 
@@ -53,14 +54,4 @@ mod tests {
         assert_abs_diff_eq!(klucb_bernoulli(0.1, 0.4), 0.519475, epsilon = 1e-6);
         assert_abs_diff_eq!(klucb_bernoulli(0.1, 0.9), 0.734714, epsilon = 1e-6);
     }
-
-    // #[test]
-    // fn test_case1() {
-    //     assert_eq!(klucb_bernoulli(0.0, 9.0f64.ln() / 1.0), 0.0);
-    // }
-
-    // #[test]
-    // fn test_case2() {
-    //     assert_eq!(klucb_bernoulli(1.0, 9.0f64.ln() / 5.0), 0.0);
-    // }
 }

@@ -373,28 +373,13 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                             mean_cost + upper_margin
                         }
                         ChildSelectionMode::KLUCB => {
-                            let scaled_mean =
-                                (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
-
-                            // assert!(
-                            //     scaled_mean >= 0.0,
-                            //     "got mean cost: {:8.2} and costs: {:8.2?}",
-                            //     mean_cost,
-                            //     node.costs
-                            // );
-                            // assert!(
-                            //     scaled_mean <= 1.0,
-                            //     "got mean cost: {:8.2} and costs: {:8.2?}",
-                            //     mean_cost,
-                            //     node.costs
-                            // );
-
+                            let max_cost = (params.search_depth - node.depth + 1) as f64 * 1000.0;
+                            assert!(max_cost >= 0.0);
+                            assert!(max_cost <= 4000.0);
+                            // let max_cost = params.klucb_max_cost;
+                            let scaled_mean = (1.0 - mean_cost / max_cost).min(1.0).max(0.0);
                             let index =
                                 -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * ln_t_over_n);
-                            // eprintln_f!(
-                            //     "{total_n=:5}, {node.n_trials=:5}, {scaled_mean=:8.2}, {index=:8.6} would have been {:8.2}",
-                            //     mean_cost + params.ucb_const * ln_t_over_n.sqrt()
-                            // );
                             index
                         }
                         ChildSelectionMode::KLUCBP => {

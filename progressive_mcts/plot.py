@@ -8,7 +8,7 @@ plt.rcParams["pdf.fonttype"] = 42
 
 # plt.cycler(color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf", "#a65628", "#984ea3", "#999999", "#e41a1c", "#dede00"])
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
-    color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf"]) + plt.cycler(marker=['+', 'o', 'x', '^'])
+    color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf", "#a65628"]) + plt.cycler(marker=['+', 'o', 'x', '^', 'v'])
 
 show_only = False
 make_pdf_also = False
@@ -250,8 +250,8 @@ if False:
                                 f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
 
 
-selection_mode = FigureMode("selection_mode", ["ucb", "ucbv", "ucbd", "klucb"])
-# cargo run --release rng_seed 0-4095 :: samples_n 4 8 16 32 64 128 256 512 1024 2048 :: portion_bernoulli 0 1 :: bound_mode marginal :: selection_mode ucb ucbd ucbv klucb :: ucb_const -3000 :: ucbd.ucb_const -1000 :: klucb.ucb_const -1 :: ucbv.ucbv_const 0 :: thread_limit 24
+selection_mode = FigureMode("selection_mode", ["ucb", "ucbv", "ucbd", "klucb", "klucb+"])
+# cargo run --release rng_seed 0-4095 :: samples_n 4 8 16 32 64 128 256 512 1024 2048 :: portion_bernoulli 0 1 :: bound_mode marginal :: selection_mode ucb ucbd ucbv klucb klucb+ :: ucb_const -3000 :: ucbd.ucb_const -1000 :: klucb.ucb_const -1  :: klucb+.ucb_const -1 :: ucbv.ucbv_const 0 :: thread_limit 24
 if True:
     samples_n_kind = FigureKind("samples_n", [16, 32, 64, 128, 256, 512, 1024, 2048])
     for metric in all_metrics:
@@ -369,3 +369,26 @@ if False:
     # selection_mode_klucb_ucb_const_-1_klucb_max_cost_4000_bound_mode_marginal_samples_n_64_portion_bernoulli_1:
     #   regret has mean:  63.18 and mean std dev:  4.132
     #   estimation_error has mean:  142.0 and mean std dev:   3.93
+
+# cargo run --release rng_seed 0-4095 :: selection_mode klucb+ :: klucb+.ucb_const -0.01 -0.03 -0.1 -0.3 -1 -3 -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+if False:
+    # for metric in all_metrics:
+    #     for portion_bernoulli in [0, 1]:
+    #         ucb_const_kind.plot(results, metric, filters=[
+    #                             "_selection_mode_klucb+_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+    for portion_bernoulli in [0, 1]:
+        evaluate_conditions(results, all_metrics, [
+            ("selection_mode", "klucb+"),
+            ("ucb_const", -1),
+            ("klucb_max_cost", 4000),
+            ("bound_mode", "marginal"),
+            ("samples_n", 64),
+            ("portion_bernoulli", portion_bernoulli)])
+
+    # selection_mode_klucb+_ucb_const_-1_klucb_max_cost_4000_bound_mode_marginal_samples_n_64_portion_bernoulli_0:
+    #   regret has mean:  39.55 and mean std dev:  1.642
+    #   estimation_error has mean:  82.54 and mean std dev:  1.338
+
+    # selection_mode_klucb+_ucb_const_-1_klucb_max_cost_4000_bound_mode_marginal_samples_n_64_portion_bernoulli_1:
+    #   regret has mean:  71.85 and mean std dev:  2.317
+    #   estimation_error has mean:  144.7 and mean std dev:   1.89
