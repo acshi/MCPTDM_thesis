@@ -15,6 +15,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
 
 use crate::run_with_parameters;
+use progressive_mcts::{ChildSelectionMode, CostBoundMode};
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct EudmParameters {
@@ -42,6 +43,9 @@ pub struct MctsParameters {
     pub choose_random_policy: bool,
     pub ucb_const: f64,
     pub bubble_up_max_weighted_leaf: bool,
+    pub bound_mode: CostBoundMode,
+    pub selection_mode: ChildSelectionMode,
+    pub klucb_max_cost: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -57,14 +61,24 @@ pub struct CostParameters {
     pub efficiency_high_speed_cost: f64,
     pub efficiency_high_speed_tolerance: f64,
     pub efficiency_weight: f64,
+
     pub safety_weight: f64,
-    pub smoothness_weight: f64,
-    pub uncomfortable_dec_weight: f64,
-    pub curvature_change_weight: f64,
+    pub safety_margin_low: f64,
+    pub safety_margin_high: f64,
+    pub logistic_map_low: f64,
+    pub logistic_map_high: f64,
+
+    pub accel_weight: f64,
+    pub steer_weight: f64,
+
+    pub discount_factor: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct RewardParameters {
     pub safety_margin: f64,
     pub uncomfortable_dec: f64,
     pub large_curvature_change: f64,
-    pub discount_factor: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -139,6 +153,7 @@ pub struct Parameters {
     pub spawn: SpawnParameters,
     pub belief: BeliefParameters,
     pub cost: CostParameters,
+    pub reward: RewardParameters,
     pub cfb: CfbParameters,
     pub eudm: EudmParameters,
     pub tree: TreeParameters,
@@ -222,11 +237,11 @@ fn create_scenarios(
                 "tree.layer_t" => params.tree.layer_t = val.parse().unwrap(),
                 "eudm.layer_t" => params.eudm.layer_t = val.parse().unwrap(),
                 "mcts.layer_t" => params.mcts.layer_t = val.parse().unwrap(),
-                "smoothness" => params.cost.smoothness_weight = val.parse().unwrap(),
                 "safety" => params.cost.safety_weight = val.parse().unwrap(),
-                "ud" => params.cost.uncomfortable_dec_weight = val.parse().unwrap(),
-                "cc" => params.cost.curvature_change_weight = val.parse().unwrap(),
-                "safety_margin" => params.cost.safety_margin = val.parse().unwrap(),
+                "safety_margin_low" => params.cost.safety_margin_low = val.parse().unwrap(),
+                "safety_margin_high" => params.cost.safety_margin_high = val.parse().unwrap(),
+                "accel" => params.cost.accel_weight = val.parse().unwrap(),
+                "steer" => params.cost.steer_weight = val.parse().unwrap(),
                 _ => panic!("{} is not a valid parameter!", name),
             }
             if name_value_pairs.len() > 1 {
@@ -291,11 +306,11 @@ fn create_scenarios(
              _{samples_n}_{search_depth}_{layer_forward_t}\
              _max_steps_{s.max_steps}\
              _n_cars_{s.n_cars}\
-             _smoothness_{s.cost.smoothness_weight}\
              _safety_{s.cost.safety_weight}\
-             _ud_{s.cost.uncomfortable_dec_weight}\
-             _cc_{s.cost.curvature_change_weight}\
-             _safety_margin_{s.cost.safety_margin}\
+             _safety_margin_low_{s.cost.safety_margin_low}\
+             _safety_margin_high_{s.cost.safety_margin_high}\
+             _accel_{s.cost.accel_weight}\
+             _steer_{s.cost.steer_weight}\
              _discount_factor_{s.cost.discount_factor}\
              _rng_seed_{s.rng_seed}_"
         ));
@@ -398,7 +413,7 @@ pub fn run_parallel_scenarios() {
 
     if n_scenarios == 1 {
         let (cost, reward) = run_with_parameters(scenarios[0].clone());
-        println_f!("{cost:?} {reward:?}");
+        println_f!("{cost:?}, {reward:?}");
     } else {
         scenarios.par_iter().for_each(|scenario| {
             let result = std::panic::catch_unwind(|| {

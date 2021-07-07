@@ -1,10 +1,10 @@
 mod arg_parameters;
-mod klucb;
 
 use arg_parameters::{run_parallel_scenarios, Parameters};
-use fstrings::{eprintln_f, format_args_f, format_f, println_f, write_f};
+use fstrings::{eprintln_f, format_args_f, println_f, write_f};
 use itertools::Itertools;
-use klucb::klucb_bernoulli;
+use progressive_mcts::klucb::klucb_bernoulli;
+use progressive_mcts::{ChildSelectionMode, CostBoundMode};
 use rand::{
     prelude::{IteratorRandom, SliceRandom, StdRng},
     Rng, SeedableRng,
@@ -25,72 +25,6 @@ impl std::fmt::Display for RunResults {
             f,
             "{s.chosen_cost:7.2} {s.chosen_true_cost:7.2} {s.true_best_cost:7.2}"
         )
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum CostBoundMode {
-    Normal,
-    LowerBound,
-    Marginal,
-}
-
-impl std::fmt::Display for CostBoundMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Normal => write!(f, "normal"),
-            Self::LowerBound => write!(f, "lower_bound"),
-            Self::Marginal => write!(f, "marginal"),
-        }
-    }
-}
-
-impl std::str::FromStr for CostBoundMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "normal" => Ok(Self::Normal),
-            "lower_bound" => Ok(Self::LowerBound),
-            "marginal" => Ok(Self::Marginal),
-            _ => Err(format_f!("Invalid CostBoundMode '{s}'")),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum ChildSelectionMode {
-    UCB,
-    UCBV,
-    UCBd,
-    KLUCB,
-    KLUCBP,
-}
-
-impl std::fmt::Display for ChildSelectionMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UCB => write!(f, "ucb"),
-            Self::UCBV => write!(f, "ucbv"),
-            Self::UCBd => write!(f, "ucbd"),
-            Self::KLUCB => write!(f, "klucb"),
-            Self::KLUCBP => write!(f, "klucb+"),
-        }
-    }
-}
-
-impl std::str::FromStr for ChildSelectionMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "ucb" => Ok(Self::UCB),
-            "ucbv" => Ok(Self::UCBV),
-            "ucbd" => Ok(Self::UCBd),
-            "klucb" => Ok(Self::KLUCB),
-            "klucb+" => Ok(Self::KLUCBP),
-            _ => Err(format_f!("Invalid ChildSelectionMode '{s}'")),
-        }
     }
 }
 
@@ -373,11 +307,8 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                             mean_cost + upper_margin
                         }
                         ChildSelectionMode::KLUCB => {
-                            // let max_cost = (params.search_depth - node.depth + 1) as f64 * 1000.0;
-                            // assert!(max_cost >= 1000.0);
-                            // assert!(max_cost <= 4000.0);
-                            let max_cost = params.klucb_max_cost;
-                            let scaled_mean = (1.0 - mean_cost / max_cost).min(1.0).max(0.0);
+                            let scaled_mean =
+                                (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
                             let index =
                                 -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * ln_t_over_n);
                             index

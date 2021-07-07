@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use progressive_mcts::{klucb::klucb_bernoulli, ChildSelectionMode, CostBoundMode};
 use rand::prelude::{SliceRandom, StdRng};
 
 use crate::{
@@ -32,8 +33,49 @@ struct MctsNode<'a> {
     expected_cost: Option<Cost>,
 
     intermediate_costs: Vec<Cost>,
+    marginal_costs: Vec<Cost>,
 
     inner: MctsNodeInner<'a>,
+}
+
+impl<'a> MctsNode<'a> {
+    fn min_child_expected_cost(&self) -> Option<Cost> {
+        match &self.inner {
+            MctsNodeInner::Branch {
+                sub_nodes: Some(sub_nodes),
+            } => sub_nodes
+                .iter()
+                .filter_map(|n| n.expected_cost)
+                .min_by(|a, b| a.partial_cmp(b).unwrap()),
+            _ => None,
+        }
+    }
+
+    fn mean_cost(&self) -> Option<Cost> {
+        match &self.inner {
+            MctsNodeInner::Branch { sub_nodes: _ } => None,
+            MctsNodeInner::Leaf { scores } => {
+                Some(scores.iter().copied().sum::<Cost>() / scores.len() as f64)
+            }
+        }
+    }
+
+    fn intermediate_cost(&self) -> Cost {
+        if self.intermediate_costs.is_empty() {
+            Cost::ZERO
+        } else {
+            self.intermediate_costs.iter().copied().sum::<Cost>()
+                / self.intermediate_costs.len() as f64
+        }
+    }
+
+    fn marginal_cost(&self) -> Cost {
+        if self.marginal_costs.is_empty() {
+            Cost::ZERO
+        } else {
+            self.marginal_costs.iter().copied().sum::<Cost>() / self.marginal_costs.len() as f64
+        }
+    }
 }
 
 fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
@@ -48,8 +90,10 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
         } else {
             road.disable_car_traces();
         }
+        let prev_cost = road.cost;
         road.take_update_steps(mcts.layer_t, mcts.dt);
         node.intermediate_costs.push(road.cost);
+        node.marginal_costs.push(road.cost - prev_cost);
         node.traces
             .append(&mut road.make_traces(node.depth - 1, false));
     }
@@ -80,6 +124,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
                             n_trials: 0,
                             expected_cost: None,
                             intermediate_costs: Vec::new(),
+                            marginal_costs: Vec::new(),
                             inner: sub_inner.clone(),
                         })
                         .collect(),
@@ -132,40 +177,56 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
                     .iter()
                     .enumerate()
                     .map(|(i, node)| {
-                        let upper_margin = mcts.ucb_const * (ln_t / node.n_trials as f64).sqrt();
-                        // eprintln!("n: {} expected: {} margin: {}", a.scores.len(), a.mean_score, upper_margin);
-                        (node.expected_cost.unwrap().total() + upper_margin, i)
+                        let mean_cost = node.expected_cost.unwrap().total();
+                        let n = node.n_trials as f64;
+                        let ln_t_over_n = ln_t / n;
+
+                        // the "index" by which the next child node is chosen
+                        let index = match mcts.selection_mode {
+                            ChildSelectionMode::UCB => {
+                                let upper_margin = mcts.ucb_const * ln_t_over_n.sqrt();
+                                mean_cost + upper_margin
+                            }
+                            ChildSelectionMode::KLUCB => {
+                                if !road.params.run_fast && mean_cost >= mcts.klucb_max_cost {
+                                    eprintln_f!("High {mean_cost=:.2}");
+                                }
+                                let scaled_mean =
+                                    (1.0 - mean_cost / mcts.klucb_max_cost).min(1.0).max(0.0);
+                                -klucb_bernoulli(scaled_mean, mcts.ucb_const.abs() * ln_t_over_n)
+                            }
+                            _ => todo!(),
+                        };
+
+                        (index, i)
                     })
                     .min_by(|a, b| a.partial_cmp(b).unwrap())
                     .unwrap();
 
                 find_and_run_trial(&mut sub_nodes[chosen_i], road, rng);
             }
-
             node.n_trials = sub_nodes.iter().map(|n| n.n_trials).sum::<usize>();
-            node.expected_cost = sub_nodes
-                .iter()
-                .filter_map(|n| n.expected_cost)
-                .min_by(|a, b| a.partial_cmp(b).unwrap());
-
-            let intermediate_cost = node.intermediate_costs.iter().copied().sum::<Cost>()
-                / node.intermediate_costs.len() as f64;
-            node.expected_cost = node.expected_cost.map(|a| a.max(&intermediate_cost));
         }
         MctsNodeInner::Leaf { scores } => {
             scores.push(road.cost);
             node.n_trials = scores.len();
-            if mcts.bubble_up_max_weighted_leaf {
-                node.expected_cost = scores
-                    .iter()
-                    .max_by(|a, b| a.partial_cmp(&b).unwrap())
-                    .copied();
-            } else {
-                node.expected_cost =
-                    Some(scores.iter().copied().sum::<Cost>() / node.n_trials as f64);
-            }
         }
     }
+
+    let expected_cost = match mcts.bound_mode {
+        CostBoundMode::Normal => node
+            .min_child_expected_cost()
+            .unwrap_or(node.mean_cost().unwrap()),
+        CostBoundMode::LowerBound => node
+            .min_child_expected_cost()
+            .unwrap_or(Cost::ZERO)
+            .max(&node.intermediate_cost()),
+        CostBoundMode::Marginal => {
+            node.min_child_expected_cost().unwrap_or(Cost::ZERO) + node.marginal_cost()
+        }
+    };
+
+    node.expected_cost = Some(expected_cost);
 }
 
 fn collect_traces(node: &mut MctsNode, traces: &mut Vec<rvx::Shape>) {
@@ -237,6 +298,7 @@ pub fn mcts_choose_policy(
         n_trials: 0,
         expected_cost: None,
         intermediate_costs: Vec::new(),
+        marginal_costs: Vec::new(),
         inner: MctsNodeInner::Branch { sub_nodes: None },
     };
 

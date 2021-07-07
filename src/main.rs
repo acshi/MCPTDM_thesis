@@ -178,11 +178,11 @@ impl State {
             self.reward.safety += dt;
         }
         let accel = (self.road.cars[0].vel - last_ego_vel) / dt;
-        if accel <= -self.params.cost.uncomfortable_dec {
+        if accel <= -self.params.reward.uncomfortable_dec {
             self.reward.uncomfortable_dec += dt;
         }
         let curvature_change = (self.road.cars[0].theta() - last_ego_theta).abs() / dt;
-        if curvature_change >= self.params.cost.large_curvature_change {
+        if curvature_change >= self.params.reward.large_curvature_change {
             self.reward.curvature_change += dt;
         }
         // eprintln_f!("{accel=:.2} {curvature_change=:.2}");

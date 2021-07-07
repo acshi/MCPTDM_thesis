@@ -69,9 +69,7 @@ hyper-parameter optimization for each method, at least of the discount factor, t
 Tasks:
 Overall for this week:
 
-random game trees to try to justify the "cost of node = max( average of downward partcicles, min(children))" and then also of reducing variance by subtracting off the mean of previous nodes in the search and keeping track of the marginal cost for each action instead. See if this can make us more sample-efficient! Do a bit of literature search to try to see if someone else has done this before.
-
-reform our cost function to not be discrete anywhere. use a sigmoid for safety. penalize all accelerations. the EUDM evaluation metrics can be kept on the side for reference, but not used in the cost function itself.
+Reform our cost function to not be discrete anywhere. use a sigmoid for safety. penalize all accelerations. the EUDM evaluation metrics can be kept on the side for reference, but not used in the cost function itself.
 
 Why does EUDM get such a low cost, yet have poor efficiency, high decelerations, (good safety), _very_ low curvature change. I guess it just avoids turning much at all? Should we modify our cost formulation at all?
 
@@ -91,6 +89,7 @@ POMCP proper? (maybe cut it)
 Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
 
 Finished tasks:
+Random game trees to try to justify the "cost of node = max( average of downward partcicles, min(children))" and then also of reducing variance by subtracting off the mean of previous nodes in the search and keeping track of the marginal cost for each action instead. See if this can make us more sample-efficient! Do a bit of literature search to try to see if someone else has done this before.
 We are getting into trouble because the obstacle vehicle policy waiting_done makes it not stateless, and so we are systematically mispredicting other vehicles. We want obstacle vehicles to not be extremely reckless, so they check their immediate area before _starting_ to turn. We want the ego vehicle to not be constantly scared because it has an obstacle-car model that says they may lane-change at any time. The POMDP of this would consider there to essentially be multiple policies here then, one that has checked and started turning, and one that hasn't.
 With these changes, we expect to see MCTS not do worse when we use more samples. Also use fewer samples to check for trends!!
 Alternative MCTS formulation where it samples from CFB, and so assigns equal weights to each sample.

@@ -53,6 +53,14 @@ fn range_dist(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> f64 {
     sep
 }
 
+fn logistic(x: f64) -> f64 {
+    1.0 / (1.0 + (-x).exp())
+}
+
+fn change_range(x: f64, a_low: f64, a_high: f64, b_low: f64, b_high: f64) -> f64 {
+    b_low + (b_high - b_low) * (x - a_low) / (a_high - a_low)
+}
+
 impl Road {
     pub fn new(params: Rc<Parameters>) -> Self {
         let ego_car = Car::new(&params, 0, 0);
@@ -164,7 +172,7 @@ impl Road {
         // preserve the ego-car
         road.cars[0] = self.cars[0].clone();
         road.debug = false;
-        road.cost.discount_factor = self.params.cost.discount_factor;
+        road.cost = Cost::new(self.params.cost.discount_factor, 1.0);
         road
     }
 
@@ -177,7 +185,7 @@ impl Road {
             road.cars[keep_car_i] = self.cars[keep_car_i].clone();
         }
         road.debug = false;
-        road.cost.discount_factor = self.params.cost.discount_factor;
+        road.cost = Cost::new(self.params.cost.discount_factor, 1.0);
         road
     }
 
@@ -412,12 +420,12 @@ impl Road {
     }
 
     fn min_unsafe_dist(&self, car_i: usize) -> Option<f64> {
-        let safety_margin = self.params.cost.safety_margin;
+        let safety_margin_high = self.params.cost.safety_margin_high;
 
         let car = &self.cars[car_i];
 
         let mut min_dist = None;
-        let dist_thresh = 2.0 * car.length + safety_margin;
+        let dist_thresh = 2.0 * car.length + safety_margin_high;
 
         let pose = car.pose();
         let shape = car.shape();
@@ -437,7 +445,7 @@ impl Road {
                 other_aabb.mins[1],
                 other_aabb.maxs[1],
             );
-            if side_sep <= safety_margin {
+            if side_sep <= safety_margin_high {
                 let longitidinal_sep = range_dist(
                     aabb.mins[0],
                     aabb.maxs[0],
@@ -445,7 +453,7 @@ impl Road {
                     other_aabb.maxs[0],
                 );
                 let dist = side_sep.max(longitidinal_sep);
-                if dist < min_dist.unwrap_or(safety_margin) {
+                if dist < min_dist.unwrap_or(safety_margin_high) {
                     // if self.super_debug() && car.is_ego() {
                     //     let road = self;
                     //     eprintln_f!("{road.timesteps}: ego from {i}, {car.x=:.2}, {c.x=:.2}, car.length + safety_margin: {:.2} mins: {:.2?} maxs: {:.2?}, other mins: {:.2?} maxs: {:.2?}, {side_sep=:.2}, {dist=:.2}",
@@ -454,11 +462,16 @@ impl Road {
                     // }
 
                     // bounding boxes are close enough, now do the more expensive exact calculation
-                    match query::closest_points(&pose, &shape, &c.pose(), &c.shape(), safety_margin)
-                    {
+                    match query::closest_points(
+                        &pose,
+                        &shape,
+                        &c.pose(),
+                        &c.shape(),
+                        safety_margin_high,
+                    ) {
                         Ok(ClosestPoints::WithinMargin(a, b)) => {
                             let dist = (a - b).magnitude();
-                            if dist < min_dist.unwrap_or(safety_margin) {
+                            if dist < min_dist.unwrap_or(safety_margin_high) {
                                 min_dist = Some(dist);
                             }
                         }
@@ -633,18 +646,28 @@ impl Road {
         }
 
         let min_dist = self.min_unsafe_dist(0);
-        if min_dist.is_some() {
-            self.cost.safety += cparams.safety_weight * dt * self.cost.discount;
-            if self.debug {
-                eprintln!("{}: UNSAFE: {:.2}", self.timesteps, min_dist.unwrap());
+        if let Some(min_dist) = min_dist {
+            let penalty = cparams.safety_weight
+                * logistic(change_range(
+                    min_dist,
+                    cparams.safety_margin_low,
+                    cparams.safety_margin_high,
+                    cparams.logistic_map_low,
+                    cparams.logistic_map_high,
+                ));
+            self.cost.safety += penalty * dt * self.cost.discount;
+            if self.debug && penalty > 10.0 {
+                eprintln!(
+                    "{}: safety distance: {:.2} -> penalty {:.2}",
+                    self.timesteps, min_dist, penalty
+                );
             }
         }
-        self.ego_is_safe = min_dist.is_none();
+        self.ego_is_safe = min_dist.map_or(true, |d| d > self.params.reward.safety_margin);
 
         let policy_id = car.operating_policy_id();
         let last_policy_id = self.last_ego.operating_policy_id();
         if policy_id != last_policy_id {
-            self.cost.smoothness += cparams.smoothness_weight * self.cost.discount;
             if self.debug && self.params.ego_policy_change_debug {
                 eprintln_f!(
                     "{}: policy change from {last_policy_id} to {policy_id}",
@@ -664,14 +687,10 @@ impl Road {
         }
 
         let accel = (car.vel - self.last_ego.vel) / dt;
-        if accel <= -cparams.uncomfortable_dec {
-            self.cost.uncomfortable_dec +=
-                cparams.uncomfortable_dec_weight * dt * self.cost.discount;
-        }
-        let curvature_change = (car.theta() - self.last_ego.theta()).abs() / dt;
-        if curvature_change >= cparams.large_curvature_change {
-            self.cost.curvature_change += cparams.curvature_change_weight * dt * self.cost.discount;
-        }
+        self.cost.accel += cparams.accel_weight * accel.powi(2) * dt * self.cost.discount;
+
+        let theta_accel = (car.theta() - self.last_ego.theta()) / dt;
+        self.cost.steer += cparams.steer_weight * theta_accel.powi(2) * dt * self.cost.discount;
 
         self.last_ego = self.cars[0].clone();
         self.cost.update_discount(dt);
@@ -788,7 +807,7 @@ impl Road {
 
                 let base_line_color = if self.cars[0].crashed {
                     RvxColor::RED.scale_rgb(0.5)
-                } else if self.cost.safety > self.last_reset_cost.safety {
+                } else if self.cost.safety > self.last_reset_cost.safety + 10.0 {
                     RvxColor::PINK
                 } else {
                     RvxColor::GREEN
@@ -887,5 +906,55 @@ impl Road {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn test_logistic_change_range() {
+        let safety_margin_low = 0.0;
+        let safety_margin_high = 1.94;
+        let log_map_low = 5.0;
+        let log_map_high = -8.0;
+
+        assert_abs_diff_eq!(
+            logistic(change_range(
+                0.8,
+                safety_margin_low,
+                safety_margin_high,
+                log_map_low,
+                log_map_high,
+            )),
+            0.4107599,
+            epsilon = 1e-6
+        );
+
+        assert_abs_diff_eq!(
+            logistic(change_range(
+                1.0,
+                safety_margin_low,
+                safety_margin_high,
+                log_map_low,
+                log_map_high,
+            )),
+            0.15433067,
+            epsilon = 1e-6
+        );
+
+        assert_abs_diff_eq!(
+            logistic(change_range(
+                1.2,
+                safety_margin_low,
+                safety_margin_high,
+                log_map_low,
+                log_map_high,
+            )),
+            0.045597,
+            epsilon = 1e-6
+        );
     }
 }

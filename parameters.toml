@@ -17,7 +17,7 @@ graphics_speedup = 8
 debug_car_i = 10
 debug_steps_before = 5
 super_debug = true
-ego_policy_change_debug = true
+ego_policy_change_debug = false
 ego_state_debug = false
 separation_debug = false
 intelligent_driver_debug = false
@@ -53,13 +53,18 @@ efficiency_high_speed_cost = 0.1
 efficiency_high_speed_tolerance = 1.0
 efficiency_weight = 1.0
 safety_weight = 100.0
-smoothness_weight = 0.0
-uncomfortable_dec_weight = 5.0
-curvature_change_weight = 2.0
-safety_margin = 0.44 # bounded by lane width 3.7 - prius width 1.76 = 1.94
+safety_margin_low = 0.0 # bounded by lane width 3.7 - prius width 1.76 = 1.94; previous was 0.44
+safety_margin_high = 2.4
+logistic_map_low = 5.0
+logistic_map_high = -7.0
+accel_weight = 0.1
+steer_weight = 10.0
+discount_factor = 0.8 # per second, 0.85
+
+[reward]
+safety_margin = 0.44
 uncomfortable_dec = 1.6
 large_curvature_change = 0.12
-discount_factor = 0.8 # per second, 0.85
 
 [cfb]
 key_vehicle_base_dist = 10.0
@@ -97,5 +102,8 @@ search_depth = 4
 samples_n = 64
 prefer_same_policy = true
 choose_random_policy = true
-ucb_const = -100.0
+ucb_const = -1 # -100 for ucb
 bubble_up_max_weighted_leaf = false
+bound_mode = "marginal"
+selection_mode = "klucb"
+klucb_max_cost = 1000

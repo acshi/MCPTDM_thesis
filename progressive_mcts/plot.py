@@ -252,7 +252,7 @@ if False:
 
 selection_mode = FigureMode("selection_mode", ["ucb", "ucbv", "ucbd", "klucb", "klucb+"])
 # cargo run --release rng_seed 0-4095 :: samples_n 4 8 16 32 64 128 256 512 1024 2048 :: portion_bernoulli 0 1 :: bound_mode marginal :: selection_mode ucb ucbd ucbv klucb klucb+ :: ucb_const -3000 :: ucbd.ucb_const -1000 :: klucb.ucb_const -1  :: klucb+.ucb_const -1 :: ucbv.ucbv_const 0 :: thread_limit 24
-if True:
+if False:
     samples_n_kind = FigureKind("samples_n", [16, 32, 64, 128, 256, 512, 1024, 2048])
     for metric in all_metrics:
         for portion_bernoulli in [0, 1]:
@@ -345,11 +345,12 @@ ucb_const_kind = FigureKind(
 klucb_max_cost_kind = FigureKind(
     "klucb_max_cost", [1000, 2000, 4000, 8000, 16000])
 # cargo run --release rng_seed 0-1023 :: selection_mode klucb :: klucb.klucb_max_cost 1000 2000 4000 8000 16000 :: klucb.ucb_const -0.01 -0.03 -0.1 -0.3 -1 -3 -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
-if False:
-    # for metric in all_metrics:
-    #     for portion_bernoulli in [0, 1]:
-    #         ucb_const_kind.plot(results, metric, filters=[
-    #                             "_selection_mode_klucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+# cargo run --release rng_seed 0-4095 :: selection_mode klucb :: klucb.ucb_const -0.01 -0.03 -0.1 -0.3 -1 -3 -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+if True:
+    for metric in all_metrics:
+        for portion_bernoulli in [0, 1]:
+            ucb_const_kind.plot(results, metric, filters=[
+                                "_selection_mode_klucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
     #         klucb_max_cost_kind.plot(results, metric, filters=[
     #             "_selection_mode_klucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
 
