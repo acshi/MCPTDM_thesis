@@ -242,6 +242,9 @@ fn create_scenarios(
                 "safety_margin_high" => params.cost.safety_margin_high = val.parse().unwrap(),
                 "accel" => params.cost.accel_weight = val.parse().unwrap(),
                 "steer" => params.cost.steer_weight = val.parse().unwrap(),
+                "mcts.bound_mode" => params.mcts.bound_mode = val.parse().unwrap(),
+                "mcts.selection_mode" => params.mcts.selection_mode = val.parse().unwrap(),
+                "mcts.klucb_max_cost" => params.mcts.klucb_max_cost = val.parse().unwrap(),
                 _ => panic!("{} is not a valid parameter!", name),
             }
             if name_value_pairs.len() > 1 {

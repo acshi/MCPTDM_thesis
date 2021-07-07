@@ -11,7 +11,7 @@ use crate::{
     side_policies::{SidePolicy, SidePolicyTrait},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum MctsNodeInner<'a> {
     Branch {
         sub_nodes: Option<Vec<MctsNode<'a>>>,
@@ -36,6 +36,23 @@ struct MctsNode<'a> {
     marginal_costs: Vec<Cost>,
 
     inner: MctsNodeInner<'a>,
+}
+
+impl<'a> std::fmt::Debug for MctsNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = self;
+        write_f!(
+            f,
+            "MctsNode ({s.depth=}, {s.n_trials=}, {s.expected_cost=:?}, "
+        )?;
+        write_f!(
+            f,
+            "#intermediate costs = {}, #marginal costs = {}, ",
+            s.intermediate_costs.len(),
+            s.marginal_costs.len()
+        )?;
+        write_f!(f, "{s.inner=:?})")
+    }
 }
 
 impl<'a> MctsNode<'a> {
@@ -216,7 +233,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
     let expected_cost = match mcts.bound_mode {
         CostBoundMode::Normal => node
             .min_child_expected_cost()
-            .unwrap_or(node.mean_cost().unwrap()),
+            .unwrap_or_else(|| node.mean_cost().expect(&format!("{:?}", node))),
         CostBoundMode::LowerBound => node
             .min_child_expected_cost()
             .unwrap_or(Cost::ZERO)
