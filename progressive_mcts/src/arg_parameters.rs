@@ -80,6 +80,7 @@ fn create_scenarios(
         || name.starts_with("ucbv.") && base_params.selection_mode != ChildSelectionMode::UCBV
         || name.starts_with("ucbd.") && base_params.selection_mode != ChildSelectionMode::UCBd
         || name.starts_with("klucb.") && base_params.selection_mode != ChildSelectionMode::KLUCB
+        || name.starts_with("klucb+.") && base_params.selection_mode != ChildSelectionMode::KLUCBP
     {
         return create_scenarios(&base_params, &name_value_pairs[1..]);
     }
@@ -121,6 +122,7 @@ fn create_scenarios(
                         assert!(params.ucbd_const <= 1.0);
                     }
                     "klucb.klucb_max_cost" => params.klucb_max_cost = val.parse().unwrap(),
+                    "klucb+.klucb_max_cost" => params.klucb_max_cost = val.parse().unwrap(),
                     "rng_seed" => params.rng_seed = val.parse().unwrap(),
                     "print_report" => params.print_report = val.parse().unwrap(),
                     _ => panic!("{} is not a valid parameter!", name),
@@ -146,7 +148,9 @@ fn create_scenarios(
         };
 
         let klucb_max_cost = match s.selection_mode {
-            ChildSelectionMode::KLUCB => format!("_klucb_max_cost_{}", s.klucb_max_cost),
+            ChildSelectionMode::KLUCB | ChildSelectionMode::KLUCBP => {
+                format!("_klucb_max_cost_{}", s.klucb_max_cost)
+            }
             _ => "".to_string(),
         };
 

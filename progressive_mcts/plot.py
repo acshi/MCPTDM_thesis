@@ -8,12 +8,13 @@ plt.rcParams["pdf.fonttype"] = 42
 
 # plt.cycler(color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf", "#a65628", "#984ea3", "#999999", "#e41a1c", "#dede00"])
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
-    color=["#377eb8", "#ff7f00", "#4daf4a"]) + plt.cycler(marker=['+', 'o', 'x'])
+    color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf"]) + plt.cycler(marker=['+', 'o', 'x', '^'])
 
 show_only = False
 make_pdf_also = False
 
-save_dpi = 200
+save_dpi = 300
+figure_zoom = 1.5
 
 formats = {"": "+-"}
 labels = {"": "normal"}
@@ -86,7 +87,8 @@ class FigureKind:
         if show_only:
             plt.show()
         else:
-            # self.fig.set_figwidth(12)
+            self.fig.set_figwidth(6.4 * figure_zoom)
+            self.fig.set_figheight(4.8 * figure_zoom)
             # self.ax.set_aspect(1.0 / self.ax.get_data_ratio() * 0.4)
 
             mode_string = f"_{mode.param}" if mode is not None else ""
@@ -247,6 +249,16 @@ if False:
             samples_n_kind.plot(results, metric, filters=[
                                 f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
 
+
+selection_mode = FigureMode("selection_mode", ["ucb", "ucbv", "ucbd", "klucb"])
+# cargo run --release rng_seed 0-4095 :: samples_n 4 8 16 32 64 128 256 512 1024 2048 :: portion_bernoulli 0 1 :: bound_mode marginal :: selection_mode ucb ucbd ucbv klucb :: ucb_const -3000 :: ucbd.ucb_const -1000 :: klucb.ucb_const -1 :: ucbv.ucbv_const 0 :: thread_limit 24
+if True:
+    samples_n_kind = FigureKind("samples_n", [16, 32, 64, 128, 256, 512, 1024, 2048])
+    for metric in all_metrics:
+        for portion_bernoulli in [0, 1]:
+            samples_n_kind.plot(results, metric, filters=[
+                                f"_portion_bernoulli_{portion_bernoulli}_"], mode=selection_mode)
+
 portion_bernoulli_kind = FigureKind(
     "portion_bernoulli", [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1])
 
@@ -258,12 +270,28 @@ if False:
 
 ucb_const_kind = FigureKind(
     "ucb_const", [-10, -30, -100, -300, -1000, -3000, -10000, -30000])
-# cargo run --release rng_seed 0-4095 :: ucb_const -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: selection_mode ucb :: ucb_const -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
 if False:
-    for metric in all_metrics:
-        for portion_bernoulli in [0, 1]:
-            ucb_const_kind.plot(results, metric, filters=[
-                "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+    # for metric in all_metrics:
+    #     for portion_bernoulli in [0, 1]:
+    #         ucb_const_kind.plot(results, metric, filters=[
+    #             "_selection_mode_ucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+
+    for portion_bernoulli in [0, 1]:
+        evaluate_conditions(results, all_metrics, [
+            ("selection_mode", "ucb"),
+            ("ucb_const", -3000),
+            ("bound_mode", "marginal"),
+            ("samples_n", 64),
+            ("portion_bernoulli", portion_bernoulli)])
+
+    # selection_mode_ucb_ucb_const_-3000_bound_mode_marginal_samples_n_64_portion_bernoulli_0:
+    #   regret has mean:  45.36 and mean std dev:  1.716
+    #   estimation_error has mean:  119.0 and mean std dev:   1.66
+
+    # selection_mode_ucb_ucb_const_-3000_bound_mode_marginal_samples_n_64_portion_bernoulli_1:
+    #   regret has mean:  77.03 and mean std dev:  2.445
+    #   estimation_error has mean:  207.3 and mean std dev:  2.377
 
 ucbv_const_kind = FigureKind(
     "ucbv_const", [0, 0.0001, 0.001, 0.01, 0.1, 1, 10])
@@ -312,13 +340,32 @@ if False:
     #   estimation_error has mean:  222.0 and mean std dev:  1.737
 
 
+ucb_const_kind = FigureKind(
+    "ucb_const", [-0.01, -0.03, -0.1, -0.3, -1, -3, -10, -30, -100, -300, -1000])
 klucb_max_cost_kind = FigureKind(
     "klucb_max_cost", [1000, 2000, 4000, 8000, 16000])
-# cargo run --release rng_seed 0-1023 :: selection_mode klucb :: klucb.klucb_max_cost 1000 2000 4000 8000 16000 :: ucb_const -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
-if True:
-    for metric in all_metrics:
-        for portion_bernoulli in [0, 1]:
-            ucb_const_kind.plot(results, metric, filters=[
-                                "_selection_mode_klucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
-            klucb_max_cost_kind.plot(results, metric, filters=[
-                "_selection_mode_klucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+# cargo run --release rng_seed 0-1023 :: selection_mode klucb :: klucb.klucb_max_cost 1000 2000 4000 8000 16000 :: klucb.ucb_const -0.01 -0.03 -0.1 -0.3 -1 -3 -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+if False:
+    # for metric in all_metrics:
+    #     for portion_bernoulli in [0, 1]:
+    #         ucb_const_kind.plot(results, metric, filters=[
+    #                             "_selection_mode_klucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+    #         klucb_max_cost_kind.plot(results, metric, filters=[
+    #             "_selection_mode_klucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+
+    for portion_bernoulli in [0, 1]:
+        evaluate_conditions(results, all_metrics, [
+            ("selection_mode", "klucb"),
+            ("ucb_const", -1),
+            ("klucb_max_cost", 4000),
+            ("bound_mode", "marginal"),
+            ("samples_n", 64),
+            ("portion_bernoulli", portion_bernoulli)])
+
+    # selection_mode_klucb_ucb_const_-1_klucb_max_cost_4000_bound_mode_marginal_samples_n_64_portion_bernoulli_0:
+    #   regret has mean:  39.36 and mean std dev:  3.119
+    #   estimation_error has mean:  74.06 and mean std dev:  2.456
+
+    # selection_mode_klucb_ucb_const_-1_klucb_max_cost_4000_bound_mode_marginal_samples_n_64_portion_bernoulli_1:
+    #   regret has mean:  63.18 and mean std dev:  4.132
+    #   estimation_error has mean:  142.0 and mean std dev:   3.93

@@ -64,6 +64,7 @@ enum ChildSelectionMode {
     UCBV,
     UCBd,
     KLUCB,
+    KLUCBP,
 }
 
 impl std::fmt::Display for ChildSelectionMode {
@@ -73,6 +74,7 @@ impl std::fmt::Display for ChildSelectionMode {
             Self::UCBV => write!(f, "ucbv"),
             Self::UCBd => write!(f, "ucbd"),
             Self::KLUCB => write!(f, "klucb"),
+            Self::KLUCBP => write!(f, "klucb+"),
         }
     }
 }
@@ -86,6 +88,7 @@ impl std::str::FromStr for ChildSelectionMode {
             "ucbv" => Ok(Self::UCBV),
             "ucbd" => Ok(Self::UCBd),
             "klucb" => Ok(Self::KLUCB),
+            "klucb+" => Ok(Self::KLUCBP),
             _ => Err(format_f!("Invalid ChildSelectionMode '{s}'")),
         }
     }
@@ -344,7 +347,8 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                 .enumerate()
                 .map(|(i, node)| {
                     let mean_cost = node.expected_cost.unwrap();
-                    let ln_t_over_n = ln_t / node.n_trials as f64;
+                    let n = node.n_trials as f64;
+                    let ln_t_over_n = ln_t / n;
 
                     let upper_bound = match params.selection_mode {
                         ChildSelectionMode::UCB => {
@@ -359,7 +363,6 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                             mean_cost + upper_margin
                         }
                         ChildSelectionMode::UCBd => {
-                            let n = node.n_trials as f64;
                             let a = (1.0 + n) / (n * n);
                             let b = (total_n * (1.0 + n).sqrt() / params.ucbd_const).ln();
                             let upper_margin = params.ucb_const * (a * (1.0 + 2.0 * b)).sqrt();
@@ -392,6 +395,15 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                             //     "{total_n=:5}, {node.n_trials=:5}, {scaled_mean=:8.2}, {index=:8.6} would have been {:8.2}",
                             //     mean_cost + params.ucb_const * ln_t_over_n.sqrt()
                             // );
+                            index
+                        }
+                        ChildSelectionMode::KLUCBP => {
+                            let scaled_mean =
+                                (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
+                            let index = -klucb_bernoulli(
+                                scaled_mean,
+                                params.ucb_const.abs() * (total_n / n).ln() / n,
+                            );
                             index
                         }
                     };
