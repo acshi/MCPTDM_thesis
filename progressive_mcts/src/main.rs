@@ -1,8 +1,10 @@
 mod arg_parameters;
+mod klucb;
 
 use arg_parameters::{run_parallel_scenarios, Parameters};
 use fstrings::{eprintln_f, format_args_f, format_f, println_f, write_f};
 use itertools::Itertools;
+use klucb::klucb_bernoulli;
 use rand::{
     prelude::{IteratorRandom, SliceRandom, StdRng},
     Rng, SeedableRng,
@@ -61,6 +63,7 @@ enum ChildSelectionMode {
     UCB,
     UCBV,
     UCBd,
+    KLUCB,
 }
 
 impl std::fmt::Display for ChildSelectionMode {
@@ -69,6 +72,7 @@ impl std::fmt::Display for ChildSelectionMode {
             Self::UCB => write!(f, "ucb"),
             Self::UCBV => write!(f, "ucbv"),
             Self::UCBd => write!(f, "ucbd"),
+            Self::KLUCB => write!(f, "klucb"),
         }
     }
 }
@@ -81,6 +85,7 @@ impl std::str::FromStr for ChildSelectionMode {
             "ucb" => Ok(Self::UCB),
             "ucbv" => Ok(Self::UCBV),
             "ucbd" => Ok(Self::UCBd),
+            "klucb" => Ok(Self::KLUCB),
             _ => Err(format_f!("Invalid ChildSelectionMode '{s}'")),
         }
     }
@@ -192,15 +197,15 @@ impl ProblemScenario {
 }
 
 #[derive(Clone)]
-struct Simulator {
-    scenario: ProblemScenario,
+struct Simulator<'a> {
+    scenario: &'a ProblemScenario,
     cost: f64,
 }
 
-impl Simulator {
-    fn new(scenario: &ProblemScenario) -> Self {
+impl<'a> Simulator<'a> {
+    fn new(scenario: &'a ProblemScenario) -> Self {
         Self {
-            scenario: scenario.clone(),
+            scenario,
             cost: 0.0,
         }
     }
@@ -211,11 +216,12 @@ impl Simulator {
             .children
             .get(policy as usize)
             .expect("only take search_depth steps");
+        // .expect("only take search_depth steps");
         let dist = child.distribution.as_ref().expect("not root-level node");
         let cost = dist.sample(rng); //.max(0.0).min(2.0 * dist.mean());
         self.cost += cost;
 
-        self.scenario = child.clone();
+        self.scenario = child;
     }
 }
 
@@ -362,6 +368,19 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                                 panic!();
                             }
                             mean_cost + upper_margin
+                        }
+                        ChildSelectionMode::KLUCB => {
+                            let scaled_mean = 1.0 - mean_cost / params.klucb_max_cost; //.min(1.0).max(0.0);
+                            assert!(scaled_mean >= 0.0);
+                            assert!(scaled_mean <= 1.0);
+
+                            let index =
+                                -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * ln_t_over_n);
+                            // eprintln_f!(
+                            //     "{total_n=:5}, {node.n_trials=:5}, {scaled_mean=:8.2}, {index=:8.6} would have been {:8.2}",
+                            //     mean_cost + params.ucb_const * ln_t_over_n.sqrt()
+                            // );
+                            index
                         }
                     };
                     (upper_bound, i)

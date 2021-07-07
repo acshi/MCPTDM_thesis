@@ -3,8 +3,12 @@ import numpy as np
 from matplotlib import pyplot as plt
 import localreg
 
-plt.rcParams.update({'font.size': 12})
-plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams.update({"font.size": 12})
+plt.rcParams["pdf.fonttype"] = 42
+
+# plt.cycler(color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf", "#a65628", "#984ea3", "#999999", "#e41a1c", "#dede00"])
+plt.rcParams["axes.prop_cycle"] = plt.cycler(
+    color=["#377eb8", "#ff7f00", "#4daf4a"]) + plt.cycler(marker=['+', 'o', 'x'])
 
 show_only = False
 make_pdf_also = False
@@ -22,6 +26,8 @@ translations["bound_mode"] = "Mode to estimate cost"
 translations["normal"] = "Normal"
 translations["lower_bound"] = "Using lower bound"
 translations["marginal"] = "Using marginal action costs"
+translations["portion_bernoulli"] = "% cost Bernoulli (instead of Gaussian)"
+translations["ucb_const"] = "UCB constant factor"
 
 
 def translate(name, mode=None):
@@ -224,36 +230,95 @@ all_metrics = ["regret", "estimation_error"]
 #                                                               "_smoothness_0_", "_safety_100_", "_ud_5_"])], key=lambda entry: entry["safety"]))
 
 if False:
-    for use_cfb in ["true"]:
-        for samples_n in [8, 16, 32, 64, 128, 256, 512]:
+    for samples_n in [64, 128]:
+        for bound_mode in ["normal", "lower_bound", "marginal"]:
             evaluate_conditions(results, all_metrics, [
-                                ("method", "mcts"), ("search_depth", 4), ("layer_t", "2"),
-                                ("smoothness", 0), ("safety", 100), ("ud", 5),
-                                ("samples_n", samples_n), ("use_cfb", use_cfb)])
-    # print("layer_t 2")
-    # for use_cfb in ["false", "true"]:
-    #     for search_depth in [4, 5, 6, 7]:
-    #         evaluate_conditions(results, all_metrics, [
-    #                             ("method", "mcts"), ("search_depth", search_depth), ("layer_t", "2"), ("samples_n", 128), ("use_cfb", use_cfb)])
-
-    print("eudm")
-    for use_cfb in ["true"]:
-        for search_depth in [4]:
-            evaluate_conditions(results, all_metrics, [
-                                ("method", "eudm"),
-                                ("smoothness", 0), ("safety", 100), ("ud", 5),
-                                ("search_depth", search_depth), ("use_cfb", use_cfb)])
-
+                                ("bound_mode", bound_mode),
+                                ("samples_n", samples_n),
+                                ("portion_bernoulli", 1)])
 
 samples_n_kind = FigureKind("samples_n", [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048])
-use_low_bound_mode = FigureMode("bound_mode", ["normal", "lower_bound", "marginal"])
+bound_mode = FigureMode("bound_mode", ["normal", "lower_bound", "marginal"])
 
-# cargo run --release rng_seed 0-2047 :: samples_n 4 8 16 32 64 128 256 512 1024 2048 :: bound_mode normal lower_bound marginal :: thread_limit 24
+# cargo run --release rng_seed 0-2047 :: samples_n 4 8 16 32 64 128 256 512 1024 2048 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: normal.ucb_const -1000 :: lower_bound.ucb_const -3000 :: marginal.ucb_const -3000 :: thread_limit 24
+if False:
+    for metric in all_metrics:
+        for portion_bernoulli in [0, 1]:
+            samples_n_kind.plot(results, metric, filters=[
+                                f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+
+portion_bernoulli_kind = FigureKind(
+    "portion_bernoulli", [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1])
+
+# cargo run --release rng_seed 0-8191 :: portion_bernoulli 0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1 :: samples_n 64 :: bound_mode normal lower_bound marginal :: normal.ucb_const -1000 :: lower_bound.ucb_const -3000 :: marginal.ucb_const -3000 :: thread_limit 24
+if False:
+    for metric in all_metrics:
+        portion_bernoulli_kind.plot(results, metric, filters=[
+                                    "_samples_n_64_"], mode=bound_mode)
+
+ucb_const_kind = FigureKind(
+    "ucb_const", [-10, -30, -100, -300, -1000, -3000, -10000, -30000])
+# cargo run --release rng_seed 0-4095 :: ucb_const -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+if False:
+    for metric in all_metrics:
+        for portion_bernoulli in [0, 1]:
+            ucb_const_kind.plot(results, metric, filters=[
+                "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+
+ucbv_const_kind = FigureKind(
+    "ucbv_const", [0, 0.0001, 0.001, 0.01, 0.1, 1, 10])
+# cargo run --release rng_seed 0-1023 :: selection_mode ucbv :: ucbv.ucbv_const 0 0.0001 0.001 0.01 0.1 1 10 :: ucb_const -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+if False:
+    for metric in all_metrics:
+        for portion_bernoulli in [0, 1]:
+            ucb_const_kind.plot(results, metric, filters=[
+                                "_selection_mode_ucbv_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+            ucbv_const_kind.plot(results, metric, filters=[
+                "_selection_mode_ucbv_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+
+ucbd_const_kind = FigureKind(
+    "ucbd_const", ["0.000001", "0.00001", 0.0001, 0.001, 0.01, 0.1, 1])
+# cargo run --release rng_seed 0-1023 :: selection_mode ucbd :: ucbd.ucbd_const 0.0001 0.001 0.01 0.1 1 :: ucb_const -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+# cargo run --release rng_seed 0-16383 :: selection_mode ucbd :: ucbd.ucbd_const 0.000001 0.0001 0.001 0.01 0.1 1 :: ucb_const -1000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+if False:
+    for metric in all_metrics:
+        for portion_bernoulli in [0, 1]:
+            ucb_const_kind.plot(results, metric, filters=[
+                                "_selection_mode_ucbd_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+            ucbd_const_kind.plot(results, metric, filters=[
+                "_ucb_const_-1000_", "_selection_mode_ucbd_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+    evaluate_conditions(results, all_metrics, [
+        ("selection_mode", "ucbd"),
+        ("ucb_const", -1000),
+        ("ucbd_const", 1),
+        ("bound_mode", "lower_bound"),
+        ("samples_n", 64),
+        ("portion_bernoulli", 0)])
+
+    evaluate_conditions(results, all_metrics, [
+        ("selection_mode", "ucbd"),
+        ("ucb_const", -1000),
+        ("ucbd_const", "0.00001"),
+        ("bound_mode", "marginal"),
+        ("samples_n", 64),
+        ("portion_bernoulli", 1)])
+
+    # selection_mode_ucbd_ucb_const_-1000_ucbd_const_1_bound_mode_lower_bound_samples_n_64_portion_bernoulli_0:
+    #   regret has mean:  71.89 and mean std dev:  1.157
+    #   estimation_error has mean:  166.9 and mean std dev:  1.059
+
+    # selection_mode_ucbd_ucb_const_-1000_ucbd_const_0.00001_bound_mode_marginal_samples_n_64_portion_bernoulli_1:
+    #   regret has mean:  74.68 and mean std dev:  1.689
+    #   estimation_error has mean:  222.0 and mean std dev:  1.737
+
+
+klucb_max_cost_kind = FigureKind(
+    "klucb_max_cost", [1000, 2000, 4000, 8000, 16000])
+# cargo run --release rng_seed 0-1023 :: selection_mode klucb :: klucb.klucb_max_cost 1000 2000 4000 8000 16000 :: ucb_const -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
 if True:
     for metric in all_metrics:
-        samples_n_kind.plot(results, metric, filters=[], mode=use_low_bound_mode)
-
-# cargo run --release rng_seed 0-2047 :: portion_bernoulli 0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1 :: samples_n 64 :: bound_mode normal lower_bound marginal :: thread_limit 24
-if True:
-    for metric in all_metrics:
-        samples_n_kind.plot(results, metric, filters=[], mode=use_low_bound_mode)
+        for portion_bernoulli in [0, 1]:
+            ucb_const_kind.plot(results, metric, filters=[
+                                "_selection_mode_klucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
+            klucb_max_cost_kind.plot(results, metric, filters=[
+                "_selection_mode_klucb_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)

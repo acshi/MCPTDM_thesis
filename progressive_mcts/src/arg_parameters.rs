@@ -21,6 +21,7 @@ pub(crate) struct Parameters {
     pub ucb_const: f64,
     pub ucbv_const: f64,
     pub ucbd_const: f64,
+    pub klucb_max_cost: f64,
     pub rng_seed: u64,
     pub samples_n: usize,
 
@@ -42,6 +43,7 @@ impl Parameters {
             ucb_const: -3000.0,
             ucbv_const: 0.001,
             ucbd_const: 1.0,
+            klucb_max_cost: 4000.0,
             rng_seed: 0,
             samples_n: 8,
             bound_mode: CostBoundMode::Normal,
@@ -77,6 +79,7 @@ fn create_scenarios(
     if name.starts_with("ucb.") && base_params.selection_mode != ChildSelectionMode::UCB
         || name.starts_with("ucbv.") && base_params.selection_mode != ChildSelectionMode::UCBV
         || name.starts_with("ucbd.") && base_params.selection_mode != ChildSelectionMode::UCBd
+        || name.starts_with("klucb.") && base_params.selection_mode != ChildSelectionMode::KLUCB
     {
         return create_scenarios(&base_params, &name_value_pairs[1..]);
     }
@@ -117,6 +120,7 @@ fn create_scenarios(
                         params.ucbd_const = val.parse().unwrap();
                         assert!(params.ucbd_const <= 1.0);
                     }
+                    "klucb.klucb_max_cost" => params.klucb_max_cost = val.parse().unwrap(),
                     "rng_seed" => params.rng_seed = val.parse().unwrap(),
                     "print_report" => params.print_report = val.parse().unwrap(),
                     _ => panic!("{} is not a valid parameter!", name),
@@ -141,6 +145,11 @@ fn create_scenarios(
             _ => "".to_string(),
         };
 
+        let klucb_max_cost = match s.selection_mode {
+            ChildSelectionMode::KLUCB => format!("_klucb_max_cost_{}", s.klucb_max_cost),
+            _ => "".to_string(),
+        };
+
         s.scenario_name = Some(format_f!(
             "_samples_n_{s.samples_n}\
              _bound_mode_{s.bound_mode}\
@@ -149,6 +158,7 @@ fn create_scenarios(
              _ucb_const_{s.ucb_const}\
              {ucbv_const}\
              {ucbd_const}\
+             {klucb_max_cost}\
              _rng_seed_{s.rng_seed}_"
         ));
     }
