@@ -264,29 +264,29 @@ fn create_scenarios(
 
     for s in scenarios.iter_mut() {
         let samples_n = match s.method.as_str() {
-            "fixed" => "".to_owned(),
-            "tree" => format_f!("samples_n_{s.tree.samples_n}"),
-            "mpdm" => format_f!("samples_n_{s.mpdm.samples_n}"),
-            "eudm" => format_f!("samples_n_{s.eudm.samples_n}"),
-            "mcts" => format_f!("samples_n_{s.mcts.samples_n}"),
+            "fixed" => "".to_string(),
+            "tree" => format_f!("_samples_n_{s.tree.samples_n}"),
+            "mpdm" => format_f!("_samples_n_{s.mpdm.samples_n}"),
+            "eudm" => format_f!("_samples_n_{s.eudm.samples_n}"),
+            "mcts" => format_f!("_samples_n_{s.mcts.samples_n}"),
             _ => panic!("Unknown method {}", s.method),
         };
 
         let search_depth = match s.method.as_str() {
-            "fixed" => "".to_owned(),
-            "tree" => format_f!("search_depth_{s.tree.search_depth}"),
-            "mpdm" => "".to_owned(),
-            "eudm" => format_f!("search_depth_{s.eudm.search_depth}"),
-            "mcts" => format_f!("search_depth_{s.mcts.search_depth}"),
+            "fixed" => "".to_string(),
+            "tree" => format_f!("_search_depth_{s.tree.search_depth}"),
+            "mpdm" => "".to_string(),
+            "eudm" => format_f!("_search_depth_{s.eudm.search_depth}"),
+            "mcts" => format_f!("_search_depth_{s.mcts.search_depth}"),
             _ => panic!("Unknown method {}", s.method),
         };
 
         let layer_forward_t = match s.method.as_str() {
-            "fixed" => "".to_owned(),
-            "tree" => format_f!("layer_t_{s.tree.layer_t}"),
-            "mpdm" => format_f!("forward_t_{s.mpdm.forward_t}"),
-            "eudm" => format_f!("layer_t_{s.eudm.layer_t}"),
-            "mcts" => format_f!("layer_t_{s.mcts.layer_t}"),
+            "fixed" => "".to_string(),
+            "tree" => format_f!("_layer_t_{s.tree.layer_t}"),
+            "mpdm" => format_f!("_forward_t_{s.mpdm.forward_t}"),
+            "eudm" => format_f!("_layer_t_{s.eudm.layer_t}"),
+            "mcts" => format_f!("_layer_t_{s.mcts.layer_t}"),
             _ => panic!("Unknown method {}", s.method),
         };
 
@@ -295,6 +295,23 @@ fn create_scenarios(
             .iter()
             .map(|a| a.to_string())
             .join(",");
+
+        let selection_mode = match s.method.as_str() {
+            "mcts" => format_f!("_selection_mode_{s.mcts.selection_mode}"),
+            _ => "".to_string(),
+        };
+
+        let bound_mode = match s.method.as_str() {
+            "mcts" => format_f!("_bound_mode_{s.mcts.bound_mode}"),
+            _ => "".to_string(),
+        };
+
+        let kluct_max_cost = match (s.method.as_str(), s.mcts.selection_mode) {
+            ("mcts", ChildSelectionMode::KLUCB) => {
+                format_f!("_klucb_max_cost_{s.mcts.klucb_max_cost}")
+            }
+            _ => "".to_string(),
+        };
 
         // "smoothness" => params.cost.smoothness_weight = val.parse().unwrap(),
         // "safety" => params.cost.safety_weight = val.parse().unwrap(),
@@ -306,7 +323,8 @@ fn create_scenarios(
             "_method_{s.method}\
              _use_cfb_{s.use_cfb}\
              _extra_ego_accdec_policies_{extra_ego_accdec}\
-             _{samples_n}_{search_depth}_{layer_forward_t}\
+             {samples_n}{search_depth}{layer_forward_t}\
+             {selection_mode}{bound_mode}{kluct_max_cost}\
              _max_steps_{s.max_steps}\
              _n_cars_{s.n_cars}\
              _safety_{s.cost.safety_weight}\
