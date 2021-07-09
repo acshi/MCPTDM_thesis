@@ -69,13 +69,14 @@ hyper-parameter optimization for each method, at least of the discount factor, t
 Tasks:
 Overall for this week:
 
-Reform our cost function to not be discrete anywhere. use a sigmoid for safety. penalize all accelerations. the EUDM evaluation metrics can be kept on the side for reference, but not used in the cost function itself.
 
 Why does EUDM get such a low cost, yet have poor efficiency, high decelerations, (good safety), _very_ low curvature change. I guess it just avoids turning much at all? Should we modify our cost formulation at all?
 
 OKAY, so let's try to finalize parameter choices. Let's keep efficiency set at 1.0 for scale, then smoothness, safety, uc, cc, safety margin, and then finally discount factor. Then MCTS' UCB constant. We can do them in isolation, one at a time.
 
 Once everything else looks good with samples_n, we can try seeing what we get for additional policies, etc...
+
+NEW IDEA: Motivation: we sometimes see a lot of changes between policies back and forth back and forth, because of how we have drawn the particles that each policy gets. Certain important particles end up having a big influence because they end up only affecting one policy and not another. SO, what if we "periodically" look at whichever particle is most discrediting a certain root-level policy choice and test how the best policy would react to this particle. Actually, we can just let our normal UCB/KLUCB choose the policy, and then we test this worst particle against it. And perhaps we can just make this _always_ be the rule, only falling back to normal particle selection if that worst particle has already been tested against the current policy. Hopefully, because of the min-avg way that the particles produce costs, this will have enough of an effect, although I could also imagine that there might be a collection of unluckily-bad particles conspiring together to make a particular policy look bad, and this wouldn't completely account for making that situation fair. Now, to test this in isolation: We can start from the same "progessive_mcts" setup, but now we need to have particles represented. Maybe we just have good (normal) and then also bad (always get high cost) particles. We can keep track of particles... with a BTreeSet? This is currently only really a problem when there is no _true_ _bad_ decision, when one is just marginally better than another, and then a bad particle makes one randomly _seem_ bad. So to simulate _that_ scenario... we need the bad particles to be a lot worse!!
 
 MAYBE SKIP:
 A new idea: unequal layer times??? Or just try making search depth deeper?
@@ -89,6 +90,7 @@ POMCP proper? (maybe cut it)
 Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
 
 Finished tasks:
+Reform our cost function to not be discrete anywhere. use a sigmoid for safety. penalize all accelerations. the EUDM evaluation metrics can be kept on the side for reference, but not used in the cost function itself.
 Random game trees to try to justify the "cost of node = max( average of downward partcicles, min(children))" and then also of reducing variance by subtracting off the mean of previous nodes in the search and keeping track of the marginal cost for each action instead. See if this can make us more sample-efficient! Do a bit of literature search to try to see if someone else has done this before.
 We are getting into trouble because the obstacle vehicle policy waiting_done makes it not stateless, and so we are systematically mispredicting other vehicles. We want obstacle vehicles to not be extremely reckless, so they check their immediate area before _starting_ to turn. We want the ego vehicle to not be constantly scared because it has an obstacle-car model that says they may lane-change at any time. The POMDP of this would consider there to essentially be multiple policies here then, one that has checked and started turning, and one that hasn't.
 With these changes, we expect to see MCTS not do worse when we use more samples. Also use fewer samples to check for trends!!

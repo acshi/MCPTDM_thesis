@@ -28,6 +28,8 @@ pub(crate) struct Parameters {
     pub bound_mode: CostBoundMode,
     pub selection_mode: ChildSelectionMode,
     pub portion_bernoulli: f64,
+    pub bad_situation_p: f64,
+    pub prioritize_worst_particles_n: usize,
 
     pub thread_limit: usize,
     pub scenario_name: Option<String>,
@@ -38,17 +40,19 @@ pub(crate) struct Parameters {
 impl Parameters {
     fn new() -> Self {
         Self {
-            search_depth: 4,
+            search_depth: 3,
             n_actions: 4,
-            ucb_const: -3000.0,
+            ucb_const: -1.0, // -3000 for UCB
             ucbv_const: 0.001,
             ucbd_const: 1.0,
             klucb_max_cost: 4000.0,
             rng_seed: 0,
             samples_n: 64,
             bound_mode: CostBoundMode::Marginal,
-            selection_mode: ChildSelectionMode::UCB,
+            selection_mode: ChildSelectionMode::KLUCB,
             portion_bernoulli: 1.0,
+            bad_situation_p: 0.2,
+            prioritize_worst_particles_n: 1,
 
             thread_limit: 1,
             scenario_name: None,
@@ -115,6 +119,10 @@ fn create_scenarios(
                     "bound_mode" => params.bound_mode = val.parse().unwrap(),
                     "selection_mode" => params.selection_mode = val.parse().unwrap(),
                     "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
+                    "bad_situation_p" => params.bad_situation_p = val.parse().unwrap(),
+                    "prioritize_worst_particles_n" => {
+                        params.prioritize_worst_particles_n = val.parse().unwrap()
+                    }
                     "ucb_const" => params.ucb_const = val.parse().unwrap(),
                     "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
                     "ucbd.ucbd_const" => {
@@ -159,6 +167,8 @@ fn create_scenarios(
              _bound_mode_{s.bound_mode}\
              _selection_mode_{s.selection_mode}\
              _portion_bernoulli_{s.portion_bernoulli}\
+             _bad_situation_p_{s.bad_situation_p}\
+             _prioritize_worst_particles_n_{s.prioritize_worst_particles_n}\
              _ucb_const_{s.ucb_const}\
              {ucbv_const}\
              {ucbd_const}\

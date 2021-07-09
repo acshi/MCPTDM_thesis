@@ -220,6 +220,16 @@ impl SideControlTrait for PurePursuitPolicy {
         // let car_rear_x = car.x - car.length * car.theta.cos();
         // let car_rear_y = car.y - car.length * car.theta.sin();
 
+        // if !road.is_truth && trajectory.len() == 3 {
+        //     let pt1 = trajectory[1];
+        //     let pt2 = trajectory[2];
+
+        //     if pt1.y == pt2.y && (car.y() - pt1.y).abs() < 0.1 {
+        //         // short-circuit since we are going straight-enough
+        //         return 0.0;
+        //     }
+        // }
+
         let car_ref_x = car.x();
         let car_ref_y = car.y();
 

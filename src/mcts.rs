@@ -206,7 +206,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
                             }
                             ChildSelectionMode::KLUCB => {
                                 if !road.params.run_fast && mean_cost >= mcts.klucb_max_cost {
-                                    eprintln_f!("High {mean_cost=:.2}");
+                                    eprintln_f!("High {mean_cost=:.2} > {mcts.klucb_max_cost}");
                                 }
                                 let scaled_mean =
                                     (1.0 - mean_cost / mcts.klucb_max_cost).min(1.0).max(0.0);

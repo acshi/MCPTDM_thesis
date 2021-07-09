@@ -346,7 +346,7 @@ klucb_max_cost_kind = FigureKind(
     "klucb_max_cost", [1000, 2000, 4000, 8000, 16000])
 # cargo run --release rng_seed 0-1023 :: selection_mode klucb :: klucb.klucb_max_cost 1000 2000 4000 8000 16000 :: klucb.ucb_const -0.01 -0.03 -0.1 -0.3 -1 -3 -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
 # cargo run --release rng_seed 0-4095 :: selection_mode klucb :: klucb.ucb_const -0.01 -0.03 -0.1 -0.3 -1 -3 -10 -30 -100 -300 -1000 -3000 -10000 -30000 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
-if True:
+if False:
     for metric in all_metrics:
         for portion_bernoulli in [0, 1]:
             ucb_const_kind.plot(results, metric, filters=[
@@ -393,3 +393,12 @@ if False:
     # selection_mode_klucb+_ucb_const_-1_klucb_max_cost_4000_bound_mode_marginal_samples_n_64_portion_bernoulli_1:
     #   regret has mean:  71.85 and mean std dev:  2.317
     #   estimation_error has mean:  144.7 and mean std dev:   1.89
+
+prioritize_worst_particles_n_kind = FigureKind(
+    "prioritize_worst_particles_n", [0, 1, 2, 3, 4, 5])
+# cargo run --release rng_seed 0-8191 :: bad_situation_p 0.2 :: prioritize_worst_particles_n 0 1 2 3 4 5 :: selection_mode klucb :: klucb.ucb_const -1 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+if True:
+    for metric in all_metrics:
+        for portion_bernoulli in [0, 1]:
+            prioritize_worst_particles_n_kind.plot(results, metric, filters=[
+                "_selection_mode_klucb_", "_ucb_const_-1_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)

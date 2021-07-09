@@ -1,15 +1,16 @@
 mod arg_parameters;
+mod problem_scenario;
 
 use arg_parameters::{run_parallel_scenarios, Parameters};
 use fstrings::{eprintln_f, format_args_f, println_f, write_f};
 use itertools::Itertools;
+use problem_scenario::{ProblemScenario, Simulator, SituationParticle};
 use progressive_mcts::klucb::klucb_bernoulli;
 use progressive_mcts::{ChildSelectionMode, CostBoundMode};
 use rand::{
-    prelude::{IteratorRandom, SliceRandom, StdRng},
-    Rng, SeedableRng,
+    prelude::{SliceRandom, StdRng},
+    SeedableRng,
 };
-use rand_distr::{Bernoulli, Distribution, Normal};
 
 #[derive(Clone, Copy, Debug)]
 struct RunResults {
@@ -29,140 +30,6 @@ impl std::fmt::Display for RunResults {
 }
 
 #[derive(Clone)]
-enum CostDistribution {
-    Normal {
-        d: Normal<f64>,
-    },
-    Bernoulli {
-        d: Bernoulli,
-        p: f64,
-        magnitude: f64,
-    },
-}
-
-impl CostDistribution {
-    #[allow(unused)]
-    fn normal(mean: f64, std_dev: f64) -> Self {
-        Self::Normal {
-            d: Normal::new(mean, std_dev).expect("valid mean and standard deviation"),
-        }
-    }
-
-    fn bernoulli(p: f64, magnitude: f64) -> Self {
-        Self::Bernoulli {
-            d: Bernoulli::new(p).expect("probability from 0 to 1"),
-            p,
-            magnitude,
-        }
-    }
-
-    fn mean(&self) -> f64 {
-        match self {
-            CostDistribution::Normal { d } => d.mean(),
-            CostDistribution::Bernoulli { d: _, p, magnitude } => p * magnitude,
-        }
-    }
-
-    fn sample(&self, rng: &mut StdRng) -> f64 {
-        match self {
-            CostDistribution::Normal { d } => d.sample(rng).max(0.0).min(2.0 * d.mean()),
-            CostDistribution::Bernoulli { d, p: _, magnitude } => {
-                if d.sample(rng) {
-                    *magnitude
-                } else {
-                    0.0
-                }
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-struct ProblemScenario {
-    distribution: Option<CostDistribution>,
-    children: Vec<ProblemScenario>,
-    depth: u32,
-}
-
-impl ProblemScenario {
-    fn inner_new(
-        depth: u32,
-        max_depth: u32,
-        n_actions: u32,
-        portion_bernoulli: f64,
-        rng: &mut StdRng,
-    ) -> Self {
-        Self {
-            distribution: if depth == 0 {
-                None
-            } else {
-                // let mean = rng.gen_range(0.0..100.0);
-                // let std_dev = rng.gen_range(0.0..1000.0);
-
-                // Some(CostDistribution::normal(mean, std_dev))
-
-                // let p = rng.gen_range(0.0..=0.5);
-                // let mag = rng.gen_range(0.0..=1000.0);
-                // Some(CostDistribution::bernoulli(p, mag))
-                let p = (0..=10).map(|i| i as f64 * 0.1).choose(rng).unwrap();
-                let mag = 1000.0;
-
-                if rng.gen_bool(portion_bernoulli) {
-                    Some(CostDistribution::bernoulli(p, mag))
-                } else {
-                    let mean = p * mag;
-                    let std_dev = (p * (1.0 - p)).sqrt() * mag;
-                    Some(CostDistribution::normal(mean, std_dev))
-                }
-            },
-            children: if depth < max_depth {
-                (0..n_actions)
-                    .map(|_| {
-                        Self::inner_new(depth + 1, max_depth, n_actions, portion_bernoulli, rng)
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            },
-            depth,
-        }
-    }
-
-    fn new(max_depth: u32, n_actions: u32, portion_bernoulli: f64, rng: &mut StdRng) -> Self {
-        Self::inner_new(0, max_depth, n_actions, portion_bernoulli, rng)
-    }
-}
-
-#[derive(Clone)]
-struct Simulator<'a> {
-    scenario: &'a ProblemScenario,
-    cost: f64,
-}
-
-impl<'a> Simulator<'a> {
-    fn new(scenario: &'a ProblemScenario) -> Self {
-        Self {
-            scenario,
-            cost: 0.0,
-        }
-    }
-
-    fn take_step(&mut self, policy: u32, rng: &mut StdRng) {
-        let child = self
-            .scenario
-            .children
-            .get(policy as usize)
-            .expect("only take search_depth steps");
-        // .expect("only take search_depth steps");
-        let dist = child.distribution.as_ref().expect("not root-level node");
-        let cost = dist.sample(rng); //.max(0.0).min(2.0 * dist.mean());
-        self.cost += cost;
-
-        self.scenario = child;
-    }
-}
-
-#[derive(Clone)]
 struct MctsNode<'a> {
     params: &'a Parameters,
     policy_choices: &'a [u32],
@@ -175,13 +42,17 @@ struct MctsNode<'a> {
     marginal_costs: Vec<f64>,
 
     sub_nodes: Option<Vec<MctsNode<'a>>>,
-    costs: Vec<f64>,
+    costs: Vec<(f64, SituationParticle)>,
 }
 
 impl<'a> MctsNode<'a> {
     fn variance(&self) -> f64 {
         let mean = self.mean_cost();
-        self.costs.iter().map(|&c| (c - mean).powi(2)).sum::<f64>() / self.costs.len() as f64
+        self.costs
+            .iter()
+            .map(|(c, _)| (*c - mean).powi(2))
+            .sum::<f64>()
+            / self.costs.len() as f64
     }
 
     fn min_child_expected_cost(&self) -> Option<f64> {
@@ -193,7 +64,7 @@ impl<'a> MctsNode<'a> {
     }
 
     fn mean_cost(&self) -> f64 {
-        self.costs.iter().copied().sum::<f64>() / self.costs.len() as f64
+        self.costs.iter().map(|(c, _)| *c).sum::<f64>() / self.costs.len() as f64
     }
 
     fn intermediate_cost(&self) -> f64 {
@@ -254,10 +125,10 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
 
         let sub_nodes = node.sub_nodes.as_mut().unwrap();
 
-        // choose a node to recurse down into! First, try keeping the policy the same
+        // choose a node to recurse down into!
         let mut has_run_trial = false;
 
-        // then choose any unexplored branch
+        // choose any unexplored branch
         if !has_run_trial {
             let unexplored = sub_nodes
                 .iter()
@@ -267,6 +138,7 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                 .collect_vec();
             if unexplored.len() > 0 {
                 let sub_node_i = *unexplored.choose(rng).unwrap();
+                possibly_modify_particle(&mut node.costs, &sub_nodes[sub_node_i], sim);
                 trial_final_cost = Some(find_and_run_trial(&mut sub_nodes[sub_node_i], sim, rng));
                 has_run_trial = true;
             }
@@ -328,13 +200,14 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap();
 
+            possibly_modify_particle(&mut node.costs, &sub_nodes[chosen_i], sim);
             trial_final_cost = Some(find_and_run_trial(&mut sub_nodes[chosen_i], sim, rng));
         }
     }
 
     let trial_final_cost = trial_final_cost.unwrap();
 
-    node.costs.push(trial_final_cost);
+    node.costs.push((trial_final_cost, sim.particle));
     node.n_trials = node.costs.len();
 
     let expected_cost = match params.bound_mode {
@@ -353,6 +226,33 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
     trial_final_cost
 }
 
+fn possibly_modify_particle(
+    costs: &[(f64, SituationParticle)],
+    node: &MctsNode,
+    sim: &mut Simulator,
+) {
+    if sim.depth != 0 {
+        return;
+    }
+
+    let mut costs = costs.to_vec();
+    // first remove duplicate particles (since we may have already replayed some)
+    costs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    costs.dedup_by(|a, b| a.1 == b.1);
+
+    // sort descending by cost, then particle
+    costs.sort_by(|a, b| b.partial_cmp(a).unwrap());
+
+    let n = node.params.prioritize_worst_particles_n;
+    for (_, particle) in costs.iter().take(n) {
+        if node.costs.iter().all(|(_, p)| p != particle) {
+            sim.particle = *particle;
+            eprintln!("Replaying particle {:?}", sim.particle);
+            return;
+        }
+    }
+}
+
 fn print_report(scenario: &ProblemScenario, node: &MctsNode, mut true_intermediate_cost: f64) {
     if node.n_trials > 0 {
         for _ in 0..node.depth {
@@ -366,16 +266,17 @@ fn print_report(scenario: &ProblemScenario, node: &MctsNode, mut true_intermedia
             true_intermediate_cost += additional_true_cost;
         }
 
-        let intermediate_cost = node.intermediate_cost();
+        let _intermediate_cost = node.intermediate_cost();
         let marginal_cost = node.marginal_cost();
         let _variance = node.variance();
 
+        //  interm = {_intermediate_cost:6.1?}, \
+        //  {node.intermediate_costs=:.2?}, \
         eprintln_f!(
             "n_trials: {node.n_trials}, {policy=:?}, {cost=:6.1}, \
-             interm = {intermediate_cost:6.1?}, marginal = {marginal_cost:6.1?}, \
+             marginal = {marginal_cost:6.1?}, \
              true = {additional_true_cost:6.1} ({true_intermediate_cost:6.1}), \
              {node.marginal_costs=:.2?}, \
-             {node.intermediate_costs=:.2?}, \
              {node.costs=:.2?}" //,
         );
     }
@@ -453,10 +354,13 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         params.portion_bernoulli,
         &mut rng,
     );
-    let sim = Simulator::new(&scenario);
 
-    for _ in 0..params.samples_n {
-        find_and_run_trial(&mut node, &mut sim.clone(), &mut rng);
+    for i in 0..params.samples_n {
+        find_and_run_trial(
+            &mut node,
+            &mut Simulator::sample(&scenario, i, params.bad_situation_p, &mut rng),
+            &mut rng,
+        );
     }
 
     if params.print_report {

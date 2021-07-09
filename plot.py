@@ -208,22 +208,21 @@ results = []
 with open("results.cache", "r") as f:
     for line in f:
         parts = line.split()
-        if len(parts) > 10:
+        if len(parts) > 9:
             entry = dict()
             entry["name"] = parts[0]
-            entry["efficiency"] = float(parts[6])
-            entry["safety"] = float(parts[7])
-            entry["ud"] = float(parts[8])
-            entry["cc"] = float(parts[9])
-            entry["seconds"] = float(parts[10])
+            entry["efficiency"] = float(parts[5])
+            entry["safety"] = float(parts[6])
+            entry["ud"] = float(parts[7])
+            entry["cc"] = float(parts[8])
+            entry["seconds"] = float(parts[9])
 
-            cost_efficiency = float(parts[1])
-            cost_safety = float(parts[2])
-            cost_smoothness = float(parts[3])
-            cost_ud = float(parts[4])
-            cost_cc = float(parts[5])
-            cost = cost_efficiency + cost_safety + cost_smoothness + cost_ud + cost_cc
-            entry["cost"] = cost
+            entry["cost.efficiency"] = float(parts[1])
+            entry["cost.safety"] = float(parts[2])
+            entry["cost.accel"] = float(parts[3])
+            entry["cost.steer"] = float(parts[4])
+            entry["cost"] = entry["cost.efficiency"] + entry["cost.safety"] + \
+                entry["cost.accel"] + entry["cost.steer"]
 
             results.append(entry)
         else:
@@ -232,11 +231,8 @@ with open("results.cache", "r") as f:
 
 method_kind = FigureKind("method", ["fixed", "tree", "mpdm", "eudm", "mcts"])
 discount_kind = FigureKind("discount_factor", [0.6, 0.7, 0.8, 0.9, 1])
-search_depth_kind = FigureKind("search_depth", [3, 4, 5, 6, 7])
 cfb_kind = FigureKind("use_cfb", ["false", "true"])
 seconds_kind = FigureKind("seconds", None, xlim=(0, 1.0))
-
-samples_n_kind = FigureKind("samples_n", [8, 16, 32, 64, 128, 256, 512])
 
 # extra_accdec_kind = FigureKind("extra_ego_accdec_policies", [
 #                                "-1", "1", "-2", "2", "-1,1", "-2,2", "1,2", "-1,-2", "-1,-2,-3,1,2,3"])
@@ -247,28 +243,32 @@ extra_accdec_kind = FigureKind("extra_ego_accdec_policies", [
 method_mode = FigureMode("method", ["fixed", "tree", "mpdm", "eudm", "mcts"])
 cfb_mode = FigureMode("use_cfb", ["false", "true"])
 
-all_metrics = ["efficiency", "cost", "safety", "ud", "cc", "seconds"]
+plot_metrics = ["efficiency", "cost", "safety"]
+evaluate_metrics = ["efficiency", "cost", "safety", "cost.efficiency",
+                    "cost.safety", "cost.accel", "cost.steer", "seconds"]
 
-print(max([r for r in results if all(f in r["name"] for f in ["_method_mcts_", "_use_cfb_true_",
-                                                              "_smoothness_0_", "_safety_100_", "_ud_5_"])], key=lambda entry: entry["safety"]))
+find_unsafest_filters = ["_method_mcts_", "_use_cfb_false_",
+                         "_selection_mode_klucb_", "_bound_mode_marginal_", "_klucb_max_cost_30_"]
+print(max([r for r in results if all(f in r["name"]
+                                     for f in find_unsafest_filters)], key=lambda entry: entry["safety"]))
 
-if True:
+if False:
     for use_cfb in ["true"]:
         for samples_n in [8, 16, 32, 64, 128, 256, 512]:
-            evaluate_conditions(results, all_metrics, [
+            evaluate_conditions(results, plot_metrics, [
                                 ("method", "mcts"), ("search_depth", 4), ("layer_t", "2"),
                                 ("smoothness", 0), ("safety", 100), ("ud", 5),
                                 ("samples_n", samples_n), ("use_cfb", use_cfb)])
     # print("layer_t 2")
     # for use_cfb in ["false", "true"]:
     #     for search_depth in [4, 5, 6, 7]:
-    #         evaluate_conditions(results, all_metrics, [
+    #         evaluate_conditions(results, plot_metrics, [
     #                             ("method", "mcts"), ("search_depth", search_depth), ("layer_t", "2"), ("samples_n", 128), ("use_cfb", use_cfb)])
 
     print("eudm")
     for use_cfb in ["true"]:
         for search_depth in [4]:
-            evaluate_conditions(results, all_metrics, [
+            evaluate_conditions(results, plot_metrics, [
                                 ("method", "eudm"),
                                 ("smoothness", 0), ("safety", 100), ("ud", 5),
                                 ("search_depth", search_depth), ("use_cfb", use_cfb)])
@@ -277,16 +277,48 @@ if True:
 #
 # cargo run --release rng_seed 0-15 :: method tree :: tree.samples_n 1 2 4 8 :: use_cfb false true :: thread_limit 24
 
-# cargo run --release rng_seed 0-127 :: method mpdm eudm mcts :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
-# cargo run --release rng_seed 127-255 :: method mpdm eudm mcts :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
+# cargo run --release rng_seed 0-127 :: method fixed mpdm eudm mcts :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
+# cargo run --release rng_seed 127-255 :: method fixed mpdm eudm mcts :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
+samples_n_kind = FigureKind("samples_n", [8, 16, 32, 64, 128, 256, 512])
+search_depth_kind = FigureKind("search_depth", [3, 4, 5, 6, 7])
+method_mode = FigureMode("method", ["fixed", "tree", "mpdm", "eudm", "mcts"])
 if False:
-    for metric in all_metrics:
+    for metric in plot_metrics:
         # samples_n_kind.plot(results, metric, mode=cfb_mode, filters=["_method_mcts_"])
         samples_n_kind.plot(results, metric, filters=[
                             "_method_mcts_", "_use_cfb_true_", "_smoothness_0_", "_safety_100_", "_ud_5_"])
         search_depth_kind.plot(results, metric, mode=method_mode, filters=[
                                "_use_cfb_true_", "_smoothness_0_", "_safety_100_", "_ud_5_"])
         # search_depth_kind.plot(results, metric, mode=cfb_mode)
+
+# cargo run --release rng_seed 0-31 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
+# cargo run --release rng_seed 32-63 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
+klucb_max_cost_kind = FigureKind("klucb_max_cost", [10, 30, 100, 300, 1000, 3000])
+selection_mode = FigureMode("selection_mode", ["ucb", "klucb"])
+bound_mode = FigureMode("bound_mode", ["normal", "lower_bound", "marginal"])
+bound_mode_kind = FigureKind("bound_mode", ["normal", "lower_bound", "marginal"])
+if False:
+    # for metric in plot_metrics:
+    #     for use_cfb in ["false", "true"]:
+    #         filters = ["_method_mcts_", "_samples_n_32_", f"_use_cfb_{use_cfb}_"]
+    #         klucb_max_cost_kind.plot(results, metric, mode=bound_mode,
+    #                                  filters=filters + ["_selection_mode_klucb_"])
+    #         bound_mode_kind.plot(results, metric, mode=selection_mode, filters=filters)
+    for use_cfb in ["false", "true"]:
+        evaluate_conditions(results, evaluate_metrics, [
+            ("method", "mcts"),
+            ("samples_n", 32),
+            ("use_cfb", use_cfb),
+            ("bound_mode", "marginal"),
+            ("selection_mode", "ucb")])
+
+        evaluate_conditions(results, evaluate_metrics, [
+            ("method", "mcts"),
+            ("samples_n", 32),
+            ("use_cfb", use_cfb),
+            ("bound_mode", "marginal"),
+            ("selection_mode", "klucb"),
+            ("klucb_max_cost", 30)])
 
 # mcts.search_depth 4-7 :: mcts.samples_n 8 16 32 64 128 256 512
 # cargo run --release rng_seed 0-15 :: method tree :: tree.samples_n 1 2 4 8 :: use_cfb false true :: thread_limit 24
@@ -295,91 +327,18 @@ if False:
 # cargo run --release rng_seed 16-31 :: method fixed mpdm mcts eudm :: use_cfb false true :: smoothness 0 0.1 0.3 1 3 10 30 100 :: thread_limit 24
 if False:
     smoothness_kind = FigureKind("smoothness", [0, 0.1, 0.3, 1, 3, 10, 30, 100])
-    for metric in all_metrics:
+    for metric in plot_metrics:
         smoothness_kind.plot(results, metric, mode=method_mode)
 
-# cargo run --release rng_seed 0-15 :: method fixed mpdm mcts eudm :: use_cfb false true :: safety 10 30 100 300 500 1000 3000 :: thread_limit 24
-# cargo run --release rng_seed 16-31 :: method fixed mpdm mcts eudm :: use_cfb false true :: safety 10 30 100 300 500 1000 3000 :: thread_limit 24
-if False:
-    safety_kind = FigureKind("safety", [10, 30, 100, 300, 500, 1000, 3000])
-    for metric in all_metrics:
-        safety_kind.plot(results, metric, mode=method_mode, filters=["_smoothness_0_"])
-
-# cargo run --release rng_seed 0-15 :: method fixed mpdm mcts eudm :: use_cfb false true :: ud 0.1 0.3 1 3 5 10 30 100 :: thread_limit 24
-# cargo run --release rng_seed 16-31 :: method fixed mpdm mcts eudm :: use_cfb false true :: ud 0.1 0.3 1 3 5 10 30 100 :: thread_limit 24
-if False:
-    ud_kind = FigureKind("ud", [0.1, 0.3, 1, 3, 5, 10, 30, 100])
-    for metric in all_metrics:
-        ud_kind.plot(results, metric, mode=method_mode, filters=[
-                     "_smoothness_0_", "_safety_100_", "_use_cfb_false_"])
-
-# cargo run --release rng_seed 0-15 :: method fixed mpdm mcts eudm :: use_cfb false true :: cc 0.1 0.3 1 2 3 4 10 30 100 :: thread_limit 24
-# cargo run --release rng_seed 16-31 :: method fixed mpdm mcts eudm :: use_cfb false true :: cc 0.1 0.3 1 2 3 4 10 30 100 :: thread_limit 24
-if False:
-    cc_kind = FigureKind("cc", [0.1, 0.3, 1, 2, 3, 4, 10, 30, 100])
-    for metric in all_metrics:
-        cc_kind.plot(results, metric, mode=method_mode, filters=[
-                     "_smoothness_0_", "_safety_100_", "_ud_5_", "_use_cfb_true_"])
+# cargo run --release rng_seed 0-255 :: method mcts :: use_cfb false :: safety 10 15 22 33 47 68 100 150 220 330 470 680 1000 :: mcts.selection_mode klucb :: mcts.klucb_max_cost 100 150 220 330 470 680 1000 :: mcts.bound_mode marginal :: mcts.samples_n 64 :: thread_limit 24
+# cargo run --release rng_seed 256-511 :: method mcts :: use_cfb false :: safety 10 15 22 33 47 68 100 150 220 330 470 680 1000 :: mcts.selection_mode klucb :: mcts.klucb_max_cost 100 150 220 330 470 680 1000 :: mcts.bound_mode marginal :: mcts.samples_n 64 :: thread_limit 24
+if True:
+    safety_kind = FigureKind("safety", [10, 15, 22, 33, 47, 68, 100, 150, 220, 330, 470, 680, 1000])
+    for metric in plot_metrics:
+        safety_kind.plot(results, metric, filters=[
+            "_method_mcts_", "_selection_mode_klucb_", "_bound_mode_marginal_", "_use_cfb_false_"])
 
 if False:
-    for metric in all_metrics:
+    for metric in plot_metrics:
         seconds_kind.plot(results, metric, mode=method_mode)
         seconds_kind.plot(results, metric, mode=cfb_mode)
-
-# mcts_filter = ["_method_mcts_", "_use_cfb_true_"]
-# samples_mode = None  # FigureMode("samples_n", ["8", "16", "32", "64", "128", "256", "512"])
-# mcts_search_depth_kind = FigureKind("search_depth", [4, 5, 6, 7])
-# mcts_search_depth_kind.plot(results, "efficiency", mode=samples_mode, filters=mcts_filter)
-# mcts_search_depth_kind.plot(results, "cost", mode=samples_mode, filters=mcts_filter)
-# mcts_search_depth_kind.plot(results, "safety", mode=samples_mode, filters=mcts_filter)
-# mcts_search_depth_kind.plot(results, "ud", mode=samples_mode, filters=mcts_filter)
-# mcts_search_depth_kind.plot(results, "cc", mode=samples_mode, filters=mcts_filter)
-
-# search_depth_kind.plot(results, "efficiency", mode=method_mode)
-# search_depth_kind.plot(results, "cost", mode=method_mode)
-# search_depth_kind.plot(results, "safety", mode=method_mode)
-# search_depth_kind.plot(results, "ud", mode=method_mode)
-# search_depth_kind.plot(results, "cc", mode=method_mode)
-
-# search_depth_kind.plot(results, "efficiency", mode=cfb_mode)
-# search_depth_kind.plot(results, "cost", mode=cfb_mode)
-# search_depth_kind.plot(results, "safety", mode=cfb_mode)
-# search_depth_kind.plot(results, "ud", mode=cfb_mode)
-# search_depth_kind.plot(results, "cc", mode=cfb_mode)
-
-# for fs in ["_use_cfb_false_", "_use_cfb_true_"]:
-#     search_depth_kind.plot(results, "efficiency", mode=method_mode, filters=[fs])
-#     search_depth_kind.plot(results, "cost", mode=method_mode, filters=[fs])
-#     search_depth_kind.plot(results, "safety", mode=method_mode, filters=[fs])
-#     search_depth_kind.plot(results, "ud", mode=method_mode, filters=[fs])
-#     search_depth_kind.plot(results, "cc", mode=method_mode, filters=[fs])
-
-# extra_accdec_kind.plot(results, "efficiency", mode=method_mode)
-# extra_accdec_kind.plot(results, "cost", mode=method_mode)
-# extra_accdec_kind.plot(results, "safety", mode=method_mode)
-# extra_accdec_kind.plot(results, "ud", mode=method_mode)
-# extra_accdec_kind.plot(results, "cc", mode=method_mode)
-
-# extra_accdec_kind.plot(results, "efficiency", mode=cfb_mode)
-# extra_accdec_kind.plot(results, "cost", mode=cfb_mode)
-# extra_accdec_kind.plot(results, "safety", mode=cfb_mode)
-# extra_accdec_kind.plot(results, "ud", mode=cfb_mode)
-# extra_accdec_kind.plot(results, "cc", mode=cfb_mode)
-
-# discount_kind.plot(results, "cost", mode=method_mode)
-# discount_kind.plot(results, "efficiency", mode=method_mode)
-# discount_kind.plot(results, "safety", mode=method_mode)
-# discount_kind.plot(results, "ud",
-#                    ylabel="Uncomfortable deceleration per km", mode=method_mode)
-# discount_kind.plot(results, "cc",
-#                    ylabel="Curvature changes per km", mode=method_mode)
-
-# method_kind.plot(results, "cost", mode=cfb_mode)
-# method_kind.plot(results, "efficiency", mode=cfb_mode)
-# method_kind.plot(results, "safety", mode=cfb_mode)
-# method_kind.plot(
-#     results, "ud", ylabel="Uncomfortable deceleration per km", mode=cfb_mode)
-# method_kind.plot(results, "cc", "Curvature change by method",
-#                  ylabel="Curvature changes per km", mode=cfb_mode)
-# method_kind.plot(results, "seconds", title="Compute time by method",
-#                  ylabel="time (s)", mode=cfb_mode)
