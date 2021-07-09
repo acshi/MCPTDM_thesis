@@ -33,6 +33,7 @@ impl SituationParticle {
 pub enum CostDistribution {
     Normal {
         d: Normal<f64>,
+        magnitude: f64,
     },
     Bernoulli {
         d: Bernoulli,
@@ -43,9 +44,10 @@ pub enum CostDistribution {
 
 impl CostDistribution {
     #[allow(unused)]
-    pub fn normal(mean: f64, std_dev: f64) -> Self {
+    pub fn normal(magnitude: f64, mean: f64, std_dev: f64) -> Self {
         Self::Normal {
             d: Normal::new(mean, std_dev).expect("valid mean and standard deviation"),
+            magnitude,
         }
     }
 
@@ -59,7 +61,7 @@ impl CostDistribution {
 
     pub fn mean(&self) -> f64 {
         match self {
-            CostDistribution::Normal { d } => d.mean(),
+            CostDistribution::Normal { d, magnitude: _ } => d.mean(),
             CostDistribution::Bernoulli { d: _, p, magnitude } => p * magnitude,
         }
     }
@@ -67,7 +69,7 @@ impl CostDistribution {
     pub fn magnitude(&self) -> f64 {
         match self {
             // for normal, return magnitude of the corresponding bernoulli distribution
-            CostDistribution::Normal { d } => d.std_dev().powi(2) / d.mean() + d.mean(),
+            CostDistribution::Normal { d: _, magnitude } => *magnitude, // d.std_dev().powi(2) / d.mean() + d.mean(),
             CostDistribution::Bernoulli {
                 d: _,
                 p: _,
@@ -78,7 +80,9 @@ impl CostDistribution {
 
     pub fn sample(&self, rng: &mut StdRng) -> f64 {
         match self {
-            CostDistribution::Normal { d } => d.sample(rng).max(0.0).min(2.0 * d.mean()),
+            CostDistribution::Normal { d, magnitude: _ } => {
+                d.sample(rng).max(0.0).min(2.0 * d.mean())
+            }
             CostDistribution::Bernoulli { d, p: _, magnitude } => {
                 if d.sample(rng) {
                     *magnitude
@@ -129,7 +133,7 @@ impl ProblemScenario {
                     // std_dev^2 / mean^2 = (p - p^2) / p^2 = 1 / p - 1.0
                     // (std_dev^2 / mean^2 + 1.0)^-1 = p
                     // mag = (std_dev^2 / mean + mean)
-                    Some(CostDistribution::normal(mean, std_dev))
+                    Some(CostDistribution::normal(mag, mean, std_dev))
                 }
             },
             children: if depth < max_depth {
@@ -183,10 +187,10 @@ impl<'a> Simulator<'a> {
         // .expect("only take search_depth steps");
         let dist = child.distribution.as_ref().expect("not root-level node");
 
-        eprintln!(
-            "depth: {} and {:?}",
-            self.depth, self.particle.bad_situation_depth
-        );
+        // eprintln!(
+        //     "depth: {} and {:?}",
+        //     self.depth, self.particle.bad_situation_depth
+        // );
         if self.particle.bad_situation_depth == Some(self.depth) {
             self.cost += dist.magnitude() * 2.5;
         } else {

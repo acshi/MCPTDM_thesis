@@ -56,8 +56,9 @@ impl<'a> MctsNode<'a> {
     }
 
     fn min_child_expected_cost(&self) -> Option<f64> {
-        self.sub_nodes.as_ref().and_then(|n| {
-            n.iter()
+        self.sub_nodes.as_ref().and_then(|nodes| {
+            nodes
+                .iter()
                 .filter_map(|n| n.expected_cost)
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
         })
@@ -247,7 +248,7 @@ fn possibly_modify_particle(
     for (_, particle) in costs.iter().take(n) {
         if node.costs.iter().all(|(_, p)| p != particle) {
             sim.particle = *particle;
-            eprintln!("Replaying particle {:?}", sim.particle);
+            // eprintln!("Replaying particle {:?}", sim.particle);
             return;
         }
     }
