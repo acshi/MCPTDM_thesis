@@ -212,7 +212,8 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
     node.n_trials = node.costs.len();
 
     let expected_cost = match params.bound_mode {
-        CostBoundMode::Normal => node.min_child_expected_cost().unwrap_or(node.mean_cost()),
+        CostBoundMode::Normal => node.mean_cost(),
+        CostBoundMode::BubbleBest => node.min_child_expected_cost().unwrap_or(node.mean_cost()),
         CostBoundMode::LowerBound => node
             .min_child_expected_cost()
             .unwrap_or(0.0)

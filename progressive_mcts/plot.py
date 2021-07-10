@@ -396,7 +396,7 @@ if False:
 
 prioritize_worst_particles_n_kind = FigureKind(
     "prioritize_worst_particles_n", [0, 1, 2, 3, 4, 5])
-# cargo run --release rng_seed 0-8191 :: bad_situation_p 0.2 :: prioritize_worst_particles_n 0 1 2 3 4 5 :: selection_mode klucb :: klucb.ucb_const -1 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal lower_bound marginal :: thread_limit 24
+# cargo run --release rng_seed 0-8191 :: bad_situation_p 0.2 :: prioritize_worst_particles_n 0 1 2 3 4 5 :: selection_mode klucb :: klucb.ucb_const -1 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal bubble_best lower_bound marginal :: thread_limit 24
 if True:
     for metric in all_metrics:
         for portion_bernoulli in [0, 1]:

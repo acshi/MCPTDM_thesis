@@ -52,7 +52,7 @@ efficiency_low_speed_cost = 1.0
 efficiency_high_speed_cost = 0.1
 efficiency_high_speed_tolerance = 1.0
 efficiency_weight = 1.0
-safety_weight = 220.0 # was 100
+safety_weight = 150.0 # was 100
 safety_margin_low = 0.0 # bounded by lane width 3.7 - prius width 1.76 = 1.94; previous was 0.44
 safety_margin_high = 2.4
 logistic_map_low = 5.0
@@ -106,4 +106,4 @@ ucb_const = -1 # -100 for ucb
 bubble_up_max_weighted_leaf = false
 bound_mode = "marginal"
 selection_mode = "klucb"
-klucb_max_cost = 1000
+klucb_max_cost = 330
