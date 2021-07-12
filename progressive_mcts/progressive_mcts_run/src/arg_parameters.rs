@@ -30,6 +30,7 @@ pub(crate) struct Parameters {
     pub portion_bernoulli: f64,
     pub bad_situation_p: f64,
     pub prioritize_worst_particles_n: usize,
+    pub prioritize_worst_particles_z: f64,
 
     pub thread_limit: usize,
     pub scenario_name: Option<String>,
@@ -52,7 +53,8 @@ impl Parameters {
             selection_mode: ChildSelectionMode::KLUCB,
             portion_bernoulli: 1.0,
             bad_situation_p: 0.2,
-            prioritize_worst_particles_n: 1,
+            prioritize_worst_particles_n: 0,
+            prioritize_worst_particles_z: 1000.0,
 
             thread_limit: 1,
             scenario_name: None,
@@ -123,6 +125,9 @@ fn create_scenarios(
                     "prioritize_worst_particles_n" => {
                         params.prioritize_worst_particles_n = val.parse().unwrap()
                     }
+                    "prioritize_worst_particles_z" => {
+                        params.prioritize_worst_particles_z = val.parse().unwrap()
+                    }
                     "ucb_const" => params.ucb_const = val.parse().unwrap(),
                     "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
                     "ucbd.ucbd_const" => {
@@ -169,6 +174,7 @@ fn create_scenarios(
              _portion_bernoulli_{s.portion_bernoulli}\
              _bad_situation_p_{s.bad_situation_p}\
              _prioritize_worst_particles_n_{s.prioritize_worst_particles_n}\
+             _prioritize_worst_particles_z_{s.prioritize_worst_particles_z}\
              _ucb_const_{s.ucb_const}\
              {ucbv_const}\
              {ucbd_const}\

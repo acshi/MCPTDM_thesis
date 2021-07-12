@@ -237,9 +237,20 @@ fn possibly_modify_particle(
         return;
     }
 
+    // let orig_costs = costs.iter().map(|(c, _)| *c).collect_vec();
+
+    let mean = costs.iter().map(|(c, _)| *c).sum::<f64>() / costs.len() as f64;
+    let std_dev =
+        (costs.iter().map(|(c, _)| (*c - mean).powi(2)).sum::<f64>() / costs.len() as f64).sqrt();
+
     let mut costs = costs.to_vec();
     // first remove duplicate particles (since we may have already replayed some)
-    costs.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    costs.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap()
+            .then_with(|| b.0.partial_cmp(&a.0).unwrap())
+    });
+    // will keep the first occuring of any duplicates, so we keep the highest-cost copy of each particle
     costs.dedup_by(|a, b| a.1 == b.1);
 
     // sort descending by cost, then particle
@@ -249,7 +260,23 @@ fn possibly_modify_particle(
     for (_, particle) in costs.iter().take(n) {
         if node.costs.iter().all(|(_, p)| p != particle) {
             sim.particle = *particle;
-            // eprintln!("Replaying particle {:?}", sim.particle);
+            // eprintln!("(1) Replaying particle {:?}", sim.particle);
+            return;
+        }
+    }
+
+    let z = node.params.prioritize_worst_particles_z;
+    if z >= 1000.0 {
+        // take this high value to mean don't prioritize like this!
+        return;
+    }
+    for (_c, particle) in costs.iter().take_while(|(c, _)| *c - mean >= std_dev * z) {
+        if node.costs.iter().all(|(_, p)| p != particle) {
+            sim.particle = *particle;
+            // eprintln!(
+            //     "(2) Replaying particle {:?} w/ c {}, mean {}, std_dev {}",
+            //     sim.particle, _c, mean, std_dev
+            // );
             return;
         }
     }
