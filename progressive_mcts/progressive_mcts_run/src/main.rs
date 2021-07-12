@@ -321,7 +321,7 @@ fn print_report(scenario: &ProblemScenario, node: &MctsNode, mut true_intermedia
 }
 
 fn true_best_child_cost(scenario: &ProblemScenario) -> (f64, f64, usize) {
-    let add_cost = scenario.distribution.as_ref().map_or(0.0, |d| d.mean());
+    let add_cost = scenario.expected_marginal_cost();
 
     let best_child_cost = scenario
         .children
@@ -381,6 +381,8 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         params.search_depth,
         params.n_actions,
         params.portion_bernoulli,
+        params.bad_situation_p,
+        params.bad_threshold_cost,
         &mut rng,
     );
 

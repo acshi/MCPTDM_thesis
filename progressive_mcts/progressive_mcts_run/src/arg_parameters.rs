@@ -29,6 +29,7 @@ pub(crate) struct Parameters {
     pub selection_mode: ChildSelectionMode,
     pub portion_bernoulli: f64,
     pub bad_situation_p: f64,
+    pub bad_threshold_cost: f64,
     pub prioritize_worst_particles_n: usize,
     pub prioritize_worst_particles_z: f64,
 
@@ -53,6 +54,7 @@ impl Parameters {
             selection_mode: ChildSelectionMode::KLUCB,
             portion_bernoulli: 1.0,
             bad_situation_p: 0.2,
+            bad_threshold_cost: 10000.0,
             prioritize_worst_particles_n: 0,
             prioritize_worst_particles_z: 1000.0,
 
@@ -121,7 +123,6 @@ fn create_scenarios(
                     "bound_mode" => params.bound_mode = val.parse().unwrap(),
                     "selection_mode" => params.selection_mode = val.parse().unwrap(),
                     "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
-                    "bad_situation_p" => params.bad_situation_p = val.parse().unwrap(),
                     "prioritize_worst_particles_n" => {
                         params.prioritize_worst_particles_n = val.parse().unwrap()
                     }
@@ -172,7 +173,6 @@ fn create_scenarios(
              _bound_mode_{s.bound_mode}\
              _selection_mode_{s.selection_mode}\
              _portion_bernoulli_{s.portion_bernoulli}\
-             _bad_situation_p_{s.bad_situation_p}\
              _prioritize_worst_particles_n_{s.prioritize_worst_particles_n}\
              _prioritize_worst_particles_z_{s.prioritize_worst_particles_z}\
              _ucb_const_{s.ucb_const}\

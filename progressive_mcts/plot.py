@@ -397,16 +397,17 @@ if False:
 prioritize_worst_particles_n_kind = FigureKind(
     "prioritize_worst_particles_n", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
 # cargo run --release rng_seed 0-8191 :: prioritize_worst_particles_n 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 :: selection_mode klucb :: klucb.ucb_const -1 :: samples_n 64 :: portion_bernoulli 0 1 :: bound_mode normal bubble_best lower_bound marginal :: thread_limit 24
-if True:
+if False:
     for metric in all_metrics:
         for portion_bernoulli in [0, 1]:
             prioritize_worst_particles_n_kind.plot(results, metric, filters=[
                 "_selection_mode_klucb_", "_ucb_const_-1_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
 
 prioritize_worst_particles_z_kind = FigureKind(
-    "prioritize_worst_particles_z", [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5])
-# cargo run --release rng_seed 0-8191 :: prioritize_worst_particles_z 0 0.5 1 1.5 2 2.5 3 3.5 4 4.5 5 :: selection_mode klucb :: klucb.ucb_const -1 :: samples_n 64 :: portion_bernoulli 0 0.5 1 :: bound_mode normal marginal :: thread_limit 24
+    "prioritize_worst_particles_z", [-3.5, -3, -2.5, -2, -1.5, -1, -.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5])
+# cargo run --release rng_seed 0-16383 :: prioritize_worst_particles_z -3.5 -3 -2.5 -2 -1.5 -1 -.5 0 0.5 1 1.5 2 2.5 3 3.5 :: selection_mode klucb :: klucb.ucb_const -1 :: samples_n 64 :: portion_bernoulli 0 0.5 1 :: bound_mode normal marginal :: thread_limit 24
 if True:
+    bound_mode = FigureMode("bound_mode", ["normal", "marginal"])
     for metric in all_metrics:
         for portion_bernoulli in [0, 0.5, 1]:
             prioritize_worst_particles_z_kind.plot(results, metric, filters=[
