@@ -4,15 +4,22 @@ use rand::{
 };
 use rand_distr::{Bernoulli, Distribution, Normal};
 
+#[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
+pub struct SpecialParticleSituation {
+    depth: u32,
+    p: f64, // "probability" compared to thresholds
+    is_good: bool,
+}
+
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct SituationParticle {
     pub id: usize,
-    pub bad_situation: Option<(u32, f64)>,
+    pub special_situation: Option<SpecialParticleSituation>,
 }
 
 impl std::fmt::Debug for SituationParticle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({}, {:?})", self.id, self.bad_situation)
+        write!(f, "({}, {:?})", self.id, self.special_situation)
     }
 }
 
@@ -20,8 +27,12 @@ impl SituationParticle {
     pub fn sample(id: usize, p: f64, max_depth: u32, rng: &mut StdRng) -> Self {
         Self {
             id,
-            bad_situation: if rng.gen_bool(p) {
-                Some((rng.gen_range(0..max_depth), rng.gen_range(0.0..=1.0)))
+            special_situation: if rng.gen_bool(p) {
+                Some(SpecialParticleSituation {
+                    depth: rng.gen_range(0..max_depth),
+                    p: rng.gen_range(0.0..=1.0),
+                    is_good: rng.gen(),
+                })
             } else {
                 None
             },
@@ -98,7 +109,7 @@ impl CostDistribution {
 #[derive(Clone)]
 pub struct ProblemScenario {
     pub distribution: Option<CostDistribution>,
-    pub bad_situation_p: f64,
+    pub special_situation_p: f64,
     pub bad_threshold_cost: f64,
     pub bad_situation_threshold: f64,
     pub children: Vec<ProblemScenario>,
@@ -112,7 +123,7 @@ impl ProblemScenario {
         max_depth: u32,
         n_actions: u32,
         portion_bernoulli: f64,
-        bad_situation_p: f64,
+        special_situation_p: f64,
         bad_threshold_cost: f64,
         rng: &mut StdRng,
     ) -> Self {
@@ -150,7 +161,7 @@ impl ProblemScenario {
                             max_depth,
                             n_actions,
                             portion_bernoulli,
-                            bad_situation_p,
+                            special_situation_p,
                             bad_threshold_cost,
                             rng,
                         )
@@ -159,7 +170,7 @@ impl ProblemScenario {
             } else {
                 Vec::new()
             },
-            bad_situation_p,
+            special_situation_p,
             bad_threshold_cost,
             bad_situation_threshold: rng.gen_range(0.0..=1.0),
             depth,
@@ -171,7 +182,7 @@ impl ProblemScenario {
         max_depth: u32,
         n_actions: u32,
         portion_bernoulli: f64,
-        bad_situation_p: f64,
+        special_situation_p: f64,
         bad_threshold_cost: f64,
         rng: &mut StdRng,
     ) -> Self {
@@ -180,7 +191,7 @@ impl ProblemScenario {
             max_depth,
             n_actions,
             portion_bernoulli,
-            bad_situation_p,
+            special_situation_p,
             bad_threshold_cost,
             rng,
         )
@@ -188,10 +199,10 @@ impl ProblemScenario {
 
     pub fn expected_marginal_cost(&self) -> f64 {
         if let Some(d) = &self.distribution {
-            let bad_p =
-                self.bad_situation_p / self.max_depth as f64 * (1.0 - self.bad_situation_threshold);
+            let bad_p = self.special_situation_p / self.max_depth as f64
+                * (1.0 - self.bad_situation_threshold);
 
-            bad_p * self.bad_threshold_cost + (1.0 - bad_p) * d.mean()
+            bad_p * self.bad_threshold_cost * 0.5 + (1.0 - bad_p) * d.mean()
         } else {
             0.0
         }
@@ -210,12 +221,12 @@ impl<'a> Simulator<'a> {
     pub fn sample(
         scenario: &'a ProblemScenario,
         id: usize,
-        bad_situation_p: f64,
+        special_situation_p: f64,
         rng: &mut StdRng,
     ) -> Self {
         Self {
             scenario,
-            particle: SituationParticle::sample(id, bad_situation_p, scenario.max_depth, rng),
+            particle: SituationParticle::sample(id, special_situation_p, scenario.max_depth, rng),
             cost: 0.0,
             depth: 0,
         }
@@ -234,10 +245,13 @@ impl<'a> Simulator<'a> {
         //     "depth: {} and {:?}",
         //     self.depth, self.particle.bad_situation_depth
         // );
-        if self.particle.bad_situation.map_or(false, |(d, p)| {
-            d == self.depth && p >= child.bad_situation_threshold
+        if self.particle.special_situation.map_or(false, |a| {
+            a.depth == self.depth && a.p >= child.bad_situation_threshold
         }) {
-            self.cost += child.bad_threshold_cost;
+            // zero-cost when good
+            if !self.particle.special_situation.unwrap().is_good {
+                self.cost += child.bad_threshold_cost;
+            }
         } else {
             let cost = dist.sample(rng); //.max(0.0).min(2.0 * dist.mean());
             self.cost += cost;
@@ -257,18 +271,18 @@ mod tests {
 
     #[test]
     fn test_expected_marginal_cost() {
-        let full_seed = [0; 32];
+        let full_seed = [1; 32];
         let mut rng = StdRng::from_seed(full_seed);
 
-        let bad_situation_p = 0.2;
+        let special_situation_p = 0.2;
 
-        let scenario = ProblemScenario::new(4, 4, 0.5, bad_situation_p, 10000.0, &mut rng);
+        let scenario = ProblemScenario::new(4, 4, 0.5, special_situation_p, 10000.0, &mut rng);
 
         let mut mean_cost = 0.0;
         let mut costs_n = 0;
 
         for i in 0..100000 {
-            let mut sim = Simulator::sample(&scenario, i, bad_situation_p, &mut rng);
+            let mut sim = Simulator::sample(&scenario, i, special_situation_p, &mut rng);
             sim.take_step(0, &mut rng);
 
             mean_cost += sim.cost;

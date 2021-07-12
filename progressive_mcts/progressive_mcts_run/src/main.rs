@@ -381,7 +381,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         params.search_depth,
         params.n_actions,
         params.portion_bernoulli,
-        params.bad_situation_p,
+        params.special_situation_p,
         params.bad_threshold_cost,
         &mut rng,
     );
@@ -389,7 +389,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
     for i in 0..params.samples_n {
         find_and_run_trial(
             &mut node,
-            &mut Simulator::sample(&scenario, i, params.bad_situation_p, &mut rng),
+            &mut Simulator::sample(&scenario, i, params.special_situation_p, &mut rng),
             &mut rng,
         );
     }
