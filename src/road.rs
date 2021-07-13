@@ -44,6 +44,8 @@ pub struct Road {
     pub trajectory_buffer: Vec<Point2<f64>>,
     pub debug: bool,
     pub is_truth: bool,
+    pub sample_id: Option<usize>,
+    pub particle: Option<Particle>,
 }
 
 fn range_dist(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> f64 {
@@ -79,6 +81,8 @@ impl Road {
             trajectory_buffer: Vec::new(),
             params,
             is_truth: true,
+            sample_id: None,
+            particle: None,
         };
 
         // road.cars[0].preferred_vel = SPEED_DEFAULT;
@@ -163,6 +167,8 @@ impl Road {
             trajectory_buffer: Vec::new(),
             debug: self.debug,
             is_truth: false,
+            sample_id: self.sample_id,
+            particle: None,
         }
     }
 
@@ -906,6 +912,35 @@ impl Road {
                 }
             }
         }
+    }
+
+    pub fn save_particle(&mut self) {
+        self.particle = Some(Particle {
+            id: self.sample_id.unwrap(),
+            policies: self
+                .cars
+                .iter()
+                .map(|c| c.side_policy.clone().unwrap())
+                .collect(),
+        });
+    }
+}
+
+#[derive(Clone, PartialOrd)]
+pub struct Particle {
+    pub id: usize,
+    pub policies: Vec<SidePolicy>,
+}
+
+impl std::fmt::Debug for Particle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id)
+    }
+}
+
+impl PartialEq for Particle {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
     }
 }
 

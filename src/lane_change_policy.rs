@@ -11,7 +11,7 @@ use crate::{
 const TRANSITION_DIST_MIN: f64 = 1.0 * PRIUS_LENGTH;
 const TRANSITION_DIST_MAX: f64 = 100.0 * PRIUS_LENGTH;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub enum LongitudinalPolicy {
     Maintain,
     Accelerate,
@@ -19,7 +19,7 @@ pub enum LongitudinalPolicy {
     AccDec(f64),
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, PartialOrd)]
 pub struct LaneChangePolicy {
     policy_id: u32,
     target_lane_i: Option<i32>,

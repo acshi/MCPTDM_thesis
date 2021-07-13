@@ -5,21 +5,11 @@ use rand::prelude::{SliceRandom, StdRng};
 use crate::{
     arg_parameters::Parameters,
     cost::Cost,
-    mpdm::{make_obstacle_vehicle_policy_belief_states, make_policy_choices},
-    road::Road,
+    mpdm::make_policy_choices,
+    road::{Particle, Road},
     road_set_for_scenario,
     side_policies::{SidePolicy, SidePolicyTrait},
 };
-
-#[derive(Clone, Debug)]
-enum MctsNodeInner<'a> {
-    Branch {
-        sub_nodes: Option<Vec<MctsNode<'a>>>,
-    },
-    Leaf {
-        scores: Vec<Cost>,
-    },
-}
 
 #[derive(Clone)]
 struct MctsNode<'a> {
@@ -32,10 +22,11 @@ struct MctsNode<'a> {
     n_trials: usize,
     expected_cost: Option<Cost>,
 
+    costs: Vec<(Cost, Particle)>,
     intermediate_costs: Vec<Cost>,
     marginal_costs: Vec<Cost>,
 
-    inner: MctsNodeInner<'a>,
+    sub_nodes: Option<Vec<MctsNode<'a>>>,
 }
 
 impl<'a> std::fmt::Debug for MctsNode<'a> {
@@ -50,31 +41,22 @@ impl<'a> std::fmt::Debug for MctsNode<'a> {
             "#intermediate costs = {}, #marginal costs = {}, ",
             s.intermediate_costs.len(),
             s.marginal_costs.len()
-        )?;
-        write_f!(f, "{s.inner=:?})")
+        )
     }
 }
 
 impl<'a> MctsNode<'a> {
     fn min_child_expected_cost(&self) -> Option<Cost> {
-        match &self.inner {
-            MctsNodeInner::Branch {
-                sub_nodes: Some(sub_nodes),
-            } => sub_nodes
+        self.sub_nodes.as_ref().and_then(|sub_nodes| {
+            sub_nodes
                 .iter()
                 .filter_map(|n| n.expected_cost)
-                .min_by(|a, b| a.partial_cmp(b).unwrap()),
-            _ => None,
-        }
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+        })
     }
 
-    fn mean_cost(&self) -> Option<Cost> {
-        match &self.inner {
-            MctsNodeInner::Branch { sub_nodes: _ } => None,
-            MctsNodeInner::Leaf { scores } => {
-                Some(scores.iter().copied().sum::<Cost>() / scores.len() as f64)
-            }
-        }
+    fn mean_cost(&self) -> Cost {
+        self.costs.iter().map(|(c, _)| *c).sum::<Cost>() / self.costs.len() as f64
     }
 
     fn intermediate_cost(&self) -> Cost {
@@ -95,7 +77,65 @@ impl<'a> MctsNode<'a> {
     }
 }
 
-fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
+fn possibly_modify_particle(costs: &[(Cost, Particle)], node: &MctsNode, road: &mut Road) {
+    if node.depth > 1 {
+        return;
+    }
+
+    // let orig_costs = costs.iter().map(|(c, _)| *c).collect_vec();
+
+    let mean = costs.iter().map(|(c, _)| *c).sum::<Cost>().total() / costs.len() as f64;
+    let std_dev = (costs
+        .iter()
+        .map(|(c, _)| (c.total() - mean).powi(2))
+        .sum::<f64>()
+        / costs.len() as f64)
+        .sqrt();
+
+    let mut costs = costs.to_vec();
+    // first remove duplicate particles (since we may have already replayed some)
+    costs.sort_by(|a, b| {
+        b.1.partial_cmp(&a.1)
+            .unwrap()
+            .then_with(|| b.0.partial_cmp(&a.0).unwrap())
+    });
+    // will keep the first occuring of any duplicates, so we keep the highest-cost copy of each particle
+    costs.dedup_by(|a, b| a.1 == b.1);
+
+    // sort descending by cost, then particle
+    costs.sort_by(|a, b| b.partial_cmp(a).unwrap());
+
+    let z = node.params.mcts.prioritize_worst_particles_z;
+    if z >= 1000.0 {
+        // take this high value to mean don't prioritize like this!
+        return;
+    }
+    for (_c, particle) in costs
+        .iter()
+        .take_while(|(c, _)| c.total() - mean >= std_dev * z)
+    {
+        if node.costs.iter().all(|(_, p)| p != particle) {
+            for (car, policy) in road.cars.iter_mut().zip(&particle.policies).skip(1) {
+                car.side_policy = Some(policy.clone());
+            }
+            road.sample_id = Some(particle.id);
+            road.save_particle();
+            // eprintln!(
+            //     "{}: Replaying particle {} w/ c {:.2}, mean {:.2}, std_dev {:.2}: {:?}",
+            //     node.depth,
+            //     particle.id,
+            //     _c.total(),
+            //     mean,
+            //     std_dev,
+            //     node.policy,
+            //     // node.costs.iter().map(|(c, p)| (c.total(), p)).collect_vec(),
+            // );
+            return;
+        }
+    }
+}
+
+fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) -> Cost {
     let params = node.params;
     let mcts = &params.mcts;
 
@@ -115,125 +155,132 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
             .append(&mut road.make_traces(node.depth - 1, false));
     }
 
-    match &mut node.inner {
-        MctsNodeInner::Branch { sub_nodes } => {
-            let sub_depth = node.depth + 1;
+    let sub_depth = node.depth + 1;
 
-            // expand node?
-            if sub_nodes.is_none() {
-                let sub_inner = if sub_depth >= mcts.search_depth {
-                    MctsNodeInner::Leaf { scores: Vec::new() }
-                } else {
-                    MctsNodeInner::Branch { sub_nodes: None }
-                };
+    let mut trial_final_cost = None;
+    if sub_depth > mcts.search_depth {
+        trial_final_cost = Some(road.cost);
+    } else {
+        // expand node?
+        if node.sub_nodes.is_none() {
+            let policy_choices = node.policy_choices;
 
-                let policy_choices = node.policy_choices;
+            node.sub_nodes = Some(
+                policy_choices
+                    .iter()
+                    .map(|p| MctsNode {
+                        params,
+                        policy_choices,
+                        policy: Some(p.clone()),
+                        traces: Vec::new(),
+                        depth: sub_depth,
+                        n_trials: 0,
+                        expected_cost: None,
+                        costs: Vec::new(),
+                        intermediate_costs: Vec::new(),
+                        marginal_costs: Vec::new(),
+                        sub_nodes: None,
+                    })
+                    .collect(),
+            );
+        }
 
-                *sub_nodes = Some(
-                    policy_choices
-                        .iter()
-                        .map(|p| MctsNode {
-                            params,
-                            policy_choices,
-                            policy: Some(p.clone()),
-                            traces: Vec::new(),
-                            depth: sub_depth,
-                            n_trials: 0,
-                            expected_cost: None,
-                            intermediate_costs: Vec::new(),
-                            marginal_costs: Vec::new(),
-                            inner: sub_inner.clone(),
-                        })
-                        .collect(),
-                );
-            }
+        let sub_nodes = node.sub_nodes.as_mut().unwrap();
 
-            let sub_nodes = sub_nodes.as_mut().unwrap();
-
-            // choose a node to recurse down into! First, try keeping the policy the same
-            let mut has_run_trial = false;
-            if mcts.prefer_same_policy {
-                if let Some(ref policy) = node.policy {
-                    let policy_id = policy.policy_id();
-                    if sub_nodes[policy_id as usize].n_trials == 0 {
-                        find_and_run_trial(&mut sub_nodes[policy_id as usize], road, rng);
-                        has_run_trial = true;
-                    }
+        // choose a node to recurse down into! First, try keeping the policy the same
+        let mut has_run_trial = false;
+        if mcts.prefer_same_policy {
+            if let Some(ref policy) = node.policy {
+                let policy_id = policy.policy_id();
+                if sub_nodes[policy_id as usize].n_trials == 0 {
+                    possibly_modify_particle(&mut node.costs, &sub_nodes[policy_id as usize], road);
+                    trial_final_cost = Some(find_and_run_trial(
+                        &mut sub_nodes[policy_id as usize],
+                        road,
+                        rng,
+                    ));
+                    has_run_trial = true;
                 }
             }
+        }
 
-            // then choose any unexplored branch
-            if !has_run_trial {
-                if mcts.choose_random_policy {
-                    let unexplored = sub_nodes
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, n)| n.n_trials == 0)
-                        .map(|(i, _)| i)
-                        .collect_vec();
-                    if unexplored.len() > 0 {
-                        let sub_node_i = *unexplored.choose(rng).unwrap();
-                        find_and_run_trial(&mut sub_nodes[sub_node_i], road, rng);
-                        has_run_trial = true;
-                    }
-                } else {
-                    for sub_node in sub_nodes.iter_mut() {
-                        if sub_node.n_trials == 0 {
-                            find_and_run_trial(sub_node, road, rng);
-                            has_run_trial = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Everything has been explored at least once: UCB time!
-            if !has_run_trial {
-                let ln_t = (node.n_trials as f64).ln();
-                let (_best_ucb, chosen_i) = sub_nodes
+        // then choose any unexplored branch
+        if !has_run_trial {
+            if mcts.choose_random_policy {
+                let unexplored = sub_nodes
                     .iter()
                     .enumerate()
-                    .map(|(i, node)| {
-                        let mean_cost = node.expected_cost.unwrap().total();
-                        let n = node.n_trials as f64;
-                        let ln_t_over_n = ln_t / n;
-
-                        // the "index" by which the next child node is chosen
-                        let index = match mcts.selection_mode {
-                            ChildSelectionMode::UCB => {
-                                let upper_margin = mcts.ucb_const * ln_t_over_n.sqrt();
-                                mean_cost + upper_margin
-                            }
-                            ChildSelectionMode::KLUCB => {
-                                if !road.params.run_fast && mean_cost >= mcts.klucb_max_cost {
-                                    eprintln_f!("High {mean_cost=:.2} > {mcts.klucb_max_cost}");
-                                }
-                                let scaled_mean =
-                                    (1.0 - mean_cost / mcts.klucb_max_cost).min(1.0).max(0.0);
-                                -klucb_bernoulli(scaled_mean, mcts.ucb_const.abs() * ln_t_over_n)
-                            }
-                            _ => todo!(),
-                        };
-
-                        (index, i)
-                    })
-                    .min_by(|a, b| a.partial_cmp(b).unwrap())
-                    .unwrap();
-
-                find_and_run_trial(&mut sub_nodes[chosen_i], road, rng);
+                    .filter(|(_, n)| n.n_trials == 0)
+                    .map(|(i, _)| i)
+                    .collect_vec();
+                if unexplored.len() > 0 {
+                    let sub_node_i = *unexplored.choose(rng).unwrap();
+                    possibly_modify_particle(&mut node.costs, &sub_nodes[sub_node_i], road);
+                    trial_final_cost =
+                        Some(find_and_run_trial(&mut sub_nodes[sub_node_i], road, rng));
+                    has_run_trial = true;
+                }
+            } else {
+                for sub_node in sub_nodes.iter_mut() {
+                    if sub_node.n_trials == 0 {
+                        possibly_modify_particle(&mut node.costs, sub_node, road);
+                        trial_final_cost = Some(find_and_run_trial(sub_node, road, rng));
+                        has_run_trial = true;
+                        break;
+                    }
+                }
             }
-            node.n_trials = sub_nodes.iter().map(|n| n.n_trials).sum::<usize>();
         }
-        MctsNodeInner::Leaf { scores } => {
-            scores.push(road.cost);
-            node.n_trials = scores.len();
+
+        // Everything has been explored at least once: UCB time!
+        if !has_run_trial {
+            let ln_t = (node.n_trials as f64).ln();
+            let (_best_ucb, chosen_i) = sub_nodes
+                .iter()
+                .enumerate()
+                .map(|(i, node)| {
+                    let mean_cost = node.expected_cost.unwrap().total();
+                    let n = node.n_trials as f64;
+                    let ln_t_over_n = ln_t / n;
+
+                    // the "index" by which the next child node is chosen
+                    let index = match mcts.selection_mode {
+                        ChildSelectionMode::UCB => {
+                            let upper_margin = mcts.ucb_const * ln_t_over_n.sqrt();
+                            mean_cost + upper_margin
+                        }
+                        ChildSelectionMode::KLUCB => {
+                            if !road.params.run_fast && mean_cost >= mcts.klucb_max_cost {
+                                eprintln_f!("High {mean_cost=:.2} > {mcts.klucb_max_cost}");
+                            }
+                            let scaled_mean =
+                                (1.0 - mean_cost / mcts.klucb_max_cost).min(1.0).max(0.0);
+                            -klucb_bernoulli(scaled_mean, mcts.ucb_const.abs() * ln_t_over_n)
+                        }
+                        _ => todo!(),
+                    };
+
+                    (index, i)
+                })
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap();
+
+            possibly_modify_particle(&mut node.costs, &sub_nodes[chosen_i], road);
+            trial_final_cost = Some(find_and_run_trial(&mut sub_nodes[chosen_i], road, rng));
         }
     }
 
+    let trial_final_cost = trial_final_cost.unwrap();
+
+    node.costs
+        .push((trial_final_cost, road.particle.clone().unwrap()));
+    node.n_trials = node.costs.len();
+
     let expected_cost = match mcts.bound_mode {
-        CostBoundMode::Normal => node
+        CostBoundMode::Normal => node.mean_cost(),
+        CostBoundMode::BubbleBest => node
             .min_child_expected_cost()
-            .unwrap_or_else(|| node.mean_cost().expect(&format!("{:?}", node))),
+            .unwrap_or_else(|| node.mean_cost()),
         CostBoundMode::LowerBound => node
             .min_child_expected_cost()
             .unwrap_or(Cost::ZERO)
@@ -244,20 +291,17 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) {
     };
 
     node.expected_cost = Some(expected_cost);
+
+    trial_final_cost
 }
 
 fn collect_traces(node: &mut MctsNode, traces: &mut Vec<rvx::Shape>) {
     traces.append(&mut node.traces);
 
-    match &mut node.inner {
-        MctsNodeInner::Branch { sub_nodes } => {
-            if let Some(sub_nodes) = sub_nodes.as_mut() {
-                for sub_node in sub_nodes.iter_mut() {
-                    collect_traces(sub_node, traces);
-                }
-            }
+    if let Some(sub_nodes) = node.sub_nodes.as_mut() {
+        for sub_node in sub_nodes.iter_mut() {
+            collect_traces(sub_node, traces);
         }
-        MctsNodeInner::Leaf { .. } => (),
     }
 }
 
@@ -274,15 +318,10 @@ fn print_report(node: &MctsNode) {
         );
     }
 
-    match &node.inner {
-        MctsNodeInner::Branch { sub_nodes } => {
-            if let Some(ref sub_nodes) = sub_nodes {
-                for sub_node in sub_nodes.iter() {
-                    print_report(sub_node);
-                }
-            }
+    if let Some(sub_nodes) = &node.sub_nodes {
+        for sub_node in sub_nodes.iter() {
+            print_report(sub_node);
         }
-        MctsNodeInner::Leaf { .. } => (),
     }
 }
 
@@ -291,16 +330,7 @@ pub fn mcts_choose_policy(
     true_road: &Road,
     rng: &mut StdRng,
 ) -> (SidePolicy, Vec<rvx::Shape>) {
-    let mut roads = road_set_for_scenario(params, true_road, rng, params.mcts.samples_n);
-    // TODO REMOVE
-    if true_road.super_debug() {
-        if let Some(debug_car_i) = params.debug_car_i {
-            let policy_belief_choices = make_obstacle_vehicle_policy_belief_states(params);
-            for road in roads.iter_mut() {
-                road.cars[debug_car_i].side_policy = Some(policy_belief_choices[4].clone());
-            }
-        }
-    }
+    let roads = road_set_for_scenario(params, true_road, rng, params.mcts.samples_n);
 
     let policy_choices = make_policy_choices(params);
     let debug = true_road.debug
@@ -314,28 +344,26 @@ pub fn mcts_choose_policy(
         depth: 0,
         n_trials: 0,
         expected_cost: None,
+        costs: Vec::new(),
         intermediate_costs: Vec::new(),
         marginal_costs: Vec::new(),
-        inner: MctsNodeInner::Branch { sub_nodes: None },
+        sub_nodes: None,
     };
 
     for mut road in roads.into_iter().cycle().take(params.mcts.samples_n) {
+        road.save_particle();
         find_and_run_trial(&mut node, &mut road, rng);
     }
 
     let mut best_score = Cost::max_value();
     let mut best_policy = None;
-    if let MctsNodeInner::Branch { sub_nodes } = &node.inner {
-        for sub_node in sub_nodes.as_ref().unwrap().iter() {
-            if let Some(score) = sub_node.expected_cost {
-                if score < best_score {
-                    best_score = score;
-                    best_policy = sub_node.policy.clone();
-                }
+    for sub_node in node.sub_nodes.as_ref().unwrap().iter() {
+        if let Some(score) = sub_node.expected_cost {
+            if score < best_score {
+                best_score = score;
+                best_policy = sub_node.policy.clone();
             }
         }
-    } else {
-        unreachable!();
     }
 
     let mut traces = Vec::new();

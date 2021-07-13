@@ -8,7 +8,11 @@ pub struct RoadSet {
 }
 
 impl RoadSet {
-    pub fn new(roads: Vec<Road>) -> Self {
+    pub fn new(mut roads: Vec<Road>) -> Self {
+        for (i, road) in roads.iter_mut().enumerate() {
+            road.sample_id = Some(i);
+        }
+
         Self { roads }
     }
 
@@ -26,7 +30,7 @@ impl RoadSet {
             roads.push(road.sample_belief(rng));
         }
 
-        Self { roads }
+        Self::new(roads)
     }
 
     pub fn ego_policy(&self) -> &SidePolicy {

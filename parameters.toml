@@ -24,7 +24,7 @@ intelligent_driver_debug = false
 belief_debug = false
 cfb_debug = false
 obstacle_car_debug = false
-policy_report_debug = true
+policy_report_debug = false
 ego_traces_debug = true
 # debugging_scenario = 3
 
@@ -103,7 +103,7 @@ samples_n = 64
 prefer_same_policy = true
 choose_random_policy = true
 ucb_const = -1 # -100 for ucb
-bubble_up_max_weighted_leaf = false
 bound_mode = "marginal"
 selection_mode = "klucb"
 klucb_max_cost = 330
+prioritize_worst_particles_z = 1000.0

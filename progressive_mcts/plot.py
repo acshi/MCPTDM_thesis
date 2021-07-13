@@ -26,6 +26,7 @@ translations["samples_n"] = "# Samples"
 translations["bound_mode"] = "Mode to estimate cost"
 translations["normal"] = "Normal"
 translations["lower_bound"] = "Using lower bound"
+translations["bubble_best"] = "Using bubble-best"
 translations["marginal"] = "Using marginal action costs"
 translations["portion_bernoulli"] = "% cost Bernoulli (instead of Gaussian)"
 translations["ucb_const"] = "UCB constant factor"
@@ -405,9 +406,9 @@ if False:
 
 prioritize_worst_particles_z_kind = FigureKind(
     "prioritize_worst_particles_z", [-3.5, -3, -2.5, -2, -1.5, -1, -.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5])
-# cargo run --release rng_seed 0-16383 :: prioritize_worst_particles_z -3.5 -3 -2.5 -2 -1.5 -1 -.5 0 0.5 1 1.5 2 2.5 3 3.5 :: selection_mode klucb :: klucb.ucb_const -1 :: samples_n 64 :: portion_bernoulli 0 0.5 1 :: bound_mode normal marginal :: thread_limit 24
+# cargo run --release rng_seed 0-8191 :: prioritize_worst_particles_z -3.5 -3 -2.5 -2 -1.5 -1 -.5 0 0.5 1 1.5 2 2.5 3 3.5 :: selection_mode klucb :: klucb.ucb_const -1 :: samples_n 64 :: portion_bernoulli 0 0.5 1 :: bound_mode normal bubble_best lower_bound marginal :: thread_limit 24
 if True:
-    bound_mode = FigureMode("bound_mode", ["normal", "marginal"])
+    bound_mode = FigureMode("bound_mode", ["normal", "bubble_best", "lower_bound", "marginal"])
     for metric in all_metrics:
         for portion_bernoulli in [0, 0.5, 1]:
             prioritize_worst_particles_z_kind.plot(results, metric, filters=[

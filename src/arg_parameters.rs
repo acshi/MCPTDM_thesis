@@ -42,10 +42,10 @@ pub struct MctsParameters {
     pub prefer_same_policy: bool,
     pub choose_random_policy: bool,
     pub ucb_const: f64,
-    pub bubble_up_max_weighted_leaf: bool,
     pub bound_mode: CostBoundMode,
     pub selection_mode: ChildSelectionMode,
     pub klucb_max_cost: f64,
+    pub prioritize_worst_particles_z: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -245,6 +245,9 @@ fn create_scenarios(
                 "mcts.bound_mode" => params.mcts.bound_mode = val.parse().unwrap(),
                 "mcts.selection_mode" => params.mcts.selection_mode = val.parse().unwrap(),
                 "mcts.klucb_max_cost" => params.mcts.klucb_max_cost = val.parse().unwrap(),
+                "mcts.prioritize_worst_particles_z" => {
+                    params.mcts.prioritize_worst_particles_z = val.parse().unwrap()
+                }
                 _ => panic!("{} is not a valid parameter!", name),
             }
             if name_value_pairs.len() > 1 {
@@ -313,6 +316,13 @@ fn create_scenarios(
             _ => "".to_string(),
         };
 
+        let prioritize_worst_particles_z = match s.method.as_str() {
+            "mcts" => {
+                format_f!("_prioritize_worst_particles_z_{s.mcts.prioritize_worst_particles_z}")
+            }
+            _ => "".to_string(),
+        };
+
         // "smoothness" => params.cost.smoothness_weight = val.parse().unwrap(),
         // "safety" => params.cost.safety_weight = val.parse().unwrap(),
         // "ud" => params.cost.uncomfortable_dec_weight = val.parse().unwrap(),
@@ -324,7 +334,7 @@ fn create_scenarios(
              _use_cfb_{s.use_cfb}\
              _extra_ego_accdec_policies_{extra_ego_accdec}\
              {samples_n}{search_depth}{layer_forward_t}\
-             {selection_mode}{bound_mode}{kluct_max_cost}\
+             {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}\
              _max_steps_{s.max_steps}\
              _n_cars_{s.n_cars}\
              _safety_{s.cost.safety_weight}\

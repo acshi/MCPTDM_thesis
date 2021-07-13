@@ -6,7 +6,7 @@ use crate::open_loop_policy::OpenLoopPolicy;
 use crate::Road;
 
 #[enum_dispatch]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum SidePolicy {
     LaneChangePolicy,
     DelayedPolicy,

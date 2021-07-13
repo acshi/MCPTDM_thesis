@@ -5,7 +5,7 @@ use crate::{
     side_policies::{SidePolicy, SidePolicyTrait},
 };
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, PartialOrd)]
 pub struct DelayedPolicy {
     policy_a: Box<SidePolicy>,
     policy_b: Box<SidePolicy>,

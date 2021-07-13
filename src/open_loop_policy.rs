@@ -4,7 +4,7 @@ use crate::{
     side_policies::{SidePolicy, SidePolicyTrait},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct OpenLoopPolicy;
 
 impl SidePolicyTrait for OpenLoopPolicy {
