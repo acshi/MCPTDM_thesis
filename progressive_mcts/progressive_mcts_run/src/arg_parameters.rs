@@ -282,6 +282,8 @@ pub fn run_parallel_scenarios() {
             .unwrap(),
     );
 
+    let many_scenarios = n_scenarios > 50000;
+
     if n_scenarios == 1 {
         let res = run_with_parameters(scenarios[0].clone());
         println_f!("{res}");
@@ -302,12 +304,23 @@ pub fn run_parallel_scenarios() {
                 let res = run_with_parameters(scenario.clone());
 
                 n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
-                print!(
-                    "{}/{}: ",
-                    n_scenarios_completed.load(Ordering::Relaxed),
-                    n_scenarios
-                );
-                println_f!("{res}");
+                if many_scenarios {
+                    let completed = n_scenarios_completed.load(Ordering::Relaxed);
+                    if completed % 100 == 0 {
+                        println!(
+                            "{}/{}: ",
+                            n_scenarios_completed.load(Ordering::Relaxed),
+                            n_scenarios
+                        );
+                    }
+                } else {
+                    print!(
+                        "{}/{}: ",
+                        n_scenarios_completed.load(Ordering::Relaxed),
+                        n_scenarios
+                    );
+                    println_f!("{res}");
+                }
                 writeln_f!(file.lock().unwrap(), "{scenario_name} {res}").unwrap();
 
                 cumulative_results.lock().unwrap().insert(scenario_name, ());
