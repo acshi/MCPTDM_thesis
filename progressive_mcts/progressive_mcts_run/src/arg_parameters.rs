@@ -316,6 +316,7 @@ pub fn run_parallel_scenarios() {
                     "PANIC for scenario: {:?}",
                     scenario.scenario_name.as_ref().unwrap()
                 );
+                panic!();
             }
         });
     }

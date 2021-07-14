@@ -404,10 +404,9 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         .unwrap()
         .iter()
         .min_by(|a, b| {
-            a.expected_cost
-                .unwrap()
-                .partial_cmp(&b.expected_cost.unwrap())
-                .unwrap()
+            let cost_a = a.expected_cost.unwrap_or(f64::MAX);
+            let cost_b = b.expected_cost.unwrap_or(f64::MAX);
+            cost_a.partial_cmp(&cost_b).unwrap()
         })
         .unwrap()
         .policy
