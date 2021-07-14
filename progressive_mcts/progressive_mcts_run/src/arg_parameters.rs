@@ -42,8 +42,8 @@ pub(crate) struct Parameters {
 impl Parameters {
     fn new() -> Self {
         Self {
-            search_depth: 3,
-            n_actions: 4,
+            search_depth: 4,
+            n_actions: 5,
             ucb_const: -1.0, // -3000 for UCB
             ucbv_const: 0.001,
             ucbd_const: 1.0,

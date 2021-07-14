@@ -1,7 +1,4 @@
-use rand::{
-    prelude::{IteratorRandom, StdRng},
-    Rng,
-};
+use rand::{prelude::StdRng, Rng};
 use rand_distr::{Bernoulli, Distribution, Normal};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
@@ -111,7 +108,7 @@ pub struct ProblemScenario {
     pub distribution: Option<CostDistribution>,
     pub special_situation_p: f64,
     pub bad_threshold_cost: f64,
-    pub bad_situation_threshold: f64,
+    pub special_situation_threshold: f64,
     pub children: Vec<ProblemScenario>,
     pub depth: u32,
     pub max_depth: u32,
@@ -139,7 +136,7 @@ impl ProblemScenario {
                 // let p = rng.gen_range(0.0..=0.5);
                 // let mag = rng.gen_range(0.0..=1000.0);
                 // Some(CostDistribution::bernoulli(p, mag))
-                let p = (0..=10).map(|i| i as f64 * 0.1).choose(rng).unwrap();
+                let p = rng.gen_range(0.0..=1.0);
                 let mag = 1000.0;
 
                 if rng.gen_bool(portion_bernoulli) {
@@ -172,7 +169,7 @@ impl ProblemScenario {
             },
             special_situation_p,
             bad_threshold_cost,
-            bad_situation_threshold: rng.gen_range(0.0..=1.0),
+            special_situation_threshold: rng.gen_range(0.0..=1.0),
             depth,
             max_depth,
         }
@@ -199,10 +196,10 @@ impl ProblemScenario {
 
     pub fn expected_marginal_cost(&self) -> f64 {
         if let Some(d) = &self.distribution {
-            let bad_p = self.special_situation_p / self.max_depth as f64
-                * (1.0 - self.bad_situation_threshold);
+            let special_p = self.special_situation_p / self.max_depth as f64
+                * (1.0 - self.special_situation_threshold);
 
-            bad_p * self.bad_threshold_cost * 0.5 + (1.0 - bad_p) * d.mean()
+            special_p * self.bad_threshold_cost * 0.5 + (1.0 - special_p) * d.mean()
         } else {
             0.0
         }
@@ -246,7 +243,7 @@ impl<'a> Simulator<'a> {
         //     self.depth, self.particle.bad_situation_depth
         // );
         if self.particle.special_situation.map_or(false, |a| {
-            a.depth == self.depth && a.p >= child.bad_situation_threshold
+            a.depth == self.depth && a.p >= child.special_situation_threshold
         }) {
             // zero-cost when good
             if !self.particle.special_situation.unwrap().is_good {
@@ -295,7 +292,7 @@ mod tests {
 
         let c0 = &scenario.children[0];
         let d_mean = c0.distribution.as_ref().unwrap().mean();
-        eprintln_f!("{c0.bad_situation_threshold=:.4}, {d_mean=:.2}");
+        eprintln_f!("{c0.special_situation_threshold=:.4}, {d_mean=:.2}");
 
         assert_abs_diff_eq!(mean_cost, true_mean_cost, epsilon = 10.0);
     }
