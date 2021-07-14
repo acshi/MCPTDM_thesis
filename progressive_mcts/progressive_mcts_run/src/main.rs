@@ -2,6 +2,7 @@ mod arg_parameters;
 mod problem_scenario;
 
 use arg_parameters::{run_parallel_scenarios, Parameters};
+#[allow(unused)]
 use fstrings::{eprintln_f, format_args_f, println_f, write_f};
 use itertools::Itertools;
 use problem_scenario::{ProblemScenario, Simulator, SituationParticle};
@@ -414,10 +415,10 @@ fn run_with_parameters(params: Parameters) -> RunResults {
 
     let chosen_true_cost = true_best_cost(&scenario.children[chosen_policy as usize], false).0;
 
-    let (true_best_cost, true_best_policy) = true_best_cost(&scenario, false);
-    println_f!(
-        "{chosen_policy=}: {node.expected_cost=:.2?}, {chosen_true_cost=:.2}, {true_best_cost=:.2}: {true_best_policy=}"
-    );
+    let (true_best_cost, _true_best_policy) = true_best_cost(&scenario, false);
+    // println_f!(
+    //     "{chosen_policy=}: {node.expected_cost=:.2?}, {chosen_true_cost=:.2}, {true_best_cost=:.2}: {_true_best_policy=}"
+    // );
 
     RunResults {
         chosen_cost: node.expected_cost.unwrap(),
