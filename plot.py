@@ -1,207 +1,48 @@
 #!/usr/bin/python3
-import numpy as np
-from matplotlib import pyplot as plt
-import localreg
+from common_plot import FigureKind, FigureMode, print_all_parameter_values_used
 
-plt.rcParams.update({'font.size': 12})
-plt.rcParams['pdf.fonttype'] = 42
+t10s = dict()
+t10s["discount_factor"] = "Discount Factor"
+t10s["safety"] = "Safety"
+t10s["cost"] = "Cost"
+t10s["efficiency"] = "Efficiency"
+t10s["ud"] = "Uncomfortable decelerations"
+t10s["cc"] = "Curvature change"
+t10s["tree"] = "Tree"
+t10s["mpdm"] = "MPDM"
+t10s["eudm"] = "EUDM"
+t10s["mcts"] = "MCTS"
+t10s["method"] = "Method"
+t10s["false"] = "Normal"
+t10s["true"] = "CFB"
+t10s["seconds"] = "Computation time (s)"
+t10s["search_depth"] = "Search depth"
+t10s["samples_n"] = "# Samples"
+t10s[None] = "Average"
 
-show_only = False
-make_pdf_also = False
-
-save_dpi = 200
-
-formats = {"": "+-"}
-labels = {"": "normal"}
-
-translations = dict()
-translations["discount_factor"] = "Discount Factor"
-translations["safety"] = "Safety"
-translations["cost"] = "Cost"
-translations["efficiency"] = "Efficiency"
-translations["ud"] = "Uncomfortable decelerations"
-translations["cc"] = "Curvature change"
-translations["tree"] = "Tree"
-translations["mpdm"] = "MPDM"
-translations["eudm"] = "EUDM"
-translations["mcts"] = "MCTS"
-translations["method"] = "Method"
-translations["false"] = "Normal"
-translations["true"] = "CFB"
-translations["seconds"] = "Computation time (s)"
-translations["search_depth"] = "Search depth"
-translations["samples_n"] = "# Samples"
-translations[None] = "Average"
-
-
-def translate(name):
-    if name in translations:
-        return translations[name]
-    return name
-
-
-class FigureMode:
-    def __init__(self, param, values):
-        self.param = param
-        self.values = values
-
-    def filter(self, results, value):
-        return [entry for entry in results if f"_{self.param}_{value}_" in entry["name"]]
-
-
-def filter_extra(results, filters):
-    return [entry for entry in results if all([f in entry["name"] for f in filters])]
-
-
-class FigureKind:
-    def __init__(self, param, ticks=None, val_names=None, locs=None, xlim=None):
-        self.param = param
-        self.ticks = ticks
-        self.xlim = xlim
-        if val_names is None and ticks is not None:
-            self.val_names = [str(val) for val in ticks]
-        else:
-            self.val_names = val_names
-        if locs is None and ticks is not None:
-            self.locs = [i for i in range(len(ticks))]
-        else:
-            self.locs = locs
-
-    def collect_vals(self, results, result_name):
-        if self.val_names is None:
-            print(
-                f"OOPS! Tried to directly plot continuous variable {self.param} as discrete")
-            return []
-        else:
-            return [[entry[result_name] for entry in results if f"_{self.param}_{val_name}_" in entry["name"]] for val_name in self.val_names]
-
-    def _set_show_save(self, title, xlabel, ylabel, result_name, mode, filters):
-        self.ax.set_title(title)
-        self.ax.legend()
-        self.ax.set_xlabel(xlabel)
-        self.ax.set_ylabel(ylabel)
-        if self.xlim is not None:
-            self.ax.set_xlim(self.xlim)
-        if show_only:
-            plt.show()
-        else:
-            # self.fig.set_figwidth(12)
-            # self.ax.set_aspect(1.0 / self.ax.get_data_ratio() * 0.4)
-
-            mode_string = f"_{mode.param}" if mode is not None else ""
-            filters_string = "_" + \
-                "_".join([f.strip("_") for f in filters]
-                         ) if len(filters) > 0 else ""
-            file_suffix = f"_{result_name}{mode_string}{filters_string}"
-
-            self.fig.tight_layout()
-            if make_pdf_also:
-                self.fig.savefig(f"figures/by_{self.param}{file_suffix}.pdf",
-                                 bbox_inches="tight", pad_inches=0)
-            self.fig.savefig(f"figures/by_{self.param}{file_suffix}.png")
-
-    def _plot(self, results, result_name, title, xlabel, ylabel, mode, filters):
-        self.fig, self.ax = plt.subplots(dpi=100 if show_only else save_dpi)
-
-        has_any = False
-        for mode_val in mode.values if mode else [None]:
-            if mode_val is None:
-                sub_results = results
-            else:
-                sub_results = mode.filter(results, mode_val)
-            sub_results = filter_extra(sub_results, filters)
-            value_sets = self.collect_vals(sub_results, result_name)
-            if len(value_sets) == 0:
-                print(
-                    f"Data completely missing for {result_name} with {filters}")
-                continue
-            for i, vals in enumerate(value_sets):
-                if len(vals) == 0:
-                    print(
-                        f"{mode_val} has 0 data points for {self.param} '{self.ticks[i]}'")
-                    vals.append(np.nan)
-            has_any = True
-            means = [np.mean(vals) for vals in value_sets]
-            stdev_mean = [np.std(vals) / np.sqrt(len(vals))
-                          for vals in value_sets]
-            self.ax.errorbar(self.locs, means,
-                             yerr=np.array(stdev_mean), label=translate(mode_val))
-        if has_any:
-            self.ax.set_xticks(self.locs)
-            self.ax.set_xticklabels(self.ticks)
-            self._set_show_save(title, xlabel, ylabel,
-                                result_name, mode, filters)
-
-    def scatter(self, results, result_name, title, xlabel, ylabel, mode, filters):
-        self.fig, self.ax = plt.subplots(dpi=100 if show_only else save_dpi)
-
-        has_any = False
-        for mode_val in mode.values:
-            sub_results = filter_extra(
-                mode.filter(results, mode_val), filters)
-            if len(sub_results) == 0:
-                continue
-            has_any = True
-            all_xs = [entry[self.param] for entry in sub_results]
-            all_ys = [entry[result_name] for entry in sub_results]
-            self.ax.scatter(all_xs, all_ys, label=translate(mode_val))
-        if has_any:
-            self._set_show_save(title, xlabel, ylabel,
-                                result_name, mode, filters)
-
-    def localreg_estimate(self, results, result_name, title, xlabel, ylabel, mode, filters):
-        self.fig, self.ax = plt.subplots(dpi=100 if show_only else save_dpi)
-
-        has_any = False
-        for mode_val in mode.values:
-            sub_results = filter_extra(
-                mode.filter(results, mode_val), filters)
-            if len(sub_results) == 0:
-                continue
-            has_any = True
-
-            all_xs = np.array([entry[self.param] for entry in sub_results])
-            all_ys = np.array([entry[result_name] for entry in sub_results])
-
-            sorted_is = np.argsort(all_xs)
-            all_xs = all_xs[sorted_is]
-            all_ys = all_ys[sorted_is]
-
-            reg_ys = localreg.localreg(
-                all_xs, all_ys, degree=0, kernel=localreg.rbf.gaussian, width=0.02)
-
-            self.ax.scatter(all_xs, reg_ys, label=translate(mode_val))
-        if has_any:
-            self._set_show_save(title, xlabel, ylabel,
-                                result_name, mode, filters)
-
-    def plot(self, results, result_name, title=None, xlabel=None, ylabel=None, mode=None, filters=[]):
-        xlabel = xlabel or translate(self.param)
-        ylabel = ylabel or translate(result_name)
-        title = title or f"{translate(result_name)} by {translate(self.param).lower()}"
-        print(f"{self.param} {result_name}")
-
-        if self.ticks is None:
-            self.localreg_estimate(results, result_name, title, xlabel, ylabel,
-                                   mode, filters)
-        else:
-            self._plot(results, result_name, title, xlabel, ylabel,
-                       mode, filters)
-
-
-def evaluate_conditions(results, metrics, conditions):
-    results = [entry for entry in results if all(
-        [f"_{c[0]}_{c[1]}_" in entry["name"] for c in conditions])]
-    conditions_string = "_".join([f"{c[0]}_{c[1]}" for c in conditions])
-
-    print(f"{conditions_string}:")
-
-    for metric in metrics:
-        vals = [entry[metric] for entry in results]
-        mean = np.mean(vals)
-        stdev_mean = np.std(vals) / np.sqrt(len(vals))
-        print(f"  {metric} has mean: {mean:6.4} and mean std dev: {stdev_mean:6.4}")
-    print()
+# sed -i 's/_samples_n/,samples_n/g' results.cache
+# sed -i 's/_search_depth/,search_depth/g' results.cache
+# sed -i 's/_layer_t/,layer_t/g' results.cache
+# sed -i 's/_forward_t/,forward_t/g' results.cache
+# sed -i 's/_selection_mode/,selection_mode/g' results.cache
+# sed -i 's/_bound_mode/,bound_mode/g' results.cache
+# sed -i 's/_klucb_max_cost/,klucb_max_cost/g' results.cache
+# sed -i 's/_prioritize_worst_particles_z/,prioritize_worst_particles_z/g' results.cache
+# sed -i 's/_method/,method/g' results.cache
+# sed -i 's/_use_cfb/,use_cfb/g' results.cache
+# sed -i 's/_extra_ego_accdec_policies/,extra_ego_accdec_policies/g' results.cache
+# sed -i 's/_max_steps/,max_steps/g' results.cache
+# sed -i 's/_n_cars/,n_cars/g' results.cache
+# sed -i 's/_safety_margin_low/,safety_margin_low/g' results.cache
+# sed -i 's/_safety_margin_high/,safety_margin_high/g' results.cache
+# sed -i 's/_safety/,safety/g' results.cache
+# sed -i 's/_accel/,accel/g' results.cache
+# sed -i 's/_steer/,steer/g' results.cache
+# sed -i 's/_discount_factor/,discount_factor/g' results.cache
+# sed -i 's/_rng_seed/,rng_seed/g' results.cache
+# sed -i 's/^method/,method/g' results.cache
+# sed -i -E 's/(rng_seed=[0-9]{1,9})/\1,/g' results.cache
+#!!! sed -i 's/_/=/g' results.cache
 
 
 results = []
@@ -228,17 +69,19 @@ with open("results.cache", "r") as f:
         else:
             continue
 
+print_all_parameter_values_used(
+    results, [("method", "mcts"), ("bound_mode", "marginal"), ("prioritize_worst_particles_z", "1000"), ("max.rng_seed", 255)])
 
-method_kind = FigureKind("method", ["fixed", "tree", "mpdm", "eudm", "mcts"])
-discount_kind = FigureKind("discount_factor", [0.6, 0.7, 0.8, 0.9, 1])
-cfb_kind = FigureKind("use_cfb", ["false", "true"])
-seconds_kind = FigureKind("seconds", None, xlim=(0, 1.0))
+method_kind = FigureKind("method", ["fixed", "tree", "mpdm", "eudm", "mcts"], translations=t10s)
+discount_kind = FigureKind("discount_factor", [0.6, 0.7, 0.8, 0.9, 1], translations=t10s)
+cfb_kind = FigureKind("use_cfb", ["false", "true"], translations=t10s)
+seconds_kind = FigureKind("seconds", None, xlim=(0, 1.0), translations=t10s)
 
 # extra_accdec_kind = FigureKind("extra_ego_accdec_policies", [
 #                                "-1", "1", "-2", "2", "-1,1", "-2,2", "1,2", "-1,-2", "-1,-2,-3,1,2,3"])
 
 extra_accdec_kind = FigureKind("extra_ego_accdec_policies", [
-                               "", "-1,-2,1,2", "-1,-2,-3,1,2,3"])
+                               "", "-1,-2,1,2", "-1,-2,-3,1,2,3"], translations=t10s)
 
 method_mode = FigureMode("method", ["fixed", "tree", "mpdm", "eudm", "mcts"])
 cfb_mode = FigureMode("use_cfb", ["false", "true"])
@@ -249,8 +92,8 @@ evaluate_metrics = ["efficiency", "cost", "safety", "cost.efficiency",
 
 find_unsafest_filters = ["_method_mcts_", "_use_cfb_false_",
                          "_selection_mode_klucb_", "_bound_mode_marginal_", "_klucb_max_cost_30_"]
-print(max([r for r in results if all(f in r["name"]
-                                     for f in find_unsafest_filters)], key=lambda entry: entry["safety"]))
+# print(max([r for r in results if all(f in r["name"]
+#  for f in find_unsafest_filters)], key=lambda entry: entry["safety"]))
 
 if False:
     for use_cfb in ["true"]:
@@ -277,26 +120,33 @@ if False:
 #
 # cargo run --release rng_seed 0-15 :: method tree :: tree.samples_n 1 2 4 8 :: use_cfb false true :: thread_limit 24
 
-# cargo run --release rng_seed 0-127 :: method fixed mpdm eudm mcts :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
-# cargo run --release rng_seed 127-255 :: method fixed mpdm eudm mcts :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
-samples_n_kind = FigureKind("samples_n", [8, 16, 32, 64, 128, 256, 512])
-search_depth_kind = FigureKind("search_depth", [3, 4, 5, 6, 7])
-method_mode = FigureMode("method", ["fixed", "tree", "mpdm", "eudm", "mcts"])
-if False:
+# cargo run --release rng_seed 0-127 :: method fixed mpdm eudm mcts :: use_cfb false true :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
+# cargo run --release rng_seed 127-255 :: method fixed mpdm eudm mcts :: use_cfb false true :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
+samples_n_kind = FigureKind("samples_n", [8, 16, 32, 64, 128, 256, 512], translations=t10s)
+search_depth_kind = FigureKind("search_depth", [3, 4, 5, 6, 7], translations=t10s)
+method_mode = FigureMode("method", ["fixed", "mpdm", "eudm", "mcts"])
+if True:
     for metric in plot_metrics:
-        # samples_n_kind.plot(results, metric, mode=cfb_mode, filters=["_method_mcts_"])
-        samples_n_kind.plot(results, metric, filters=[
-                            "_method_mcts_", "_use_cfb_true_", "_smoothness_0_", "_safety_100_", "_ud_5_"])
-        search_depth_kind.plot(results, metric, mode=method_mode, filters=[
-                               "_use_cfb_true_", "_smoothness_0_", "_safety_100_", "_ud_5_"])
-        # search_depth_kind.plot(results, metric, mode=cfb_mode)
+        samples_n_kind.plot(results, metric, mode=cfb_mode, filters=[
+                            ("method", "mcts"), ("bound_mode", "marginal"), ("prioritize_worst_particles_z", "1000"), ("max.rng_seed", 255)])
+        for use_cfb in ["false", "true"]:
+            search_depth_kind.plot(results, metric, mode=FigureMode("method", ["eudm", "mcts"]), filters=[
+                                   ("use_cfb", use_cfb),
+                                   ("mcts.bound_mode", "marginal"),
+                                   ("mcts.prioritize_worst_particles_z", "1000"),
+                                   ("max.rng_seed", 255)])
+        search_depth_kind.plot(results, metric, mode=cfb_mode, filters=[("mcts.bound_mode", "marginal"),
+                                                                        ("mcts.prioritize_worst_particles_z", "1000"),
+                                                                        ("max.rng_seed", 255)])
 
-# cargo run --release rng_seed 0-31 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
-# cargo run --release rng_seed 32-63 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
-klucb_max_cost_kind = FigureKind("klucb_max_cost", [10, 30, 100, 300, 1000, 3000])
+        # cargo run --release rng_seed 0-31 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
+        # cargo run --release rng_seed 32-63 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
+klucb_max_cost_kind = FigureKind(
+    "klucb_max_cost", [10, 30, 100, 300, 1000, 3000], translations=t10s)
 selection_mode = FigureMode("selection_mode", ["ucb", "klucb"])
-bound_mode = FigureMode("bound_mode", ["normal", "lower_bound", "marginal"])
-bound_mode_kind = FigureKind("bound_mode", ["normal", "lower_bound", "marginal"])
+bound_mode = FigureMode("bound_mode", ["normal", "bubble_best", "lower_bound", "marginal"])
+bound_mode_kind = FigureKind(
+    "bound_mode", ["normal", "bubble_best", "lower_bound", "marginal"], translations=t10s)
 if False:
     # for metric in plot_metrics:
     #     for use_cfb in ["false", "true"]:
@@ -334,7 +184,7 @@ if False:
 # cargo run --release rng_seed 256-511 :: method mcts :: use_cfb false :: safety 10 15 22 33 47 68 100 150 220 330 470 680 1000 :: mcts.selection_mode klucb :: mcts.klucb_max_cost 100 150 220 330 470 680 1000 :: mcts.bound_mode marginal :: mcts.samples_n 64 :: thread_limit 24
 # cargo run --release rng_seed 2048-3071 :: method mcts :: use_cfb false :: safety 150 :: mcts.selection_mode klucb :: mcts.klucb_max_cost 100 150 220 330 470 680 1000 :: mcts.bound_mode marginal :: mcts.samples_n 64 :: thread_limit 24
 # cargo run --release rng_seed 3072-4095 :: method mcts :: use_cfb false :: safety 150 :: mcts.selection_mode klucb :: mcts.klucb_max_cost 100 150 220 330 470 680 1000 :: mcts.bound_mode marginal :: mcts.samples_n 64 :: thread_limit 24
-if True:
+if False:
     safety_kind = FigureKind("safety", [10, 15, 22, 33, 47, 68, 100, 150, 220, 330, 470, 680, 1000])
     klucb_max_cost_kind = FigureKind("klucb_max_cost", [100, 150, 220, 330, 470, 680, 1000])
     safety_mode = FigureMode("safety", [150, 220, 330, 470])
@@ -352,3 +202,12 @@ if False:
     for metric in plot_metrics:
         seconds_kind.plot(results, metric, mode=method_mode)
         seconds_kind.plot(results, metric, mode=cfb_mode)
+
+# cargo run --release rng_seed 0-1023 :: method mcts :: use_cfb false :: mcts.bound_mode normal bubble_best lower_bound marginal :: mcts.prioritize_worst_particles_z -3 -2 -1 0 1 2 3 1000 :: thread_limit 24
+# cargo run --release rng_seed 1024-2047 :: method mcts :: use_cfb false :: mcts.bound_mode normal bubble_best lower_bound marginal :: mcts.prioritize_worst_particles_z -3 -2 -1 0 1 2 3 1000 :: thread_limit 24
+if False:
+    prioritize_worst_particles_z_kind = FigureKind(
+        "prioritize_worst_particles_z", [-3, -2, -1, 0, 1, 2, 3, 1000])
+    for metric in plot_metrics:
+        prioritize_worst_particles_z_kind.plot(results, metric, mode=bound_mode, filters=[
+            "_method_mcts_", "_selection_mode_klucb_", "_use_cfb_false_"])

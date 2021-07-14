@@ -152,34 +152,35 @@ fn create_scenarios(
 
     for s in scenarios.iter_mut() {
         let ucbv_const = match s.selection_mode {
-            ChildSelectionMode::UCBV => format!("_ucbv_const_{}", s.ucbv_const),
+            ChildSelectionMode::UCBV => format!(",ucbv_const={}", s.ucbv_const),
             _ => "".to_string(),
         };
 
         let ucbd_const = match s.selection_mode {
-            ChildSelectionMode::UCBd => format!("_ucbd_const_{}", s.ucbd_const),
+            ChildSelectionMode::UCBd => format!(",ucbd_const={}", s.ucbd_const),
             _ => "".to_string(),
         };
 
         let klucb_max_cost = match s.selection_mode {
             ChildSelectionMode::KLUCB | ChildSelectionMode::KLUCBP => {
-                format!("_klucb_max_cost_{}", s.klucb_max_cost)
+                format!(",klucb_max_cost={}", s.klucb_max_cost)
             }
             _ => "".to_string(),
         };
 
         s.scenario_name = Some(format_f!(
-            "_samples_n_{s.samples_n}\
-             _bound_mode_{s.bound_mode}\
-             _selection_mode_{s.selection_mode}\
-             _portion_bernoulli_{s.portion_bernoulli}\
-             _prioritize_worst_particles_n_{s.prioritize_worst_particles_n}\
-             _prioritize_worst_particles_z_{s.prioritize_worst_particles_z}\
-             _ucb_const_{s.ucb_const}\
+            ",samples_n={s.samples_n}\
+             ,bound_mode={s.bound_mode}\
+             ,selection_mode={s.selection_mode}\
+             ,portion_bernoulli={s.portion_bernoulli}\
+             ,prioritize_worst_particles_n={s.prioritize_worst_particles_n}\
+             ,prioritize_worst_particles_z={s.prioritize_worst_particles_z}\
+             ,ucb_const={s.ucb_const}\
              {ucbv_const}\
              {ucbd_const}\
              {klucb_max_cost}\
-             _rng_seed_{s.rng_seed}_"
+             ,rng_seed={s.rng_seed}\
+             ,"
         ));
     }
 

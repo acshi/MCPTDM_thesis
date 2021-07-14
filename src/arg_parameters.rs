@@ -268,28 +268,28 @@ fn create_scenarios(
     for s in scenarios.iter_mut() {
         let samples_n = match s.method.as_str() {
             "fixed" => "".to_string(),
-            "tree" => format_f!("_samples_n_{s.tree.samples_n}"),
-            "mpdm" => format_f!("_samples_n_{s.mpdm.samples_n}"),
-            "eudm" => format_f!("_samples_n_{s.eudm.samples_n}"),
-            "mcts" => format_f!("_samples_n_{s.mcts.samples_n}"),
+            "tree" => format_f!(",samples_n={s.tree.samples_n}"),
+            "mpdm" => format_f!(",samples_n={s.mpdm.samples_n}"),
+            "eudm" => format_f!(",samples_n={s.eudm.samples_n}"),
+            "mcts" => format_f!(",samples_n={s.mcts.samples_n}"),
             _ => panic!("Unknown method {}", s.method),
         };
 
         let search_depth = match s.method.as_str() {
             "fixed" => "".to_string(),
-            "tree" => format_f!("_search_depth_{s.tree.search_depth}"),
+            "tree" => format_f!(",search_depth={s.tree.search_depth}"),
             "mpdm" => "".to_string(),
-            "eudm" => format_f!("_search_depth_{s.eudm.search_depth}"),
-            "mcts" => format_f!("_search_depth_{s.mcts.search_depth}"),
+            "eudm" => format_f!(",search_depth={s.eudm.search_depth}"),
+            "mcts" => format_f!(",search_depth={s.mcts.search_depth}"),
             _ => panic!("Unknown method {}", s.method),
         };
 
         let layer_forward_t = match s.method.as_str() {
             "fixed" => "".to_string(),
-            "tree" => format_f!("_layer_t_{s.tree.layer_t}"),
-            "mpdm" => format_f!("_forward_t_{s.mpdm.forward_t}"),
-            "eudm" => format_f!("_layer_t_{s.eudm.layer_t}"),
-            "mcts" => format_f!("_layer_t_{s.mcts.layer_t}"),
+            "tree" => format_f!(",layer_t={s.tree.layer_t}"),
+            "mpdm" => format_f!(",forward_t={s.mpdm.forward_t}"),
+            "eudm" => format_f!(",layer_t={s.eudm.layer_t}"),
+            "mcts" => format_f!(",layer_t={s.mcts.layer_t}"),
             _ => panic!("Unknown method {}", s.method),
         };
 
@@ -300,25 +300,25 @@ fn create_scenarios(
             .join(",");
 
         let selection_mode = match s.method.as_str() {
-            "mcts" => format_f!("_selection_mode_{s.mcts.selection_mode}"),
+            "mcts" => format_f!(",selection_mode={s.mcts.selection_mode}"),
             _ => "".to_string(),
         };
 
         let bound_mode = match s.method.as_str() {
-            "mcts" => format_f!("_bound_mode_{s.mcts.bound_mode}"),
+            "mcts" => format_f!(",bound_mode={s.mcts.bound_mode}"),
             _ => "".to_string(),
         };
 
         let kluct_max_cost = match (s.method.as_str(), s.mcts.selection_mode) {
             ("mcts", ChildSelectionMode::KLUCB) => {
-                format_f!("_klucb_max_cost_{s.mcts.klucb_max_cost}")
+                format_f!(",klucb_max_cost={s.mcts.klucb_max_cost}")
             }
             _ => "".to_string(),
         };
 
         let prioritize_worst_particles_z = match s.method.as_str() {
             "mcts" => {
-                format_f!("_prioritize_worst_particles_z_{s.mcts.prioritize_worst_particles_z}")
+                format_f!(",prioritize_worst_particles_z={s.mcts.prioritize_worst_particles_z}")
             }
             _ => "".to_string(),
         };
@@ -330,20 +330,21 @@ fn create_scenarios(
         // "safety_margin" => params.cost.safety_margin = val.parse().unwrap(),
 
         s.scenario_name = Some(format_f!(
-            "_method_{s.method}\
-             _use_cfb_{s.use_cfb}\
-             _extra_ego_accdec_policies_{extra_ego_accdec}\
+            ",method={s.method}\
+             ,use_cfb={s.use_cfb}\
+             ,extra_ego_accdec_policies={extra_ego_accdec}\
              {samples_n}{search_depth}{layer_forward_t}\
              {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}\
-             _max_steps_{s.max_steps}\
-             _n_cars_{s.n_cars}\
-             _safety_{s.cost.safety_weight}\
-             _safety_margin_low_{s.cost.safety_margin_low}\
-             _safety_margin_high_{s.cost.safety_margin_high}\
-             _accel_{s.cost.accel_weight}\
-             _steer_{s.cost.steer_weight}\
-             _discount_factor_{s.cost.discount_factor}\
-             _rng_seed_{s.rng_seed}_"
+             ,max_steps={s.max_steps}\
+             ,n_cars={s.n_cars}\
+             ,safety={s.cost.safety_weight}\
+             ,safety_margin_low={s.cost.safety_margin_low}\
+             ,safety_margin_high={s.cost.safety_margin_high}\
+             ,accel={s.cost.accel_weight}\
+             ,steer={s.cost.steer_weight}\
+             ,discount_factor={s.cost.discount_factor}\
+             ,rng_seed={s.rng_seed}\
+             ,"
         ));
     }
 
