@@ -53,7 +53,7 @@ impl Parameters {
             rng_seed: 0,
             samples_n: 64,
             bound_mode: CostBoundMode::Marginal,
-            final_choice_mode: CostBoundMode::Marginal,
+            final_choice_mode: CostBoundMode::Same,
             selection_mode: ChildSelectionMode::KLUCB,
             portion_bernoulli: 1.0,
             special_situation_p: 0.2,

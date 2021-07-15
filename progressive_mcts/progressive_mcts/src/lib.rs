@@ -8,6 +8,7 @@ pub enum CostBoundMode {
     BubbleBest,
     LowerBound,
     Marginal,
+    Same,
 }
 
 impl std::fmt::Display for CostBoundMode {
@@ -17,6 +18,7 @@ impl std::fmt::Display for CostBoundMode {
             Self::BubbleBest => write!(f, "bubble_best"),
             Self::LowerBound => write!(f, "lower_bound"),
             Self::Marginal => write!(f, "marginal"),
+            Self::Same => write!(f, "same"),
         }
     }
 }
@@ -30,6 +32,7 @@ impl std::str::FromStr for CostBoundMode {
             "bubble_best" => Ok(Self::BubbleBest),
             "lower_bound" => Ok(Self::LowerBound),
             "marginal" => Ok(Self::Marginal),
+            "same" => Ok(Self::Same),
             _ => Err(format!("Invalid CostBoundMode '{}'", s)),
         }
     }

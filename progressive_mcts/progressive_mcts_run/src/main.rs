@@ -221,6 +221,7 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
         CostBoundMode::Marginal => {
             node.min_child_expected_cost().unwrap_or(0.0) + node.marginal_cost()
         }
+        CostBoundMode::Same => panic!("Bound mode cannot be 'Same'"),
     };
 
     node.expected_cost = Some(expected_cost);
@@ -379,7 +380,13 @@ fn set_final_choice_expected_values(params: &Parameters, node: &mut MctsNode) {
         return;
     }
 
-    let expected_cost = match params.final_choice_mode {
+    let final_choice_mode = if params.final_choice_mode == CostBoundMode::Same {
+        params.bound_mode
+    } else {
+        params.final_choice_mode
+    };
+
+    let expected_cost = match final_choice_mode {
         CostBoundMode::Normal => node.mean_cost(),
         CostBoundMode::BubbleBest => node.min_child_expected_cost().unwrap_or(node.mean_cost()),
         CostBoundMode::LowerBound => node
@@ -389,6 +396,7 @@ fn set_final_choice_expected_values(params: &Parameters, node: &mut MctsNode) {
         CostBoundMode::Marginal => {
             node.min_child_expected_cost().unwrap_or(0.0) + node.marginal_cost()
         }
+        CostBoundMode::Same => panic!("Bound mode cannot be 'Same'"),
     };
 
     node.expected_cost = Some(expected_cost);
