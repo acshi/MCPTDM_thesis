@@ -61,7 +61,7 @@ impl<'a> MctsNode<'a> {
             nodes
                 .iter()
                 .filter_map(|n| n.expected_cost)
-                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .min_by(|a, b| a.partial_cmp(b).expect(&format!("{}, {}", a, b)))
         })
     }
 
@@ -83,6 +83,47 @@ impl<'a> MctsNode<'a> {
         } else {
             self.marginal_costs.iter().sum::<f64>() / self.marginal_costs.len() as f64
         }
+    }
+
+    fn compute_selection_index(&self, total_n: f64, ln_t: f64) -> f64 {
+        let params = self.params;
+        let mean_cost = self.expected_cost.unwrap();
+        let n = self.n_trials as f64;
+        let ln_t_over_n = ln_t / n;
+        let index = match params.selection_mode {
+            ChildSelectionMode::UCB => {
+                let upper_margin = params.ucb_const * ln_t_over_n.sqrt();
+                mean_cost + upper_margin
+            }
+            ChildSelectionMode::UCBV => {
+                let variance = self.variance();
+                let upper_margin = params.ucb_const
+                    * (params.ucbv_const * (variance * ln_t_over_n).sqrt() + ln_t_over_n);
+                mean_cost + upper_margin
+            }
+            ChildSelectionMode::UCBd => {
+                let a = (1.0 + n) / (n * n);
+                let b = (total_n * (1.0 + n).sqrt() / params.ucbd_const).ln();
+                let upper_margin = params.ucb_const * (a * (1.0 + 2.0 * b)).sqrt();
+                if !upper_margin.is_finite() {
+                    eprintln_f!("{a=} {b=} {upper_margin=} {n=} {total_n=}");
+                    panic!();
+                }
+                mean_cost + upper_margin
+            }
+            ChildSelectionMode::KLUCB => {
+                let scaled_mean = (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
+                let index = -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * ln_t_over_n);
+                index
+            }
+            ChildSelectionMode::KLUCBP => {
+                let scaled_mean = (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
+                let index =
+                    -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * (total_n / n).ln() / n);
+                index
+            }
+        };
+        index
     }
 }
 
@@ -154,50 +195,8 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
                 .iter()
                 .enumerate()
                 .map(|(i, node)| {
-                    let mean_cost = node.expected_cost.unwrap();
-                    let n = node.n_trials as f64;
-                    let ln_t_over_n = ln_t / n;
-
-                    let upper_bound = match params.selection_mode {
-                        ChildSelectionMode::UCB => {
-                            let upper_margin = params.ucb_const * ln_t_over_n.sqrt();
-                            mean_cost + upper_margin
-                        }
-                        ChildSelectionMode::UCBV => {
-                            let variance = node.variance();
-                            let upper_margin = params.ucb_const
-                                * (params.ucbv_const * (variance * ln_t_over_n).sqrt()
-                                    + ln_t_over_n);
-                            mean_cost + upper_margin
-                        }
-                        ChildSelectionMode::UCBd => {
-                            let a = (1.0 + n) / (n * n);
-                            let b = (total_n * (1.0 + n).sqrt() / params.ucbd_const).ln();
-                            let upper_margin = params.ucb_const * (a * (1.0 + 2.0 * b)).sqrt();
-                            if !upper_margin.is_finite() {
-                                eprintln_f!("{a=} {b=} {upper_margin=} {n=} {total_n=}");
-                                panic!();
-                            }
-                            mean_cost + upper_margin
-                        }
-                        ChildSelectionMode::KLUCB => {
-                            let scaled_mean =
-                                (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
-                            let index =
-                                -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * ln_t_over_n);
-                            index
-                        }
-                        ChildSelectionMode::KLUCBP => {
-                            let scaled_mean =
-                                (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
-                            let index = -klucb_bernoulli(
-                                scaled_mean,
-                                params.ucb_const.abs() * (total_n / n).ln() / n,
-                            );
-                            index
-                        }
-                    };
-                    (upper_bound, i)
+                    let index = node.compute_selection_index(total_n, ln_t);
+                    (index, i)
                 })
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap();
@@ -283,7 +282,12 @@ fn possibly_modify_particle(
     }
 }
 
-fn print_report(scenario: &ProblemScenario, node: &MctsNode, mut true_intermediate_cost: f64) {
+fn print_report(
+    scenario: &ProblemScenario,
+    node: &MctsNode,
+    parent_n_trials: f64,
+    mut true_intermediate_cost: f64,
+) {
     if node.n_trials > 0 {
         for _ in 0..node.depth {
             eprint!("    ");
@@ -300,14 +304,21 @@ fn print_report(scenario: &ProblemScenario, node: &MctsNode, mut true_intermedia
         let marginal_cost = node.marginal_cost();
         let _variance = node.variance();
 
+        let _costs_only = node.costs.iter().map(|(c, _)| *c).collect_vec();
+
+        let index = node.compute_selection_index(parent_n_trials, parent_n_trials.ln());
+
         //  interm = {_intermediate_cost:6.1?}, \
         //  {node.intermediate_costs=:.2?}, \
         eprintln_f!(
             "n_trials: {node.n_trials}, {policy=:?}, {cost=:6.1}, \
+             {index=:.8}, \
              marginal = {marginal_cost:6.1?}, \
              true = {additional_true_cost:6.1} ({true_intermediate_cost:6.1}), \
              {node.marginal_costs=:.2?}, \
-             {node.costs=:.2?}" //,
+             "
+             //  {_costs_only=:.2?}, \
+             //  {node.costs=:.2?}" //,
         );
     }
     if let Some(sub_nodes) = &node.sub_nodes {
@@ -315,6 +326,7 @@ fn print_report(scenario: &ProblemScenario, node: &MctsNode, mut true_intermedia
             print_report(
                 &scenario.children[policy_i],
                 sub_node,
+                node.n_trials as f64,
                 true_intermediate_cost,
             );
         }
@@ -354,6 +366,49 @@ fn true_best_cost(scenario: &ProblemScenario, debug: bool) -> (f64, usize) {
     }
 
     (total_cost, best_child_i)
+}
+
+fn set_final_choice_expected_values(params: &Parameters, node: &mut MctsNode) {
+    if let Some(sub_nodes) = &mut node.sub_nodes {
+        for sub_node in sub_nodes.iter_mut() {
+            set_final_choice_expected_values(params, sub_node);
+        }
+    }
+
+    if node.n_trials == 0 {
+        return;
+    }
+
+    let expected_cost = match params.final_choice_mode {
+        CostBoundMode::Normal => node.mean_cost(),
+        CostBoundMode::BubbleBest => node.min_child_expected_cost().unwrap_or(node.mean_cost()),
+        CostBoundMode::LowerBound => node
+            .min_child_expected_cost()
+            .unwrap_or(0.0)
+            .max(node.intermediate_cost()),
+        CostBoundMode::Marginal => {
+            node.min_child_expected_cost().unwrap_or(0.0) + node.marginal_cost()
+        }
+    };
+
+    node.expected_cost = Some(expected_cost);
+}
+
+fn get_best_policy(node: &MctsNode) -> u32 {
+    let chosen_policy = node
+        .sub_nodes
+        .as_ref()
+        .unwrap()
+        .iter()
+        .min_by(|a, b| {
+            let cost_a = a.expected_cost.unwrap_or(f64::MAX);
+            let cost_b = b.expected_cost.unwrap_or(f64::MAX);
+            cost_a.partial_cmp(&cost_b).unwrap()
+        })
+        .unwrap()
+        .policy
+        .unwrap();
+    chosen_policy
 }
 
 fn run_with_parameters(params: Parameters) -> RunResults {
@@ -396,29 +451,24 @@ fn run_with_parameters(params: Parameters) -> RunResults {
     }
 
     if params.print_report {
-        print_report(&scenario, &node, 0.0);
+        print_report(&scenario, &node, node.n_trials as f64, 0.0);
     }
 
-    let chosen_policy = node
-        .sub_nodes
-        .as_ref()
-        .unwrap()
-        .iter()
-        .min_by(|a, b| {
-            let cost_a = a.expected_cost.unwrap_or(f64::MAX);
-            let cost_b = b.expected_cost.unwrap_or(f64::MAX);
-            cost_a.partial_cmp(&cost_b).unwrap()
-        })
-        .unwrap()
-        .policy
-        .unwrap();
+    set_final_choice_expected_values(&params, &mut node);
+    let chosen_policy = get_best_policy(&node);
+
+    // if params.print_report {
+    //     print_report(&scenario, &node, 0.0);
+    // }
 
     let chosen_true_cost = true_best_cost(&scenario.children[chosen_policy as usize], false).0;
 
     let (true_best_cost, _true_best_policy) = true_best_cost(&scenario, false);
-    // println_f!(
-    //     "{chosen_policy=}: {node.expected_cost=:.2?}, {chosen_true_cost=:.2}, {true_best_cost=:.2}: {_true_best_policy=}"
-    // );
+
+    if params.is_single_run {
+        println_f!(
+        "{chosen_policy=}: {node.expected_cost=:.2?}, {chosen_true_cost=:.2}, {true_best_cost=:.2}: {_true_best_policy=}");
+    }
 
     RunResults {
         chosen_cost: node.expected_cost.unwrap(),

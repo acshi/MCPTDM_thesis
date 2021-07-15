@@ -26,6 +26,7 @@ pub(crate) struct Parameters {
     pub samples_n: usize,
 
     pub bound_mode: CostBoundMode,
+    pub final_choice_mode: CostBoundMode,
     pub selection_mode: ChildSelectionMode,
     pub portion_bernoulli: f64,
     pub special_situation_p: f64,
@@ -37,6 +38,7 @@ pub(crate) struct Parameters {
     pub scenario_name: Option<String>,
 
     pub print_report: bool,
+    pub is_single_run: bool,
 }
 
 impl Parameters {
@@ -51,6 +53,7 @@ impl Parameters {
             rng_seed: 0,
             samples_n: 64,
             bound_mode: CostBoundMode::Marginal,
+            final_choice_mode: CostBoundMode::Marginal,
             selection_mode: ChildSelectionMode::KLUCB,
             portion_bernoulli: 1.0,
             special_situation_p: 0.2,
@@ -62,6 +65,7 @@ impl Parameters {
             scenario_name: None,
 
             print_report: false,
+            is_single_run: false,
         }
     }
 }
@@ -121,6 +125,7 @@ fn create_scenarios(
                     "thread_limit" => params.thread_limit = val.parse().unwrap(),
                     "samples_n" => params.samples_n = val.parse().unwrap(),
                     "bound_mode" => params.bound_mode = val.parse().unwrap(),
+                    "final_choice_mode" => params.final_choice_mode = val.parse().unwrap(),
                     "selection_mode" => params.selection_mode = val.parse().unwrap(),
                     "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
                     "prioritize_worst_particles_n" => {
@@ -171,6 +176,7 @@ fn create_scenarios(
         s.scenario_name = Some(format_f!(
             ",samples_n={s.samples_n}\
              ,bound_mode={s.bound_mode}\
+             ,final_choice_mode={s.final_choice_mode}\
              ,selection_mode={s.selection_mode}\
              ,portion_bernoulli={s.portion_bernoulli}\
              ,prioritize_worst_particles_n={s.prioritize_worst_particles_n}\
@@ -285,7 +291,9 @@ pub fn run_parallel_scenarios() {
     let many_scenarios = n_scenarios > 50000;
 
     if n_scenarios == 1 {
-        let res = run_with_parameters(scenarios[0].clone());
+        let mut single_scenario = scenarios[0].clone();
+        single_scenario.is_single_run = true;
+        let res = run_with_parameters(single_scenario);
         println_f!("{res}");
     } else {
         scenarios.par_iter().for_each(|scenario| {
@@ -306,7 +314,7 @@ pub fn run_parallel_scenarios() {
                 n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
                 if many_scenarios {
                     let completed = n_scenarios_completed.load(Ordering::Relaxed);
-                    if completed % 100 == 0 {
+                    if completed % 500 == 0 {
                         println!(
                             "{}/{}: ",
                             n_scenarios_completed.load(Ordering::Relaxed),

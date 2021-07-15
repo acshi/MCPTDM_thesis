@@ -53,5 +53,9 @@ mod tests {
 
         assert_abs_diff_eq!(klucb_bernoulli(0.1, 0.4), 0.519475, epsilon = 1e-6);
         assert_abs_diff_eq!(klucb_bernoulli(0.1, 0.9), 0.734714, epsilon = 1e-6);
+
+        assert_abs_diff_eq!(klucb_bernoulli(1.0, 0.0), 1.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(klucb_bernoulli(1.0, 0.5), 1.0, epsilon = 1e-6);
+        assert_abs_diff_eq!(klucb_bernoulli(1.0, 1.0), 1.0, epsilon = 1e-6);
     }
 }
