@@ -12,10 +12,10 @@ plt.rcParams["axes.prop_cycle"] = plt.cycler(
 
 
 show_only = False
-make_pdf_also = False
+make_pdf_also = True
 
 save_dpi = 300
-figure_zoom = 1.75
+figure_zoom = 1.25
 
 
 class FigureMode:
@@ -23,35 +23,52 @@ class FigureMode:
         self.param = param
         self.values = values
 
-    def filter(self, results, value):
-        return [entry for entry in results if f",{self.param}={value}," in entry["name"]]
+    def matches(self, params, value):
+        return params[self.param] == str(value)
+
+    # def filter(self, results, value):
+    #     return [entry for entry in results if self.matches(entry["params"], value)]
 
 
-def filter_match(name, filter):
+def filter_match(params, filter):
     param = filter[0]
     param_value = filter[1]
     param_split = param.split(".")
 
     if len(param_split) == 2:
         if param_split[0] == "max":
-            name_value = float(name.split(f"{param_split[1]}=")[1].split(",")[0])
+            name_value = float(params[param_split[1]])
             return name_value <= param_value
-        elif not f",method={param_split[0]}," in name:
+        elif params["method"] != param_split[0]:
             return True
         param = param_split[1]
 
-    return f",{param}={param_value}," in name
+    return params[param] == str(param_value)
 
 
 def filter_extra(results, filters):
-    return [entry for entry in results if all(filter_match(entry["name"], f) for f in filters)]
+    return [entry for entry in results if all(filter_match(entry["params"], f) for f in filters)]
 
 
 def short_num_string(val):
     scientific = f"{val:.1e}".replace(".0e", "e").replace(
         "+", "").replace("e0", "e").replace("e-0", "e-")
     normal = str(val)
-    return scientific if len(scientific) < len(normal) else normal
+    # same-length means scientific is shorter in most fonts because of '.' being short
+    return scientific if len(scientific) <= len(normal) else normal
+
+
+def decapitalize_word(word):
+    if len(word) == 0:
+        return word
+    if word.isupper():
+        return word
+    return word[0].lower() + word[1:]
+
+
+def decapitalize(title):
+    words = title.split(" ")
+    return " ".join(decapitalize_word(word) for word in words)
 
 
 class FigureKind:
@@ -78,17 +95,29 @@ class FigureKind:
             return self.translations[name]
         return name
 
-    def collect_vals(self, results, result_name):
+    def filter_entry(self, entry, filters, mode=None, mode_val=None):
+        params = entry["params"]
+        return self.param in params and all(filter_match(params, f) for f in filters) and (mode is None or mode.matches(params, mode_val))
+
+    def collect_vals(self, results, result_name, filters, mode=None, mode_val=None):
         if self.val_names is None:
             print(
                 f"OOPS! Tried to directly plot continuous variable {self.param} as discrete")
             return []
         else:
-            return [[entry[result_name] for entry in results if f",{self.param}={val_name}," in entry["name"]] for val_name in self.val_names]
+            val_sets = [list() for _ in range(len(self.val_names))]
+            for entry in results:
+                if not self.filter_entry(entry, filters, mode, mode_val):
+                    continue
+                for (i, val_name) in enumerate(self.val_names):
+                    if entry["params"][self.param] == val_name:
+                        val_sets[i].append(entry[result_name])
+            return val_sets
 
     def _set_show_save(self, title, xlabel, ylabel, result_name, mode, filters):
         self.ax.set_title(title)
-        self.ax.legend()
+        if mode is not None:
+            self.ax.legend()
         self.ax.set_xlabel(xlabel)
         self.ax.set_ylabel(ylabel)
         if self.xlim is not None:
@@ -107,7 +136,7 @@ class FigureKind:
 
             self.fig.tight_layout()
             if make_pdf_also:
-                self.fig.savefig(f"figures/by_{self.param}{file_suffix}.pdf",
+                self.fig.savefig(f"figures/pdf/by_{self.param}{file_suffix}.pdf",
                                  bbox_inches="tight", pad_inches=0)
             self.fig.savefig(f"figures/by_{self.param}{file_suffix}.png")
 
@@ -116,12 +145,10 @@ class FigureKind:
 
         has_any = False
         for mode_val in mode.values if mode else [None]:
-            if mode_val is None:
-                sub_results = results
-            else:
-                sub_results = mode.filter(results, mode_val)
-            sub_results = filter_extra(sub_results, filters)
-            value_sets = self.collect_vals(sub_results, result_name)
+            import time
+            start_time = time.time()
+            value_sets = self.collect_vals(results, result_name, filters, mode, mode_val)
+            print(f"collect_vals took {time.time() - start_time:.2} seconds")
             if len(value_sets) == 0:
                 print(
                     f"Data completely missing for {result_name} with {filters}")
@@ -192,7 +219,10 @@ class FigureKind:
     def plot(self, results, result_name, title=None, xlabel=None, ylabel=None, mode=None, filters=[]):
         xlabel = xlabel or self.translate(self.param)
         ylabel = ylabel or self.translate(result_name)
-        title = title or f"{self.translate(result_name)} by {self.translate(self.param).lower()}"
+        if title is None:
+            title = f"{self.translate(result_name)} by {decapitalize(self.translate(self.param))}"
+            if mode is not None:
+                title = f"{title} and {decapitalize(self.translate(mode.param))}"
         print(f"{self.param} {result_name}")
 
         if self.ticks is None:
@@ -220,13 +250,8 @@ def evaluate_conditions(results, metrics, filters):
 def print_all_parameter_values_used(results, filters):
     param_sets = {}
     for result in filter_extra(results, filters):
-        name = result["name"]
-        for pair in name.split(","):
-            if len(pair) == 0:
-                continue
-            pair_parts = pair.split("=")
-            param_name = pair_parts[0]
-            param_value = pair_parts[1]
+        for param_name in result["params"]:
+            param_value = result["params"][param_name]
             if param_name not in param_sets:
                 param_sets[param_name] = {}
             param_set = param_sets[param_name]
@@ -243,3 +268,15 @@ def print_all_parameter_values_used(results, filters):
 
         print(f"{param_name} has values: " +
               ", ".join(f"({param_value}: {param_set[param_value]})" for param_value in param_set))
+
+
+def parse_parameters(parameters_string):
+    parsed_params = {}
+    for param in parameters_string.split(","):
+        if len(param) == 0:
+            continue
+        param_split = param.split("=")
+        param_name = param_split[0]
+        param_value = param_split[1]
+        parsed_params[param_name] = param_value
+    return parsed_params

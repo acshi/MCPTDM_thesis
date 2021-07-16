@@ -288,6 +288,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
         CostBoundMode::Marginal => {
             node.min_child_expected_cost().unwrap_or(Cost::ZERO) + node.marginal_cost()
         }
+        CostBoundMode::Same => unimplemented!(),
     };
 
     node.expected_cost = Some(expected_cost);
