@@ -8,6 +8,7 @@ use itertools::Itertools;
 use problem_scenario::{ProblemScenario, Simulator, SituationParticle};
 use progressive_mcts::klucb::klucb_bernoulli;
 use progressive_mcts::{ChildSelectionMode, CostBoundMode};
+use rand::Rng;
 use rand::{
     prelude::{SliceRandom, StdRng},
     SeedableRng,
@@ -122,6 +123,8 @@ impl<'a> MctsNode<'a> {
                     -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * (total_n / n).ln() / n);
                 index
             }
+            ChildSelectionMode::Uniform => n,
+            ChildSelectionMode::Random => unimplemented!("No index for Random ChildSelectionMode"),
         };
         index
     }
@@ -189,17 +192,22 @@ fn find_and_run_trial(node: &mut MctsNode, sim: &mut Simulator, rng: &mut StdRng
 
         // Everything has been explored at least once: UCB time!
         if !has_run_trial {
-            let total_n = node.n_trials as f64;
-            let ln_t = total_n.ln();
-            let (_best_ucb, chosen_i) = sub_nodes
-                .iter()
-                .enumerate()
-                .map(|(i, node)| {
-                    let index = node.compute_selection_index(total_n, ln_t);
-                    (index, i)
-                })
-                .min_by(|a, b| a.partial_cmp(b).unwrap())
-                .unwrap();
+            let chosen_i = if params.selection_mode == ChildSelectionMode::Random {
+                rng.gen_range(0..sub_nodes.len())
+            } else {
+                let total_n = node.n_trials as f64;
+                let ln_t = total_n.ln();
+                let (_best_ucb, chosen_i) = sub_nodes
+                    .iter()
+                    .enumerate()
+                    .map(|(i, node)| {
+                        let index = node.compute_selection_index(total_n, ln_t);
+                        (index, i)
+                    })
+                    .min_by(|a, b| a.partial_cmp(b).unwrap())
+                    .unwrap();
+                chosen_i
+            };
 
             possibly_modify_particle(&mut node.costs, &sub_nodes[chosen_i], sim);
             trial_final_cost = Some(find_and_run_trial(&mut sub_nodes[chosen_i], sim, rng));

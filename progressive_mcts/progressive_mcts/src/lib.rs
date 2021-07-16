@@ -47,6 +47,8 @@ pub enum ChildSelectionMode {
     KLUCB,
     #[serde(rename = "klucb+")]
     KLUCBP,
+    Random,
+    Uniform,
 }
 
 impl std::fmt::Display for ChildSelectionMode {
@@ -57,6 +59,8 @@ impl std::fmt::Display for ChildSelectionMode {
             Self::UCBd => write!(f, "ucbd"),
             Self::KLUCB => write!(f, "klucb"),
             Self::KLUCBP => write!(f, "klucb+"),
+            Self::Random => write!(f, "random"),
+            Self::Uniform => write!(f, "uniform"),
         }
     }
 }
@@ -71,6 +75,8 @@ impl std::str::FromStr for ChildSelectionMode {
             "ucbd" => Ok(Self::UCBd),
             "klucb" => Ok(Self::KLUCB),
             "klucb+" => Ok(Self::KLUCBP),
+            "random" => Ok(Self::Random),
+            "uniform" => Ok(Self::Uniform),
             _ => Err(format!("Invalid ChildSelectionMode '{}'", s)),
         }
     }
