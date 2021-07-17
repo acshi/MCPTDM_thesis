@@ -31,7 +31,6 @@ pub(crate) struct Parameters {
     pub portion_bernoulli: f64,
     pub special_situation_p: f64,
     pub bad_threshold_cost: f64,
-    pub prioritize_worst_particles_n: usize,
     pub prioritize_worst_particles_z: f64,
 
     pub thread_limit: usize,
@@ -58,7 +57,6 @@ impl Parameters {
             portion_bernoulli: 1.0,
             special_situation_p: 0.2,
             bad_threshold_cost: 10000.0,
-            prioritize_worst_particles_n: 0,
             prioritize_worst_particles_z: 1000.0,
 
             thread_limit: 1,
@@ -128,9 +126,6 @@ fn create_scenarios(
                     "final_choice_mode" => params.final_choice_mode = val.parse().unwrap(),
                     "selection_mode" => params.selection_mode = val.parse().unwrap(),
                     "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
-                    "prioritize_worst_particles_n" => {
-                        params.prioritize_worst_particles_n = val.parse().unwrap()
-                    }
                     "prioritize_worst_particles_z" => {
                         params.prioritize_worst_particles_z = val.parse().unwrap()
                     }
@@ -179,7 +174,7 @@ fn create_scenarios(
              ,final_choice_mode={s.final_choice_mode}\
              ,selection_mode={s.selection_mode}\
              ,portion_bernoulli={s.portion_bernoulli}\
-             ,prioritize_worst_particles_n={s.prioritize_worst_particles_n}\
+             ,prioritize_worst_particles_n=0\
              ,prioritize_worst_particles_z={s.prioritize_worst_particles_z}\
              ,ucb_const={s.ucb_const}\
              {ucbv_const}\

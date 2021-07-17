@@ -140,7 +140,7 @@ class FigureKind:
                                  bbox_inches="tight", pad_inches=0)
             self.fig.savefig(f"figures/by_{self.param}{file_suffix}.png")
 
-    def _plot(self, results, result_name, title, xlabel, ylabel, mode, filters):
+    def _plot(self, results, result_name, title, xlabel, ylabel, mode, filters, extra_lines):
         self.fig, self.ax = plt.subplots(dpi=100 if show_only else save_dpi)
 
         has_any = False
@@ -167,6 +167,15 @@ class FigureKind:
                           for vals in value_sets]
             self.ax.errorbar(self.locs, means,
                              yerr=np.array(stdev_mean), label=self.translate(mode_val))
+
+        for extra_line in extra_lines:
+            line_label = extra_line[0]
+            line_filters = extra_line[1]
+            vals = [entry[result_name] for entry in filter_extra(results, line_filters)]
+            mean = np.mean(vals)
+            stdev_mean = np.std(vals) / np.sqrt(len(vals))
+            self.ax.errorbar([self.locs[0], self.locs[-1]], [mean, mean],
+                             yerr=[stdev_mean, stdev_mean], label=line_label)
         if has_any:
             self.ax.set_xticks(self.locs)
             self.ax.set_xticklabels(self.tick_labels)
@@ -216,7 +225,7 @@ class FigureKind:
             self._set_show_save(title, xlabel, ylabel,
                                 result_name, mode, filters)
 
-    def plot(self, results, result_name, title=None, xlabel=None, ylabel=None, mode=None, filters=[]):
+    def plot(self, results, result_name, title=None, xlabel=None, ylabel=None, mode=None, filters=[], extra_lines=[]):
         xlabel = xlabel or self.translate(self.param)
         ylabel = ylabel or self.translate(result_name)
         if title is None:
@@ -230,7 +239,7 @@ class FigureKind:
                                    mode, filters)
         else:
             self._plot(results, result_name, title, xlabel, ylabel,
-                       mode, filters)
+                       mode, filters, extra_lines)
 
 
 def evaluate_conditions(results, metrics, filters):
@@ -239,12 +248,17 @@ def evaluate_conditions(results, metrics, filters):
 
     print(f"{filters_string}:")
 
+    return_results = []
+
     for metric in metrics:
         vals = [entry[metric] for entry in results]
         mean = np.mean(vals)
         stdev_mean = np.std(vals) / np.sqrt(len(vals))
         print(f"  {metric} has mean: {mean:6.4} and mean std dev: {stdev_mean:6.4}")
+        return_results.append(mean)
     print()
+
+    return return_results
 
 
 def print_all_parameter_values_used(results, filters):

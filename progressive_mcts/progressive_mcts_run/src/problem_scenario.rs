@@ -8,10 +8,30 @@ pub struct SpecialParticleSituation {
     is_good: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Clone, Copy)]
 pub struct SituationParticle {
     pub id: usize,
     pub special_situation: Option<SpecialParticleSituation>,
+}
+
+impl Eq for SituationParticle {}
+
+impl PartialOrd for SituationParticle {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
+impl PartialEq for SituationParticle {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl std::hash::Hash for SituationParticle {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_usize(self.id);
+    }
 }
 
 impl std::fmt::Debug for SituationParticle {
