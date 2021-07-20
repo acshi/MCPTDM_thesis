@@ -4,6 +4,7 @@ pub struct Cost {
     pub safety: f64,
     pub accel: f64,
     pub steer: f64,
+    pub plan_change: f64,
 
     pub discount: f64,
     pub discount_factor: f64,
@@ -14,6 +15,7 @@ pub struct Cost {
 impl std::fmt::Display for Cost {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = self.normalize();
+        // explicitly choosing to NOT include plan_change here, since it is really just for helping EUDM make decisions
         write_f!(
             f,
             "{s.efficiency:8.2} {s.safety:8.2} {s.accel:8.2} {s.steer:8.2}"
@@ -26,7 +28,7 @@ impl std::fmt::Debug for Cost {
         let s = self;
         write_f!(
             f,
-            "eff: {s.efficiency:8.2}, safe: {s.safety:8.2}, accel: {s.accel:8.2}, steer: {s.steer:8.2}"
+            "eff: {s.efficiency:8.2}, safe: {s.safety:8.2}, accel: {s.accel:8.2}, steer: {s.steer:8.2}, plan_change: {s.plan_change:8.2}"
         )
     }
 }
@@ -40,6 +42,7 @@ impl Cost {
             safety: 0.0,
             accel: 0.0,
             steer: 0.0,
+            plan_change: 0.0,
             discount: 1.0,
             discount_factor,
             weight,
@@ -52,6 +55,7 @@ impl Cost {
             safety: 0.0,
             accel: 0.0,
             steer: 0.0,
+            plan_change: 0.0,
             discount: 1.0,
             discount_factor: 1.0,
             weight: 1.0,
@@ -64,6 +68,7 @@ impl Cost {
             safety: self.safety * self.weight,
             accel: self.accel * self.weight,
             steer: self.steer * self.weight,
+            plan_change: self.plan_change * self.weight,
             discount: 1.0,
             discount_factor: 1.0,
             weight: 1.0,
@@ -71,7 +76,7 @@ impl Cost {
     }
 
     fn unweighted_total(&self) -> f64 {
-        self.efficiency + self.safety + self.accel + self.steer
+        self.efficiency + self.safety + self.accel + self.steer + self.plan_change
     }
 
     pub fn total(&self) -> f64 {
@@ -132,6 +137,7 @@ impl std::ops::Mul<f64> for Cost {
             safety: self.safety * rhs,
             accel: self.accel * rhs,
             steer: self.steer * rhs,
+            plan_change: self.plan_change * rhs,
             discount: self.discount,
             discount_factor: self.discount_factor,
             weight: self.weight,
@@ -148,6 +154,7 @@ impl std::ops::Div<f64> for Cost {
             safety: self.safety / rhs,
             accel: self.accel / rhs,
             steer: self.steer / rhs,
+            plan_change: self.plan_change / rhs,
             discount: self.discount,
             discount_factor: self.discount_factor,
             weight: self.weight,
@@ -161,6 +168,7 @@ impl std::ops::DivAssign<f64> for Cost {
         self.safety /= rhs;
         self.accel /= rhs;
         self.steer /= rhs;
+        self.plan_change /= rhs;
     }
 }
 
@@ -175,6 +183,7 @@ impl std::ops::Add for Cost {
             safety: a.safety + b.safety,
             accel: a.accel + b.accel,
             steer: a.steer + b.steer,
+            plan_change: a.plan_change + b.plan_change,
             discount: self.discount,
             discount_factor: self.discount_factor,
             weight: 1.0,
@@ -193,6 +202,7 @@ impl std::ops::Sub for Cost {
             safety: a.safety - b.safety,
             accel: a.accel - b.accel,
             steer: a.steer - b.steer,
+            plan_change: a.plan_change - b.plan_change,
             discount: self.discount,
             discount_factor: self.discount_factor,
             weight: 1.0,

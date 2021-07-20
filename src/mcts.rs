@@ -77,8 +77,14 @@ impl<'a> MctsNode<'a> {
     }
 }
 
-fn possibly_modify_particle(costs: &[(Cost, Particle)], node: &MctsNode, road: &mut Road) {
+fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &MctsNode, road: &mut Road) {
     if node.depth > 1 {
+        return;
+    }
+
+    let z = node.params.mcts.prioritize_worst_particles_z;
+    if z >= 1000.0 {
+        // take this high value to mean don't prioritize like this!
         return;
     }
 
@@ -92,29 +98,30 @@ fn possibly_modify_particle(costs: &[(Cost, Particle)], node: &MctsNode, road: &
         / costs.len() as f64)
         .sqrt();
 
-    let mut costs = costs.to_vec();
-    // first remove duplicate particles (since we may have already replayed some)
-    costs.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap()
-            .then_with(|| b.0.partial_cmp(&a.0).unwrap())
-    });
-    // will keep the first occuring of any duplicates, so we keep the highest-cost copy of each particle
-    costs.dedup_by(|a, b| a.1 == b.1);
+    // let mut costs = costs.to_vec();
+    // // first remove duplicate particles (since we may have already replayed some)
+    // costs.sort_by(|a, b| {
+    //     b.1.partial_cmp(&a.1)
+    //         .unwrap()
+    //         .then_with(|| b.0.partial_cmp(&a.0).unwrap())
+    // });
+    // // will keep the first occuring of any duplicates, so we keep the highest-cost copy of each particle
+    // costs.dedup_by(|a, b| a.1 == b.1);
 
     // sort descending by cost, then particle
     costs.sort_by(|a, b| b.partial_cmp(a).unwrap());
 
-    let z = node.params.mcts.prioritize_worst_particles_z;
-    if z >= 1000.0 {
-        // take this high value to mean don't prioritize like this!
-        return;
+    // up to samples_n possible particles
+    let mut node_seen_particles = vec![false; node.params.mcts.samples_n];
+    for (_, particle) in node.costs.iter() {
+        node_seen_particles[particle.id] = true;
     }
+
     for (_c, particle) in costs
         .iter()
         .take_while(|(c, _)| c.total() - mean >= std_dev * z)
     {
-        if node.costs.iter().all(|(_, p)| p != particle) {
+        if !node_seen_particles[particle.id] {
             for (car, policy) in road.cars.iter_mut().zip(&particle.policies).skip(1) {
                 car.side_policy = Some(policy.clone());
             }
@@ -330,7 +337,7 @@ pub fn mcts_choose_policy(
     params: &Parameters,
     true_road: &Road,
     rng: &mut StdRng,
-) -> (SidePolicy, Vec<rvx::Shape>) {
+) -> (Option<SidePolicy>, Vec<rvx::Shape>) {
     let roads = road_set_for_scenario(params, true_road, rng, params.mcts.samples_n);
 
     let policy_choices = make_policy_choices(params);
@@ -374,5 +381,5 @@ pub fn mcts_choose_policy(
         print_report(&node);
     }
 
-    (best_policy.unwrap(), traces)
+    (best_policy, traces)
 }

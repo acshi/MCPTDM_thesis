@@ -40,19 +40,21 @@ impl DelayedPolicy {
         }
     }
 
-    fn check_for_switch(&mut self, road: &Road) {
+    fn check_for_switch(&mut self, road: &Road, dt: f64) {
         let start_time = *self.start_time.get_or_insert(road.t);
         self.time_until_switch = (start_time + self.delay_time - road.t).max(0.0);
-        if self.time_until_switch <= 0.001 {
+        if self.time_until_switch < dt {
             self.has_switched = true;
         }
     }
 }
 
 impl SidePolicyTrait for DelayedPolicy {
-    fn choose_target_lane(&mut self, road: &Road, car_i: usize) -> i32 {
-        self.check_for_switch(road);
+    fn precheck(&mut self, road: &Road, dt: f64) {
+        self.check_for_switch(road, dt);
+    }
 
+    fn choose_target_lane(&mut self, road: &Road, car_i: usize) -> i32 {
         if self.has_switched {
             self.policy_b.choose_target_lane(road, car_i)
         } else {
@@ -61,8 +63,6 @@ impl SidePolicyTrait for DelayedPolicy {
     }
 
     fn choose_trajectory(&mut self, road: &Road, car_i: usize, traj: &mut Vec<Point2<f64>>) {
-        self.check_for_switch(road);
-
         if self.has_switched {
             self.policy_b.choose_trajectory(road, car_i, traj)
         } else {
@@ -71,8 +71,6 @@ impl SidePolicyTrait for DelayedPolicy {
     }
 
     fn choose_follow_time(&mut self, road: &crate::Road, car_i: usize) -> f64 {
-        self.check_for_switch(road);
-
         if self.has_switched {
             self.policy_b.choose_follow_time(road, car_i)
         } else {
@@ -81,8 +79,6 @@ impl SidePolicyTrait for DelayedPolicy {
     }
 
     fn choose_vel(&mut self, road: &Road, car_i: usize) -> f64 {
-        self.check_for_switch(road);
-
         if self.has_switched {
             self.policy_b.choose_vel(road, car_i)
         } else {
@@ -91,7 +87,7 @@ impl SidePolicyTrait for DelayedPolicy {
     }
 
     fn policy_id(&self) -> u32 {
-        let mut policy_id = 100;
+        let mut policy_id = 100 + self.delay_time as u32 * 1000;
         if self.has_switched {
             policy_id += 10 * self.policy_b.policy_id();
         } else {

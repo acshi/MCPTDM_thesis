@@ -68,7 +68,7 @@ impl Belief {
             let pred_finished_waiting = predict_finished_waiting(road, car_i);
 
             if road.super_debug()
-                && road.params.obstacle_car_debug
+                && road.params.belief_debug
                 && road.params.debug_car_i == Some(car_i)
             {
                 eprintln_f!("{pred_lane=} {pred_long=:?} {pred_finished_waiting=}");
@@ -105,13 +105,13 @@ impl Belief {
                         }
                         // the chance that the vehicle effectively skips checking for it to be clear before turning
                         // in practice, this would more mean that noise prevented us from telling that they already started turning(?)
-                        if !pred_finished_waiting && !wait_for_clear {
+                        if wants_lane_change && !pred_finished_waiting && !wait_for_clear {
                             prob *= bparams.skips_waiting_prob;
                         }
                         belief.push(prob);
 
                         if road.super_debug()
-                            && road.params.obstacle_car_debug
+                            && road.params.belief_debug
                             && road.params.debug_car_i == Some(car_i)
                         {
                             eprintln_f!("{road.timesteps}: {car_i=} {lane_i=} {long_policy=:?} {wait_for_clear=}: {prob=:.2}, would: {would_lane_change}, wants: {wants_lane_change}, will: {will_lane_change}");
@@ -120,9 +120,9 @@ impl Belief {
                 }
             }
             if LongitudinalPolicy::Decelerate == pred_long {
-                belief.push(1.0);
+                belief.push(bparams.decelerate_prior_prob);
             } else {
-                belief.push(road.params.belief.different_longitudinal_prob);
+                belief.push(bparams.decelerate_prior_prob * bparams.different_longitudinal_prob);
             }
 
             normalize(belief);

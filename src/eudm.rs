@@ -16,7 +16,7 @@ fn dcp_tree_search(
     policy_choices: &[SidePolicy],
     roads: RoadSet,
     debug: bool,
-) -> (SidePolicy, Vec<rvx::Shape>) {
+) -> (Option<SidePolicy>, Vec<rvx::Shape>) {
     let mut traces = Vec::new();
 
     let unchanged_policy = roads.ego_policy();
@@ -28,11 +28,6 @@ fn dcp_tree_search(
             "{}: EUDM DCP-Tree search policies and costs, starting with policy {}",
             roads.timesteps(),
             unchanged_policy.policy_id(),
-        );
-        eprintln!(
-            "Starting from base costs: {:7.2?} = {:7.2}",
-            roads.cost(),
-            roads.cost().total()
         );
     }
 
@@ -57,8 +52,7 @@ fn dcp_tree_search(
         if debug {
             let unchanged_policy_id = unchanged_policy.policy_id();
             eprintln_f!(
-                "Unchanged: {unchanged_policy_id}: {:7.2?} = {:7.2}",
-                cost,
+                "Unchanged: {unchanged_policy_id}: {cost:7.2?} = {:7.2}, {unchanged_policy:?}",
                 cost.total()
             );
         }
@@ -83,7 +77,8 @@ fn dcp_tree_search(
         if switch_depth == eudm.search_depth {
             if debug {
                 eprintln_f!(
-                    "{switch_depth=}: {operating_policy:?}: {:7.2?} = {:7.2}",
+                    "switch time: {}, {operating_policy:?}: {:7.2?} = {:7.2}",
+                    switch_depth as f64 * eudm.layer_t,
                     init_policy_roads.cost(),
                     init_policy_roads.cost().total()
                 );
@@ -101,7 +96,7 @@ fn dcp_tree_search(
                 if sub_policy.policy_id() == operating_policy.policy_id() {
                     continue;
                 }
-                roads.set_ego_policy(sub_policy);
+                roads.set_ego_policy_not_switched(sub_policy);
 
                 for depth_level in switch_depth..eudm.search_depth {
                     if depth_level < 4 {
@@ -115,7 +110,8 @@ fn dcp_tree_search(
 
                 if debug {
                     eprintln_f!(
-                        "{switch_depth=} to {i}: {sub_policy:?}: {:7.2?} = {:7.2}",
+                        "switch time: {}, to {i}: {sub_policy:?}: {:7.2?} = {:7.2}",
+                        switch_depth as f64 * eudm.layer_t,
                         roads.cost(),
                         roads.cost().total()
                     );
@@ -190,18 +186,18 @@ fn dcp_tree_search(
             );
         }
         (
-            SidePolicy::DelayedPolicy(DelayedPolicy::new(
+            Some(SidePolicy::DelayedPolicy(DelayedPolicy::new(
                 operating_policy.clone(),
                 best_sub_policy.clone(),
                 eudm.layer_t * best_switch_depth as f64,
-            )),
+            ))),
             traces,
         )
     } else {
         if debug {
             eprintln_f!("Choose to keep unchanged policy with {best_cost=:.2}");
         }
-        (unchanged_policy.clone(), traces)
+        (None, traces)
     }
 }
 
@@ -209,7 +205,7 @@ pub fn dcp_tree_choose_policy(
     params: &Parameters,
     true_road: &Road,
     rng: &mut StdRng,
-) -> (SidePolicy, Vec<rvx::Shape>) {
+) -> (Option<SidePolicy>, Vec<rvx::Shape>) {
     let roads = road_set_for_scenario(params, true_road, rng, params.eudm.samples_n);
     let debug = params.policy_report_debug
         && true_road.debug

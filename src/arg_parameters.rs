@@ -71,6 +71,8 @@ pub struct CostParameters {
     pub accel_weight: f64,
     pub steer_weight: f64,
 
+    pub plan_change_weight: f64,
+
     pub discount_factor: f64,
 }
 
@@ -86,7 +88,7 @@ pub struct CfbParameters {
     pub key_vehicle_base_dist: f64,
     pub key_vehicle_dist_time: f64,
     pub uncertainty_threshold: f64,
-    pub dangerous_delta_threshold: f64,
+    pub risky_delta_threshold: f64,
     pub max_n_for_cartesian_product: usize,
     pub dt: f64,
     pub horizon_t: f64,
@@ -99,6 +101,7 @@ pub struct CfbParameters {
 pub struct BeliefParameters {
     pub different_lane_prob: f64,
     pub different_longitudinal_prob: f64,
+    pub decelerate_prior_prob: f64,
     pub accelerate_delta_vel_thresh: f64,
     pub accelerate_ahead_dist_thresh: f64,
     pub decelerate_vel_thresh: f64,
@@ -119,6 +122,7 @@ pub struct Parameters {
     pub n_cars: usize,
     pub method: String,
     pub use_cfb: bool,
+    pub policies_wait_for_clear: bool,
     pub extra_ego_accdec_policies: Vec<f64>,
 
     pub physics_dt: f64,
@@ -242,6 +246,7 @@ fn create_scenarios(
                 "safety_margin_high" => params.cost.safety_margin_high = val.parse().unwrap(),
                 "accel" => params.cost.accel_weight = val.parse().unwrap(),
                 "steer" => params.cost.steer_weight = val.parse().unwrap(),
+                "plan_change" => params.cost.plan_change_weight = val.parse().unwrap(),
                 "mcts.bound_mode" => params.mcts.bound_mode = val.parse().unwrap(),
                 "mcts.selection_mode" => params.mcts.selection_mode = val.parse().unwrap(),
                 "mcts.klucb_max_cost" => params.mcts.klucb_max_cost = val.parse().unwrap(),
@@ -342,6 +347,7 @@ fn create_scenarios(
              ,safety_margin_high={s.cost.safety_margin_high}\
              ,accel={s.cost.accel_weight}\
              ,steer={s.cost.steer_weight}\
+             ,plan_change={s.cost.plan_change_weight}\
              ,discount_factor={s.cost.discount_factor}\
              ,rng_seed={s.rng_seed}\
              ,"

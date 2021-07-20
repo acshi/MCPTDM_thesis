@@ -2,3 +2,6 @@
 
 [workspace]
 members = ["progressive_mcts", "progressive_mcts_run"]
+
+[profile.release]
+debug = true

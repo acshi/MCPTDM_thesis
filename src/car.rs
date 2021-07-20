@@ -82,6 +82,7 @@ pub struct Car {
     shape: Cuboid,
     pose: Isometry2<f64>,
     aabb: AABB,
+    // norotation_aabb: AABB,
 }
 
 impl Car {

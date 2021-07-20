@@ -1,13 +1,14 @@
 use itertools::Itertools;
 
 use crate::{
-    arg_parameters::Parameters, mpdm::make_obstacle_vehicle_policy_belief_states, road::Road,
-    road_set::RoadSet,
+    arg_parameters::Parameters, car::SPEED_LOW, mpdm::make_obstacle_vehicle_policy_belief_states,
+    road::Road, road_set::RoadSet,
 };
 
 fn key_vehicles<'a>(params: &Parameters, road: &Road) -> Vec<usize> {
     let ego = &road.cars[0];
-    let dx_thresh = params.cfb.key_vehicle_base_dist + ego.vel * params.cfb.key_vehicle_dist_time;
+    let dx_thresh = params.cfb.key_vehicle_base_dist
+        + ego.vel.max(SPEED_LOW) * params.cfb.key_vehicle_dist_time;
 
     let mut car_ids = Vec::new();
     for c in &road.cars[1..] {
@@ -16,7 +17,9 @@ fn key_vehicles<'a>(params: &Parameters, road: &Road) -> Vec<usize> {
         }
 
         let dx = (ego.x() - c.x()).abs();
-        // eprintln_f!("ego to {c.car_i}: {dx=:.2}, {dx_thresh=:.2}");
+        // if params.cfb_debug && road.super_debug() {
+        //     eprintln_f!("ego to {c.car_i}: {dx=:.2}, {dx_thresh=:.2}");
+        // }
         if dx <= dx_thresh {
             car_ids.push(c.car_i);
         }
@@ -55,7 +58,6 @@ pub fn conditional_focused_branching(
 
     let policies = make_obstacle_vehicle_policy_belief_states(params);
 
-    let base_safety = road.cost.safety;
     let open_loop_sims = uncertain_car_ids
         .into_iter()
         .map(|car_i| {
@@ -68,7 +70,7 @@ pub fn conditional_focused_branching(
                     road.car_traces = None;
                     road.take_update_steps(params.cfb.horizon_t, params.cfb.dt);
                     // eprintln_f!("{car_i=} {road.cost:.2?} {policy:?}");
-                    road.cost.safety - base_safety
+                    road.cost.total()
                 })
                 .collect_vec();
 
@@ -94,12 +96,12 @@ pub fn conditional_focused_branching(
     let mut sorted_open_sims = open_loop_sims.into_iter().filter_map(|a| a).collect_vec();
 
     // only need to give special consideration to an obstacle vehicle if one policy is more dangerous than another
-    sorted_open_sims.retain(|(_, max_safety_cost, costs)| {
-        let min_safety_cost = *costs
+    sorted_open_sims.retain(|(_, max_cost, costs)| {
+        let min_cost = *costs
             .iter()
             .min_by(|a, b| a.partial_cmp(b).unwrap())
             .unwrap();
-        *max_safety_cost > min_safety_cost + params.cfb.dangerous_delta_threshold
+        *max_cost > min_cost + params.cfb.risky_delta_threshold
     });
 
     if debug {

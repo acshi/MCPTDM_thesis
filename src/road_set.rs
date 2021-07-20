@@ -43,6 +43,12 @@ impl RoadSet {
         }
     }
 
+    pub fn set_ego_policy_not_switched(&mut self, policy: &SidePolicy) {
+        for road in self.roads.iter_mut() {
+            road.set_ego_policy_not_switched(policy.clone());
+        }
+    }
+
     // pub fn is_debug(&self) -> bool {
     //     self.roads[0].debug
     // }

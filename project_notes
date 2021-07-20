@@ -53,7 +53,12 @@ Since I don't have belief estimation, how about just a static set of beliefs bas
 Questions for Ed:
 Tell the story in terms of how what we really want to do is similar to tree search with infinite samples, but we can't because that is infeasible. We can talk about how MPDM tries to solve this, then talk about how EUDM expands the search space, and then say that we think even more flexibility is justified and that we do this with MCTS. Talk about how their CFB is a useful heuristic for improving our ability to sample the space and then how we modify it for MCTS.
 
-MCTS is currently at a safety disadvantage vs. other methods because it currently information that can be shared is not. If some cost is encurred at a depth of 1, it really ought to be applied to the entire subtree. Currently, we are acting as if all costs are fully dependent on all actions to full depth. Is there a principled way of fusing information like this? I figure maybe we can keep track of these intermediate values, and then do a max operation?
+7/16/21:
+Terminology to use? Monte Carlo roll-outs samples particles, vs the number of trials I run to evaluate results.
+
+It is okay to elect policies at a rate slower than 20Hz, la!! There is enough to gain from using more samples, that we should be okay to do that... although we seem to have something going on with more samples not helping the final scenario? We _should_ use more samples though for the synthetic experiments.
+
+Work the word "robust" into the title, since that is the main thrust of the changes we are doing.
 
 Some decisions:
 Increasing search depth appears to NOT actually help. Let's keep it at depth 4 and 8 seconds total.
@@ -68,31 +73,35 @@ hyper-parameter optimization for each method, at least of the discount factor, t
 
 Ed's recommended order: contributions, abstract, results/evaluation, everything else, then related work maybe last (first pass, just dump citations, and get a sense for the reference look and organize). There is _some_ space in a journal article to editorialize a little about the field and the directions and the methods that you have.
 
+EUDM uses 0 steer weight and plan_change weight of 2 or so
+
 Tasks:
 Overall for this week:
 
 15 work days left until the end of July. A 20-page paper with an average of 1000 words per page, would be 20,000 words and I would need to write 1,333 words per day!!!
 
-synthetic test using z-score instead of prioritize_worst_particles_n... So it seems that "repeat everything" is coming up as the best option here... which intuitively seems really bad to me, showing that the synthetic test isn't being realistic at all. I imagine that trying to repeat all the particles across each top-level policy would just give us less diversity and make it less likely that we discover a really bad scenario which then itself might be repeated over and help decriminate between the different choices... but in the current setup, these "bad scenario" particles don't actually provide any information, since they are the same for all the choices. Maybe each (state, action) pair in the problem scenario should get not just a basic distribution, but also a "bad scenario" distribution. The true expected value then would be a combination of these and might be dominated by either one. Then, discovering enough "bad scenario" particles would be important to fish out the true value of these choices. Blindly repeating the basic particles would then not discover as much information.
+Tune EUDM plan_change weight.
 
-Why does EUDM get such a low cost, yet have poor efficiency, high decelerations, (good safety), _very_ low curvature change. I guess it just avoids turning much at all? Should we modify our cost formulation at all?
-
-OKAY, so let's try to finalize parameter choices. Let's keep efficiency set at 1.0 for scale, then smoothness, safety, uc, cc, safety margin, and then finally discount factor. Then MCTS' UCB constant. We can do them in isolation, one at a time.
+Maybe do all these with n_samples=32:
+UCB constant for MCTS?
+Some comparison between KLUCB/+ and UCB?
+Between marginal and lower_bound?
+OKAY, finalize discount factors for each method?
+Then finally test using more samples?
 
 Once everything else looks good with samples_n, we can try seeing what we get for additional policies, etc...
 
 MAYBE SKIP:
 A new idea: unequal layer times??? Or just try making search depth deeper?
-
 A new idea: improve MCTS with progressive widening (I guess just adding new leaf nodes with different belief samples?) Or even a KR-UCT like approach that take advantage of the fact that policies with different longitudinal choices are more similar than ones with different lateral choices? Or even extend to continuous space with KR-UCT? Or use KR-UCT to make POMCP work?
-
 A new idea: a machine-learning approach that chooses which paths of the tree to search?
-
 POMCP proper? (maybe cut it)
-
 Make an environment more like in the EUDM paper, like a loop, which will help reduce the number of cars on the road to a reasonable number for fast comparisons. They use 0.4 second time steps the closed loop simulations. (Their github uses 0.2 seconds timesteps, tree depth 5 and 1-second actions).
 
 Finished tasks:
+Figure out why EUDM is doing so poorly. Basically the same as "fixed" here.... :/
+Synthetic test using z-score instead of prioritize_worst_particles_n... So it seems that "repeat everything" is coming up as the best option here... which intuitively seems really bad to me, showing that the synthetic test isn't being realistic at all. I imagine that trying to repeat all the particles across each top-level policy would just give us less diversity and make it less likely that we discover a really bad scenario which then itself might be repeated over and help decriminate between the different choices... but in the current setup, these "bad scenario" particles don't actually provide any information, since they are the same for all the choices. Maybe each (state, action) pair in the problem scenario should get not just a basic distribution, but also a "bad scenario" distribution. The true expected value then would be a combination of these and might be dominated by either one. Then, discovering enough "bad scenario" particles would be important to fish out the true value of these choices. Blindly repeating the basic particles would then not discover as much information.
+So looking at the UCB constant... I wonder what is mattering more here... using the expected-cost rule with UCB to decide where the next node goes........ or just in determining which final action to choose! Because too many of them just seem to want (or tolerate) the highest UCB constant possible... which is suspicious!?
 NEW IDEA: Motivation: we sometimes see a lot of changes between policies back and forth back and forth, because of how we have drawn the particles that each policy gets. Certain important particles end up having a big influence because they end up only affecting one policy and not another. SO, what if we "periodically" look at whichever particle is most discrediting a certain root-level policy choice and test how the best policy would react to this particle. Actually, we can just let our normal UCB/KLUCB choose the policy, and then we test this worst particle against it. And perhaps we can just make this _always_ be the rule, only falling back to normal particle selection if that worst particle has already been tested against the current policy. Hopefully, because of the min-avg way that the particles produce costs, this will have enough of an effect, although I could also imagine that there might be a collection of unluckily-bad particles conspiring together to make a particular policy look bad, and this wouldn't completely account for making that situation fair. Now, to test this in isolation: We can start from the same "progessive_mcts" setup, but now we need to have particles represented. Maybe we just have good (normal) and then also bad (always get high cost) particles. We can keep track of particles... with a BTreeSet? This is currently only really a problem when there is no _true_ _bad_ decision, when one is just marginally better than another, and then a bad particle makes one randomly _seem_ bad. So to simulate _that_ scenario... we need the bad particles to be a lot worse!!
 Reform our cost function to not be discrete anywhere. use a sigmoid for safety. penalize all accelerations. the EUDM evaluation metrics can be kept on the side for reference, but not used in the cost function itself.
 Random game trees to try to justify the "cost of node = max( average of downward partcicles, min(children))" and then also of reducing variance by subtracting off the mean of previous nodes in the search and keeping track of the marginal cost for each action instead. See if this can make us more sample-efficient! Do a bit of literature search to try to see if someone else has done this before.

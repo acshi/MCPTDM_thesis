@@ -15,6 +15,8 @@ pub enum SidePolicy {
 
 #[enum_dispatch(SidePolicy)]
 pub trait SidePolicyTrait {
+    fn precheck(&mut self, _road: &Road, _dt: f64) {}
+
     fn choose_target_lane(&mut self, road: &Road, car_i: usize) -> i32 {
         road.cars[car_i].target_lane_i
     }

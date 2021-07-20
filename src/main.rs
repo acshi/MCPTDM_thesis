@@ -35,10 +35,6 @@ use crate::{eudm::dcp_tree_choose_policy, mcts::mcts_choose_policy, tree::tree_c
 #[macro_use]
 extern crate fstrings;
 
-#[cfg(test)]
-#[macro_use]
-extern crate approx;
-
 mod arg_parameters;
 mod belief;
 mod car;
@@ -124,7 +120,7 @@ impl State {
                 mpdm_choose_policy(&self.params, &self.road, policy_rng)
             } else {
                 match self.params.method.as_str() {
-                    "fixed" => (self.road.ego_policy().clone(), Vec::new()),
+                    "fixed" => (None, Vec::new()),
                     "mpdm" => mpdm_choose_policy(&self.params, &self.road, policy_rng),
                     "eudm" => dcp_tree_choose_policy(&self.params, &self.road, policy_rng),
                     "tree" => tree_choose_policy(&self.params, &self.road, policy_rng),
@@ -137,7 +133,9 @@ impl State {
                 check_for_duplicate_shapes(&self.traces);
             }
 
-            self.road.set_ego_policy(policy);
+            if let Some(policy) = policy {
+                self.road.set_ego_policy(policy);
+            }
         }
 
         // random policy changes for the obstacle vehicles
@@ -328,10 +326,11 @@ fn randomize_unimportant_vehicle_policies(
     selected_ids: &[usize],
     rng: &mut StdRng,
 ) {
-    let policies = make_obstacle_vehicle_policy_belief_states(params);
-    let sampled_belief = belief.sample(rng);
-
+    // eprintln!("Randomizing vehicles other than: {:?}", selected_ids);
     for road in roads.iter_mut() {
+        let policies = make_obstacle_vehicle_policy_belief_states(params);
+        let sampled_belief = belief.sample(rng);
+
         for car in road.cars[1..].iter_mut() {
             if !selected_ids.contains(&car.car_i) {
                 car.side_policy = Some(policies[sampled_belief[car.car_i]].clone());

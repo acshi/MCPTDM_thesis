@@ -111,7 +111,7 @@ pub fn tree_choose_policy(
     params: &Parameters,
     true_road: &Road,
     rng: &mut StdRng,
-) -> (SidePolicy, Vec<rvx::Shape>) {
+) -> (Option<SidePolicy>, Vec<rvx::Shape>) {
     let roads = road_set_for_scenario(params, true_road, rng, params.tree.samples_n);
     let policy_choices = make_policy_choices(params);
     let debug = params.policy_report_debug
@@ -137,5 +137,5 @@ pub fn tree_choose_policy(
         );
     }
 
-    (policy, final_node.traces)
+    (Some(policy), final_node.traces)
 }

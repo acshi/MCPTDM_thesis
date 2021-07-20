@@ -1,5 +1,6 @@
 #!/usr/bin/python3
-from common_plot import FigureKind, FigureMode, print_all_parameter_values_used
+from common_plot import parse_parameters, FigureKind, FigureMode, print_all_parameter_values_used, evaluate_conditions
+import time
 
 t10s = dict()
 t10s["discount_factor"] = "Discount Factor"
@@ -18,6 +19,15 @@ t10s["true"] = "CFB"
 t10s["seconds"] = "Computation time (s)"
 t10s["search_depth"] = "Search depth"
 t10s["samples_n"] = "# Samples"
+t10s["bound_mode"] = "UCB expected-cost rule"
+t10s["final_choice_mode"] = "Final choice expected-cost rule"
+t10s["selection_mode"] = "UCB variation"
+t10s["normal"] = "Normal"
+t10s["lower_bound"] = "Using lower bound"
+t10s["bubble_best"] = "Using bubble-best"
+t10s["marginal"] = "Using marginal action costs"
+t10s["ucb_const"] = "UCB constant factor"
+t10s["prioritize_worst_particles_z"] = "Prioritize worst particles with z-scores above"
 t10s[None] = "Average"
 
 # sed -i 's/_samples_n/,samples_n/g' results.cache
@@ -45,13 +55,14 @@ t10s[None] = "Average"
 #!!! sed -i 's/_/=/g' results.cache
 
 
+start_time = time.time()
 results = []
 with open("results.cache", "r") as f:
     for line in f:
         parts = line.split()
         if len(parts) > 9:
             entry = dict()
-            entry["name"] = parts[0]
+            entry["params"] = parse_parameters(parts[0])
             entry["efficiency"] = float(parts[5])
             entry["safety"] = float(parts[6])
             entry["ud"] = float(parts[7])
@@ -68,9 +79,7 @@ with open("results.cache", "r") as f:
             results.append(entry)
         else:
             continue
-
-print_all_parameter_values_used(
-    results, [("method", "mcts"), ("bound_mode", "marginal"), ("prioritize_worst_particles_z", "1000"), ("max.rng_seed", 255)])
+print(f"took {time.time() - start_time:.2f} seconds to load data")
 
 method_kind = FigureKind("method", ["fixed", "tree", "mpdm", "eudm", "mcts"], translations=t10s)
 discount_kind = FigureKind("discount_factor", [0.6, 0.7, 0.8, 0.9, 1], translations=t10s)
@@ -86,8 +95,8 @@ extra_accdec_kind = FigureKind("extra_ego_accdec_policies", [
 method_mode = FigureMode("method", ["fixed", "tree", "mpdm", "eudm", "mcts"])
 cfb_mode = FigureMode("use_cfb", ["false", "true"])
 
-plot_metrics = ["efficiency", "cost", "safety"]
-evaluate_metrics = ["efficiency", "cost", "safety", "cost.efficiency",
+plot_metrics = ["cost", "safety", "efficiency"]
+evaluate_metrics = ["cost", "safety", "efficiency", "cost.efficiency",
                     "cost.safety", "cost.accel", "cost.steer", "seconds"]
 
 find_unsafest_filters = ["_method_mcts_", "_use_cfb_false_",
@@ -96,51 +105,59 @@ find_unsafest_filters = ["_method_mcts_", "_use_cfb_false_",
 #  for f in find_unsafest_filters)], key=lambda entry: entry["safety"]))
 
 if False:
-    for use_cfb in ["true"]:
-        for samples_n in [8, 16, 32, 64, 128, 256, 512]:
-            evaluate_conditions(results, plot_metrics, [
-                                ("method", "mcts"), ("search_depth", 4), ("layer_t", "2"),
-                                ("smoothness", 0), ("safety", 100), ("ud", 5),
-                                ("samples_n", samples_n), ("use_cfb", use_cfb)])
-    # print("layer_t 2")
-    # for use_cfb in ["false", "true"]:
-    #     for search_depth in [4, 5, 6, 7]:
-    #         evaluate_conditions(results, plot_metrics, [
-    #                             ("method", "mcts"), ("search_depth", search_depth), ("layer_t", "2"), ("samples_n", 128), ("use_cfb", use_cfb)])
-
-    print("eudm")
-    for use_cfb in ["true"]:
-        for search_depth in [4]:
-            evaluate_conditions(results, plot_metrics, [
-                                ("method", "eudm"),
-                                ("smoothness", 0), ("safety", 100), ("ud", 5),
-                                ("search_depth", search_depth), ("use_cfb", use_cfb)])
+    evaluate_conditions(results, plot_metrics, [
+        ("method", "mcts"), ("search_depth", 4),
+        ("samples_n", 64), ("use_cfb", "false")])
 
 
-#
+# print_all_parameter_values_used(results, [])
+
 # cargo run --release rng_seed 0-15 :: method tree :: tree.samples_n 1 2 4 8 :: use_cfb false true :: thread_limit 24
 
-# cargo run --release rng_seed 0-127 :: method fixed mpdm eudm mcts :: use_cfb false true :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
-# cargo run --release rng_seed 127-255 :: method fixed mpdm eudm mcts :: use_cfb false true :: eudm.search_depth 3-7 :: mcts.search_depth 3-7 :: mcts.samples_n 8 16 32 64 128 256 512 :: thread_limit 24
-samples_n_kind = FigureKind("samples_n", [8, 16, 32, 64, 128, 256, 512], translations=t10s)
-search_depth_kind = FigureKind("search_depth", [3, 4, 5, 6, 7], translations=t10s)
+# cargo run --release rng_seed 256-511 :: method fixed mpdm eudm mcts :: use_cfb false true :: eudm.search_depth 3-6 :: mcts.search_depth 3-6 :: mcts.samples_n 8 16 32 64 128 256 :: thread_limit 24
+# cargo run --release rng_seed 128-255 :: method fixed mpdm eudm mcts :: use_cfb false true :: eudm.search_depth 3-6 :: mcts.search_depth 3-6 :: mcts.samples_n 8 16 32 64 128 256 :: thread_limit 24
+# cargo run --release rng_seed 0-2047 :: method fixed mpdm :: use_cfb false true :: thread_limit 24
+# cargo run --release rng_seed 0-2047 :: method eudm :: use_cfb false true :: thread_limit 24
+# cargo run --release rng_seed 0-2047 :: method mcts :: use_cfb false true :: mcts.bound_mode lower_bound :: mcts.samples_n 2 4 8 16 32 64 128 256 :: thread_limit 24
+samples_n_kind = FigureKind("samples_n", [2, 4, 8, 16, 32, 64, 128, 256], translations=t10s)
+search_depth_kind = FigureKind("search_depth", [3, 4, 5, 6], translations=t10s)
 method_mode = FigureMode("method", ["fixed", "mpdm", "eudm", "mcts"])
-if True:
+if False:
+    common_filters = [("mcts.bound_mode", "marginal"),
+                      ("mcts.prioritize_worst_particles_z", "1000"), ("max.rng_seed", 1023)]
     for metric in plot_metrics:
         samples_n_kind.plot(results, metric, mode=cfb_mode, filters=[
-                            ("method", "mcts"), ("bound_mode", "marginal"), ("prioritize_worst_particles_z", "1000"), ("max.rng_seed", 255)])
+                            ("method", "mcts")] + common_filters)
+        search_depth_mode = FigureMode("search_depth", [3, 4, 5, 6, 7])
         for use_cfb in ["false", "true"]:
-            search_depth_kind.plot(results, metric, mode=FigureMode("method", ["eudm", "mcts"]), filters=[
-                                   ("use_cfb", use_cfb),
-                                   ("mcts.bound_mode", "marginal"),
-                                   ("mcts.prioritize_worst_particles_z", "1000"),
-                                   ("max.rng_seed", 255)])
-        search_depth_kind.plot(results, metric, mode=cfb_mode, filters=[("mcts.bound_mode", "marginal"),
-                                                                        ("mcts.prioritize_worst_particles_z", "1000"),
-                                                                        ("max.rng_seed", 255)])
+            samples_n_kind.plot(results, metric, mode=search_depth_mode, filters=[
+                                ("method", "mcts"), ("use_cfb", use_cfb)] + common_filters)
+        #     search_depth_kind.plot(results, metric, mode=FigureMode("method", ["eudm", "mcts"]), filters=[
+        #                            ("use_cfb", use_cfb)] + common_filters)
+        #     # seconds_kind.plot(results, metric, mode=method_mode, filters=[
+        #     #                   ("use_cfb", use_cfb), ("mcts.samples_n", 32), ("mcts.search_depth", 3), ("eudm.search_depth", 3)] + common_filters)
+        # search_depth_kind.plot(results, metric, mode=cfb_mode, filters=[] + common_filters)
 
-        # cargo run --release rng_seed 0-31 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
-        # cargo run --release rng_seed 32-63 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
+# print_all_parameter_values_used(
+#     results, [("method", "mcts"), ("mcts.bound_mode", "marginal"), ("max.rng_seed", 2047), ("mcts.prioritize_worst_particles_z", "-1000")])
+# quit()
+
+# cargo run --release rng_seed 0-2047 :: method mcts :: use_cfb false :: mcts.bound_mode lower_bound marginal :: mcts.samples_n 2 4 8 16 32 64 128 256 :: mcts.prioritize_worst_particles_z -1000 1000 :: thread_limit 24
+samples_n_kind = FigureKind("samples_n", [2, 4, 8, 16, 32, 64, 128, 256, 512], translations=t10s)
+prioritize_worst_particles_z_mode = FigureMode("prioritize_worst_particles_z", ["-1000", "1000"])
+if True:
+    common_filters = [("use_cfb", "false"),
+                      ("max.rng_seed", 2047)]
+    mcts_filters = [("method", "mcts"),
+                    ("mcts.bound_mode", "marginal")] + common_filters
+    fixed_filters = [("method", "fixed")] + common_filters
+    mpdm_filters = [("method", "mpdm")] + common_filters
+    for metric in plot_metrics:
+        samples_n_kind.plot(
+            results, metric, mode=prioritize_worst_particles_z_mode, filters=mcts_filters, extra_lines=[("Fixed", fixed_filters), ("MPDM", mpdm_filters)])
+
+# cargo run --release rng_seed 0-31 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
+# cargo run --release rng_seed 32-63 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
 klucb_max_cost_kind = FigureKind(
     "klucb_max_cost", [10, 30, 100, 300, 1000, 3000], translations=t10s)
 selection_mode = FigureMode("selection_mode", ["ucb", "klucb"])
@@ -198,16 +215,59 @@ if False:
         # klucb_max_cost_kind.plot(results, metric, mode=safety_mode, filters=[
         #     "_method_mcts_", "_selection_mode_klucb_", "_bound_mode_marginal_", "_use_cfb_false_"])
 
-if False:
-    for metric in plot_metrics:
-        seconds_kind.plot(results, metric, mode=method_mode)
-        seconds_kind.plot(results, metric, mode=cfb_mode)
-
-# cargo run --release rng_seed 0-1023 :: method mcts :: use_cfb false :: mcts.bound_mode normal bubble_best lower_bound marginal :: mcts.prioritize_worst_particles_z -3 -2 -1 0 1 2 3 1000 :: thread_limit 24
-# cargo run --release rng_seed 1024-2047 :: method mcts :: use_cfb false :: mcts.bound_mode normal bubble_best lower_bound marginal :: mcts.prioritize_worst_particles_z -3 -2 -1 0 1 2 3 1000 :: thread_limit 24
+# cargo run --release rng_seed 0-1023 :: method mcts :: use_cfb false :: mcts.bound_mode normal bubble_best lower_bound marginal :: mcts.prioritize_worst_particles_z -1000 1000 :: thread_limit 24
+# cargo run --release rng_seed 1024-2047 :: method mcts :: use_cfb false :: mcts.bound_mode normal bubble_best lower_bound marginal :: mcts.prioritize_worst_particles_z -1000 1000 :: thread_limit 24
 if False:
     prioritize_worst_particles_z_kind = FigureKind(
-        "prioritize_worst_particles_z", [-3, -2, -1, 0, 1, 2, 3, 1000])
+        "prioritize_worst_particles_z", [-1000, 1000], translations=t10s)
+    filters = [("method", "mcts"), ("selection_mode", "klucb"),
+               ("search_depth", 4), ("samples_n", 64), ("use_cfb", "false")]
     for metric in plot_metrics:
-        prioritize_worst_particles_z_kind.plot(results, metric, mode=bound_mode, filters=[
-            "_method_mcts_", "_selection_mode_klucb_", "_use_cfb_false_"])
+        prioritize_worst_particles_z_kind.plot(results, metric, mode=bound_mode, filters=filters)
+
+    for bound_mode in ["lower_bound", "marginal"]:
+        for z in [-1000, 1000]:
+            evaluate_conditions(results, plot_metrics, filters + [
+                                ("bound_mode", bound_mode), ("prioritize_worst_particles_z", z)])
+
+    # method=mcts,selection_mode=klucb,search_depth=4,samples_n=64,use_cfb=false,bound_mode=lower_bound,prioritize_worst_particles_z=-1000:
+    #   efficiency has mean:  6.206 and mean std dev: 0.04445
+    #   cost has mean:  427.5 and mean std dev:  9.176
+    #   safety has mean: 0.003439 and mean std dev: 0.0009229
+
+    # method=mcts,selection_mode=klucb,search_depth=4,samples_n=64,use_cfb=false,bound_mode=lower_bound,prioritize_worst_particles_z=1000:
+    #   efficiency has mean:  6.178 and mean std dev: 0.04449
+    #   cost has mean:  451.7 and mean std dev:  12.16
+    #   safety has mean: 0.006107 and mean std dev: 0.001267
+
+    # method=mcts,selection_mode=klucb,search_depth=4,samples_n=64,use_cfb=false,bound_mode=marginal,prioritize_worst_particles_z=-1000:
+    #   efficiency has mean:  5.834 and mean std dev: 0.04181
+    #   cost has mean:  448.7 and mean std dev:  10.45
+    #   safety has mean: 0.003931 and mean std dev: 0.00112
+
+    # method=mcts,selection_mode=klucb,search_depth=4,samples_n=64,use_cfb=false,bound_mode=marginal,prioritize_worst_particles_z=1000:
+    #   efficiency has mean:  5.847 and mean std dev: 0.04242
+    #   cost has mean:  454.1 and mean std dev:  11.49
+    #   safety has mean: 0.00471 and mean std dev: 0.001229
+
+latex_table = ""
+if False:
+    fixed_filters = [("method", "fixed")]
+    import pdb
+    res = evaluate_conditions(results, plot_metrics, filters=fixed_filters)
+    latex_table += f"Fixed & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f}\n"
+
+    mpdm_filters = [("method", "mpdm"), ("forward_t", 8)]
+    res = evaluate_conditions(results, plot_metrics, filters=mpdm_filters)
+    latex_table += f"MPDM & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f}\n"
+
+    eudm_filters = [("method", "eudm"), ("search_depth", 4), ("use_cfb", "true")]
+    res = evaluate_conditions(results, plot_metrics, filters=eudm_filters)
+    latex_table += f"EUDM & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f}\n"
+
+    mcts_filters = [("method", "mcts"), ("bound_mode", "lower_bound"), ("selection_mode", "klucb"),
+                    ("search_depth", 4), ("samples_n", 64), ("use_cfb", "false"), ("prioritize_worst_particles_z", -1000)]
+    res = evaluate_conditions(results, plot_metrics, filters=mcts_filters)
+    latex_table += f"Ours & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f}\n"
+
+print(latex_table)

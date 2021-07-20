@@ -3,6 +3,7 @@ use std::{f64::consts::PI, rc::Rc, u32};
 use itertools::Itertools;
 use nalgebra::{vector, Point2, Point3};
 use parry2d_f64::{
+    bounding_volume::AABB,
     math::Isometry,
     na::point,
     query::{self, ClosestPoints},
@@ -37,6 +38,7 @@ pub struct Road {
     pub cars: Vec<Car>,
     pub belief: Option<Rc<Belief>>,
     pub last_ego: Car,
+    pub switched_ego_policy: bool,
     pub cost: Cost,
     pub ego_is_safe: bool,
     pub car_traces: Option<Vec<Vec<(Point3<f64>, u32)>>>,
@@ -73,6 +75,7 @@ impl Road {
             last_ego: ego_car.clone(),
             cars: vec![ego_car],
             belief: None,
+            switched_ego_policy: false,
             cost: Cost::new(1.0, 1.0),
             ego_is_safe: true,
             debug: !params.run_fast,
@@ -160,6 +163,7 @@ impl Road {
             cars: Vec::new(),
             belief: self.belief.clone(),
             last_ego: self.last_ego.clone(),
+            switched_ego_policy: false,
             cost: self.cost.clone(),
             ego_is_safe: self.ego_is_safe,
             car_traces: None,
@@ -216,16 +220,11 @@ impl Road {
     }
 
     pub fn set_ego_policy(&mut self, policy: SidePolicy) {
-        // we don't want to lose state when "switching" to the same policy we are already running
-        // this only really matters for mantain velocity policy and delayed switch policies
-        // For the delayed switching policies, it is assumed that any switch is wanted
-        // in order to reset the switching time
-        let policy_id = policy.policy_id();
-        let old_policy_id = self.ego_policy().policy_id();
-        if policy_id < 100 && policy_id == old_policy_id {
-            // not a delayed policy... keep state by not changing
-            return;
-        }
+        self.cars[0].side_policy = Some(policy);
+        self.switched_ego_policy = true;
+    }
+
+    pub fn set_ego_policy_not_switched(&mut self, policy: SidePolicy) {
         self.cars[0].side_policy = Some(policy);
     }
 
@@ -334,27 +333,22 @@ impl Road {
         false
     }
 
-    #[allow(unused)]
-    pub fn dist_clear_ahead(&self, car_i: usize) -> Option<(f64, usize)> {
-        self.dist_clear::<true>(car_i)
-    }
-
     pub fn dist_clear_ahead_in_lane(&self, car_i: usize, lane_i: i32) -> Option<(f64, usize)> {
-        self.dist_clear_in_lane::<true>(car_i, Some(lane_i))
+        self.dist_clear_in_lane::<true>(car_i, lane_i)
     }
 
     // fn dist_clear_behind(&self, car_i: usize) -> Option<(f64, usize)> {
     //     self.dist_clear(car_i, false)
     // }
 
-    pub fn dist_clear<const AHEAD: bool>(&self, car_i: usize) -> Option<(f64, usize)> {
-        self.dist_clear_in_lane::<AHEAD>(car_i, None)
-    }
+    // pub fn dist_clear<const AHEAD: bool>(&self, car_i: usize) -> Option<(f64, usize)> {
+    //     self.dist_clear_in_lane::<AHEAD>(car_i, None)
+    // }
 
     pub fn dist_clear_in_lane<const AHEAD: bool>(
         &self,
         car_i: usize,
-        lane_i: Option<i32>,
+        lane_i: i32,
     ) -> Option<(f64, usize)> {
         let car = &self.cars[car_i];
 
@@ -364,17 +358,21 @@ impl Road {
         let dist_thresh = car.vel * 100.0 + 2.0 * car.length;
 
         let pose = self.cars[car_i].pose();
-        let shape = self.cars[car_i].shape();
         // we remove rotation from the ego's aabb calculation because otherwise we will
         // see spurious potential collisions from the back of the car while turning.
         // no rotation just focuses on the front of the ego-car for this calculation
-        let no_rotation_pose = if let Some(lane_i) = lane_i {
-            Isometry::translation(pose.translation.vector.x, Road::get_lane_y(lane_i))
-        } else {
-            Isometry::translation(pose.translation.vector.x, pose.translation.vector.y)
-        };
+        let lane_y = Road::get_lane_y(lane_i);
 
-        let aabb = shape.compute_aabb(&no_rotation_pose);
+        let aabb = AABB::new(
+            point!(
+                pose.translation.vector.x - car.length * 0.5,
+                lane_y - car.width * 0.5
+            ),
+            point!(
+                pose.translation.vector.x + car.length * 0.5,
+                lane_y + car.width * 0.5
+            ),
+        );
         for (i, c) in self.cars.iter().enumerate() {
             // if statements ordered in fastest way to get to 'continue' (for performance)
             // skip cars behind (or ahead of) this one
@@ -503,6 +501,7 @@ impl Road {
             // policy
             {
                 let mut policy = self.cars[car_i].side_policy.take().unwrap();
+                policy.precheck(self, dt);
                 self.cars[car_i].target_lane_i = policy.choose_target_lane(self, car_i);
                 self.cars[car_i].target_follow_time = policy.choose_follow_time(self, car_i);
                 self.cars[car_i].target_vel = policy.choose_vel(self, car_i);
@@ -570,8 +569,14 @@ impl Road {
         if self.params.only_crashes_with_ego {
             let i1 = 0;
             for i2 in 1..self.cars.len() {
-                if self.cars[i1].crashed && self.cars[i2].crashed {
-                    continue;
+                if self.params.only_ego_crashes_in_forward_sims {
+                    if (i1 != 0 || self.cars[i1].crashed) && (i2 != 0 || self.cars[i2].crashed) {
+                        continue;
+                    }
+                } else {
+                    if self.cars[i1].crashed && self.cars[i2].crashed {
+                        continue;
+                    }
                 }
                 if self.collides_between(i1, i2) {
                     if self.super_debug() {
@@ -584,9 +589,25 @@ impl Road {
 
                     if self.is_truth || !self.params.only_ego_crashes_in_forward_sims || i1 == 0 {
                         self.cars[i1].crashed = true;
+                        // let s = self as &Road;
+                        // eprintln_f!(
+                        //     "{s.timesteps}: {:?}, y {:.3}, crashed with {i2}: {:?}, y {:.3}",
+                        //     self.cars[i1].side_policy.as_ref().unwrap(),
+                        //     self.cars[i1].y(),
+                        //     self.cars[i2].side_policy.as_ref().unwrap(),
+                        //     self.cars[i2].y()
+                        // );
                     }
                     if self.is_truth || !self.params.only_ego_crashes_in_forward_sims || i2 == 0 {
                         self.cars[i2].crashed = true;
+                        // let s = self as &Road;
+                        // eprintln_f!(
+                        //     "{s.timesteps}: {:?}, y {:.3} crashed with {i1}: {:?}, y {:.3}",
+                        //     self.cars[i2].side_policy.as_ref().unwrap(),
+                        //     self.cars[i2].y(),
+                        //     self.cars[i1].side_policy.as_ref().unwrap(),
+                        //     self.cars[i1].y()
+                        // );
                     }
                 }
             }
@@ -682,14 +703,19 @@ impl Road {
                 eprintln!("New policy: {:?}", self.ego_policy().operating_policy());
             }
         } else if self.debug && self.params.ego_policy_change_debug {
-            let policy_id = car.full_policy_id();
-            let last_policy_id = self.last_ego.full_policy_id();
-            if policy_id != last_policy_id {
+            if self.switched_ego_policy {
+                let policy_id = car.full_policy_id();
+                let last_policy_id = self.last_ego.full_policy_id();
                 eprintln_f!(
-                    "{}: full policy id has changed from {last_policy_id} to {policy_id}",
+                    "{}: full policy has changed from {last_policy_id} to {policy_id}",
                     self.timesteps
                 );
             }
+        }
+
+        if self.switched_ego_policy {
+            self.cost.plan_change += cparams.plan_change_weight * self.cost.discount;
+            self.switched_ego_policy = false;
         }
 
         let accel = (car.vel - self.last_ego.vel) / dt;
@@ -813,7 +839,7 @@ impl Road {
 
                 let base_line_color = if self.cars[0].crashed {
                     RvxColor::RED.scale_rgb(0.5)
-                } else if self.cost.safety > self.last_reset_cost.safety + 10.0 {
+                } else if self.cost.safety > self.last_reset_cost.safety + 20.0 {
                     RvxColor::PINK
                 } else {
                     RvxColor::GREEN
@@ -822,8 +848,8 @@ impl Road {
                 let line_color = match depth_level {
                     0 => base_line_color.set_a(0.6),
                     1 => base_line_color.scale_rgb(0.6).set_a(0.6),
-                    2 => base_line_color.scale_rgb(0.3).set_a(0.6),
-                    3 | _ => base_line_color.scale_rgb(0.1).set_a(0.6),
+                    2 => base_line_color.scale_rgb(0.5).set_a(0.6),
+                    3 | _ => base_line_color.scale_rgb(0.4).set_a(0.6),
                 };
 
                 let mut line_width = match depth_level {

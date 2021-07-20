@@ -8,7 +8,7 @@ plt.rcParams.update({'font.size': 12})
 plt.rcParams['pdf.fonttype'] = 42
 
 plt.rcParams["axes.prop_cycle"] = plt.cycler(
-    color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf", "#a65628"]) + plt.cycler(marker=['+', 'o', 'x', '^', 'v'])
+    color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf", "#a65628", "#984ea3", "#999999"]) + plt.cycler(marker=["+", "o", "x", "^", "v", "s", "*"])
 
 
 show_only = False
@@ -54,7 +54,7 @@ def short_num_string(val):
     scientific = f"{val:.1e}".replace(".0e", "e").replace(
         "+", "").replace("e0", "e").replace("e-0", "e-")
     normal = str(val)
-    # same-length means scientific is shorter in most fonts because of '.' being short
+    # same-length means scientific is shorter in most fonts because of "." being short
     return scientific if len(scientific) <= len(normal) else normal
 
 
@@ -130,7 +130,7 @@ class FigureKind:
 
             mode_string = f"_{mode.param}" if mode is not None else ""
             filters_string = "_" + \
-                "_".join(f"{f[0]}_{f[1]}" for f in filters
+                "_".join(f"{f[0]}_{f[1]}" for f in filters if not f[0].startswith("max.")
                          ) if len(filters) > 0 else ""
             file_suffix = f"_{result_name}{mode_string}{filters_string}"
 
@@ -140,7 +140,7 @@ class FigureKind:
                                  bbox_inches="tight", pad_inches=0)
             self.fig.savefig(f"figures/by_{self.param}{file_suffix}.png")
 
-    def _plot(self, results, result_name, title, xlabel, ylabel, mode, filters, extra_lines):
+    def _plot(self, results, result_name, title, xlabel, ylabel, mode, filters, extra_lines, extra_modes):
         self.fig, self.ax = plt.subplots(dpi=100 if show_only else save_dpi)
 
         has_any = False
@@ -176,6 +176,21 @@ class FigureKind:
             stdev_mean = np.std(vals) / np.sqrt(len(vals))
             self.ax.errorbar([self.locs[0], self.locs[-1]], [mean, mean],
                              yerr=[stdev_mean, stdev_mean], label=line_label)
+
+        for extra_mode in extra_modes:
+            mode_label = extra_mode[0]
+            mode_filters = extra_mode[1]
+
+            import time
+            start_time = time.time()
+            value_sets = self.collect_vals(results, result_name, mode_filters, None, None)
+            print(f"collect_vals took {time.time() - start_time:.2} seconds")
+
+            means = [np.mean(vals) for vals in value_sets]
+            stdev_mean = [np.std(vals) / np.sqrt(len(vals))
+                          for vals in value_sets]
+            self.ax.errorbar(self.locs, means, yerr=stdev_mean, label=mode_label)
+
         if has_any:
             self.ax.set_xticks(self.locs)
             self.ax.set_xticklabels(self.tick_labels)
@@ -225,7 +240,7 @@ class FigureKind:
             self._set_show_save(title, xlabel, ylabel,
                                 result_name, mode, filters)
 
-    def plot(self, results, result_name, title=None, xlabel=None, ylabel=None, mode=None, filters=[], extra_lines=[]):
+    def plot(self, results, result_name, title=None, xlabel=None, ylabel=None, mode=None, filters=[], extra_lines=[], extra_modes=[]):
         xlabel = xlabel or self.translate(self.param)
         ylabel = ylabel or self.translate(result_name)
         if title is None:
@@ -239,7 +254,7 @@ class FigureKind:
                                    mode, filters)
         else:
             self._plot(results, result_name, title, xlabel, ylabel,
-                       mode, filters, extra_lines)
+                       mode, filters, extra_lines, extra_modes)
 
 
 def evaluate_conditions(results, metrics, filters):

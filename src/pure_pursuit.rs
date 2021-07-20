@@ -1,3 +1,4 @@
+use nalgebra::point;
 use parry2d_f64::{math::Isometry, na::Point2, shape::Ball};
 use rvx::{Rvx, RvxColor};
 
@@ -51,6 +52,66 @@ impl PurePursuitPolicy {
     }
 }
 
+fn ranges_overlap(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> bool {
+    if low_a - high_b <= 0.0 {
+        return true;
+    }
+    if low_b - high_a <= 0.0 {
+        return true;
+    }
+    false
+}
+
+// fn circle_line_contact(
+//     circ_xy: Point2<f64>,
+//     radius: f64,
+//     pt1: Point2<f64>,
+//     pt2: Point2<f64>,
+// ) -> Option<Point2<f64>> {
+//     use approx::assert_relative_eq;
+//     let (cx, cy) = (circ_xy.x, circ_xy.y);
+//     let r = radius;
+
+//     let (x1, y1) = (pt1.x - cx, pt1.y - cy);
+//     let (x2, y2) = (pt2.x - cx, pt2.y - cy);
+//     eprint_f!("{cx=:6.2} {cy=:6.2}, {x1=:6.2} {y1=:6.2}, {x2=:6.2} {y2=:6.2}, {r:6.2}: ");
+
+//     // handle some special cases a little faster
+//     let mut special_case_solution = None;
+//     if y1 == y2 {
+//         let r_prime = if y1 == 0.0 {
+//             r
+//         } else {
+//             (r * r - y1 * y1).sqrt()
+//         };
+//         let (low_x, high_x) = if x1 < x2 { (x1, x2) } else { (x2, x1) };
+//         if range_dist(low_x, high_x, -r_prime, r_prime) == 0.0 {
+//             if x1 < 0.0 {
+//                 special_case_solution = Some(point!(cx - r_prime, y1 + cy));
+//             } else {
+//                 special_case_solution = Some(point!(cx + r_prime, y1 + cy));
+//             }
+//         }
+//     }
+
+//     if let Some(pt) = special_case_solution {
+//         eprint!("special {:.2?} ", pt.coords.as_slice());
+//     }
+
+//     let res = circle_line_contact_inner(circ_xy, radius, pt1, pt2);
+//     if let Some(pt) = res {
+//         eprintln!("{:.2?}", pt.coords.as_slice());
+//     } else {
+//         eprintln!();
+//     }
+
+//     if let (Some(special_case_solution), Some(res)) = (special_case_solution, res) {
+//         assert_relative_eq!(res, special_case_solution);
+//     }
+
+//     res
+// }
+
 fn circle_line_contact(
     circ_xy: Point2<f64>,
     radius: f64,
@@ -68,7 +129,28 @@ fn circle_line_contact(
 
     let (x1, y1) = (pt1.x - cx, pt1.y - cy);
     let (x2, y2) = (pt2.x - cx, pt2.y - cy);
-    // eprintln_f!("{x1=:6.2} {y1=:6.2}, {x2=:6.2} {y2=:6.2}");
+    // eprint_f!("{cx=:6.2} {cy=:6.2}, {x1=:6.2} {y1=:6.2}, {x2=:6.2} {y2=:6.2}, {r:6.2}: ");
+
+    // handle some special cases a little faster
+    if y1 == y2 {
+        if y1.abs() > radius {
+            return None;
+        }
+        let r_prime = if y1 == 0.0 {
+            r
+        } else {
+            (r * r - y1 * y1).sqrt()
+        };
+        let (low_x, high_x) = if x1 < x2 { (x1, x2) } else { (x2, x1) };
+        if ranges_overlap(low_x, high_x, -r_prime, r_prime) {
+            if x1 < 0.0 {
+                return Some(point!(cx - r_prime, y1 + cy));
+            } else {
+                return Some(point!(cx + r_prime, y1 + cy));
+            }
+        }
+        return None;
+    }
 
     let dx = x2 - x1;
     let dy = y2 - y1;
@@ -308,9 +390,9 @@ impl SideControlTrait for PurePursuitPolicy {
 
 #[cfg(test)]
 mod tests {
-    use parry2d_f64::{math::Point, na::Vector2};
-
     use super::*;
+    use approx::assert_relative_eq;
+    use parry2d_f64::{math::Point, na::Vector2};
 
     #[test]
     fn test_polyline_contact1() {

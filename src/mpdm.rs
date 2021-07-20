@@ -65,6 +65,7 @@ pub fn make_obstacle_vehicle_policy_belief_states(params: &Parameters) -> Vec<Si
 }
 
 pub fn make_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
+    let wait_for_clear = params.policies_wait_for_clear;
     let mut policy_choices = Vec::new();
 
     let mut long_policies = vec![LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate];
@@ -78,7 +79,7 @@ pub fn make_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
                 policy_choices.len() as u32,
                 Some(lane_i),
                 params.lane_change_time,
-                false,
+                wait_for_clear,
                 long_policy,
             )));
         }
@@ -88,7 +89,7 @@ pub fn make_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
         policy_choices.len() as u32,
         None,
         params.lane_change_time,
-        false,
+        wait_for_clear,
         LongitudinalPolicy::Decelerate,
     )));
 
@@ -114,7 +115,7 @@ pub fn mpdm_choose_policy(
     params: &Parameters,
     true_road: &Road,
     rng: &mut StdRng,
-) -> (SidePolicy, Vec<rvx::Shape>) {
+) -> (Option<SidePolicy>, Vec<rvx::Shape>) {
     let mut traces = Vec::new();
     let roads = road_set_for_scenario(params, true_road, rng, params.mpdm.samples_n);
     let debug = params.policy_report_debug
@@ -160,5 +161,5 @@ pub fn mpdm_choose_policy(
     }
     // eprintln!();
 
-    (best_policy.unwrap(), traces)
+    (best_policy, traces)
 }

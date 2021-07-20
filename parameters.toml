@@ -2,6 +2,7 @@ max_steps = 6000
 n_cars = 13
 method = "mcts"
 use_cfb = true
+policies_wait_for_clear = false
 extra_ego_accdec_policies = []
 
 physics_dt = 0.01
@@ -14,7 +15,7 @@ thread_limit = 8
 rng_seed = 0
 run_fast = false
 graphics_speedup = 8
-debug_car_i = 10
+debug_car_i = 6
 debug_steps_before = 5
 super_debug = true
 ego_policy_change_debug = true
@@ -24,7 +25,7 @@ intelligent_driver_debug = false
 belief_debug = false
 cfb_debug = false
 obstacle_car_debug = false
-policy_report_debug = false
+policy_report_debug = true
 ego_traces_debug = true
 # debugging_scenario = 3
 
@@ -41,6 +42,7 @@ place_ahead_beyond = 100.0
 [belief]
 different_lane_prob = 0.2
 different_longitudinal_prob = 0.8
+decelerate_prior_prob = 0.2
 accelerate_delta_vel_thresh = 2.0
 accelerate_ahead_dist_thresh = 10.0
 decelerate_vel_thresh = 4.0
@@ -52,14 +54,15 @@ efficiency_low_speed_cost = 1.0
 efficiency_high_speed_cost = 0.1
 efficiency_high_speed_tolerance = 1.0
 efficiency_weight = 1.0
-safety_weight = 150.0 # was 100
-safety_margin_low = 0.0 # bounded by lane width 3.7 - prius width 1.76 = 1.94; previous was 0.44
+safety_weight = 150.0                 # was 100
+safety_margin_low = 0.0               # bounded by lane width 3.7 - prius width 1.76 = 1.94; previous was 0.44
 safety_margin_high = 2.4
 logistic_map_low = 5.0
 logistic_map_high = -7.0
 accel_weight = 0.1
-steer_weight = 20.0 # was 10.0
-discount_factor = 0.8 # per second, 0.85
+steer_weight = 20.0                   # was 10.0
+plan_change_weight = 0.0
+discount_factor = 0.8                 # per second, 0.85
 
 [reward]
 safety_margin = 0.44
@@ -68,9 +71,9 @@ large_curvature_change = 0.12
 
 [cfb]
 key_vehicle_base_dist = 10.0
-key_vehicle_dist_time = 2.0
+key_vehicle_dist_time = 4.0
 uncertainty_threshold = 0.3
-dangerous_delta_threshold = 10.0
+risky_delta_threshold = 10.0
 max_n_for_cartesian_product = 4
 dt = 0.2
 horizon_t = 8.0
@@ -102,7 +105,7 @@ search_depth = 4
 samples_n = 64
 prefer_same_policy = true
 choose_random_policy = true
-ucb_const = -1 # -100 for ucb
+ucb_const = -1                        # -100 for ucb
 bound_mode = "marginal"
 selection_mode = "klucb"
 klucb_max_cost = 330
