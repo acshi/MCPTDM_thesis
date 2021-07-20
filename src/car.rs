@@ -382,4 +382,27 @@ impl Car {
         self.theta = theta;
         self.update_geometry_cache();
     }
+
+    pub fn spatial_x(&self) -> i32 {
+        self.spatial_offset(0.0)
+    }
+
+    pub fn spatial_offset(&self, dx: f64) -> i32 {
+        ((self.x + dx) * 1000.0) as i32
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct SpatialCar {
+    pub x: i32,
+    pub car_i: u32,
+}
+
+impl From<&Car> for SpatialCar {
+    fn from(item: &Car) -> Self {
+        Self {
+            x: item.spatial_x(),
+            car_i: item.car_i as u32,
+        }
+    }
 }

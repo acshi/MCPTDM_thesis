@@ -13,7 +13,7 @@ use rand::{prelude::StdRng, Rng};
 use rvx::{Rvx, RvxColor};
 
 use crate::{
-    arg_parameters::Parameters, belief::Belief, cost::Cost,
+    arg_parameters::Parameters, belief::Belief, car::SpatialCar, cost::Cost,
     mpdm::make_obstacle_vehicle_policy_belief_states, side_control::SideControlTrait,
     side_policies::SidePolicy,
 };
@@ -36,6 +36,7 @@ pub struct Road {
     pub t: f64,           // current time in seconds
     pub timesteps: usize, // current time in timesteps (related by DT)
     pub cars: Vec<Car>,
+    pub cars_spatial: Vec<SpatialCar>, // This is a copy for spatial queries, updated ONLY at the end of road.update()
     pub belief: Option<Rc<Belief>>,
     pub last_ego: Car,
     pub switched_ego_policy: bool,
@@ -51,10 +52,15 @@ pub struct Road {
 }
 
 fn range_dist(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> f64 {
-    let sep1 = (low_a - high_b).max(0.0);
-    let sep2 = (low_b - high_a).max(0.0);
-    let sep = sep1.max(sep2);
-    sep
+    let sep1 = low_a - high_b; //.max(0.0);
+    let sep2 = low_b - high_a; //.max(0.0);
+    if sep1 > sep2 {
+        sep1
+    } else {
+        sep2
+    }
+    // let sep = sep1.max(sep2);
+    // sep
 }
 
 fn logistic(x: f64) -> f64 {
@@ -73,6 +79,7 @@ impl Road {
             t: 0.0,
             timesteps: 0,
             last_ego: ego_car.clone(),
+            cars_spatial: vec![SpatialCar::from(&ego_car)].into_iter().collect(),
             cars: vec![ego_car],
             belief: None,
             switched_ego_policy: false,
@@ -161,6 +168,7 @@ impl Road {
             t: self.t,
             timesteps: self.timesteps,
             cars: Vec::new(),
+            cars_spatial: Vec::new(),
             belief: self.belief.clone(),
             last_ego: self.last_ego.clone(),
             switched_ego_policy: false,
@@ -334,28 +342,13 @@ impl Road {
     }
 
     pub fn dist_clear_ahead_in_lane(&self, car_i: usize, lane_i: i32) -> Option<(f64, usize)> {
-        self.dist_clear_in_lane::<true>(car_i, lane_i)
-    }
-
-    // fn dist_clear_behind(&self, car_i: usize) -> Option<(f64, usize)> {
-    //     self.dist_clear(car_i, false)
-    // }
-
-    // pub fn dist_clear<const AHEAD: bool>(&self, car_i: usize) -> Option<(f64, usize)> {
-    //     self.dist_clear_in_lane::<AHEAD>(car_i, None)
-    // }
-
-    pub fn dist_clear_in_lane<const AHEAD: bool>(
-        &self,
-        car_i: usize,
-        lane_i: i32,
-    ) -> Option<(f64, usize)> {
         let car = &self.cars[car_i];
 
         let mut min_dist = f64::MAX;
         let mut min_car_i = None;
 
-        let dist_thresh = car.vel * 100.0 + 2.0 * car.length;
+        // turns out this threshold just doesn't rule out enough to be useful
+        // let dist_thresh = car.vel * 100.0 + 2.0 * car.length;
 
         let pose = self.cars[car_i].pose();
         // we remove rotation from the ego's aabb calculation because otherwise we will
@@ -373,18 +366,17 @@ impl Road {
                 lane_y + car.width * 0.5
             ),
         );
-        for (i, c) in self.cars.iter().enumerate() {
-            // if statements ordered in fastest way to get to 'continue' (for performance)
-            // skip cars behind (or ahead of) this one
-            if AHEAD && c.x() < car.x() || !AHEAD && c.x() > car.x() {
-                // if i == 0 && car_i == 14 {
-                //     eprintln_f!("Skipping {car_i} to ego: c.x {:.2} car.x {:.2}", c.x, car.x);
-                // }
+
+        // for (i, c) in self.cars.iter().enumerate() {
+        let start_spacial_x = car.spatial_x();
+        for spatial_car in &self.cars_spatial {
+            if spatial_car.x < start_spacial_x {
                 continue;
             }
-            if (c.x() - car.x()).abs() >= dist_thresh {
-                continue;
-            }
+
+            let i = spatial_car.car_i as usize;
+            let c = &self.cars[i];
+
             if i == car_i {
                 continue;
             }
@@ -638,6 +630,13 @@ impl Road {
         self.trajectory_buffer = trajectory;
     }
 
+    fn update_cars_spatial(&mut self) {
+        self.cars_spatial.clear();
+        self.cars_spatial
+            .extend(self.cars.iter().map(|c| SpatialCar::from(c)));
+        self.cars_spatial.sort_by(|a, b| a.x.cmp(&b.x));
+    }
+
     pub fn update(&mut self, dt: f64) {
         // skip work if we have a weight of zero!
         if self.cost.weight == 0.0 {
@@ -652,6 +651,8 @@ impl Road {
         self.timesteps += 1;
 
         self.update_cost(dt);
+
+        self.update_cars_spatial();
     }
 
     fn update_cost(&mut self, dt: f64) {
