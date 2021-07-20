@@ -57,9 +57,7 @@ pub struct MpdmParameters {
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct CostParameters {
-    pub efficiency_low_speed_cost: f64,
-    pub efficiency_high_speed_cost: f64,
-    pub efficiency_high_speed_tolerance: f64,
+    pub efficiency_speed_cost: f64,
     pub efficiency_weight: f64,
 
     pub safety_weight: f64,

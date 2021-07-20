@@ -86,6 +86,7 @@ Maybe do all these with n_samples=32:
 UCB constant for MCTS?
 Some comparison between KLUCB/+ and UCB?
 Between marginal and lower_bound?
+
 OKAY, finalize discount factors for each method?
 Then finally test using more samples?
 

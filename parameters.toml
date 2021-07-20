@@ -50,19 +50,17 @@ finished_waiting_dy = 0.5
 skips_waiting_prob = 0.1
 
 [cost]
-efficiency_low_speed_cost = 1.0
-efficiency_high_speed_cost = 0.1
-efficiency_high_speed_tolerance = 1.0
+efficiency_speed_cost = 1.0
 efficiency_weight = 1.0
-safety_weight = 150.0                 # was 100
-safety_margin_low = 0.0               # bounded by lane width 3.7 - prius width 1.76 = 1.94; previous was 0.44
+safety_weight = 150.0       # was 100
+safety_margin_low = 0.0     # bounded by lane width 3.7 - prius width 1.76 = 1.94; previous was 0.44
 safety_margin_high = 2.4
 logistic_map_low = 5.0
 logistic_map_high = -7.0
 accel_weight = 0.1
-steer_weight = 20.0                   # was 10.0
+steer_weight = 20.0         # was 10.0
 plan_change_weight = 0.0
-discount_factor = 0.8                 # per second, 0.85
+discount_factor = 0.8       # per second, 0.85
 
 [reward]
 safety_margin = 0.44

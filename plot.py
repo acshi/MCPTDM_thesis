@@ -142,14 +142,15 @@ if False:
 #     results, [("method", "mcts"), ("mcts.bound_mode", "marginal"), ("max.rng_seed", 2047), ("mcts.prioritize_worst_particles_z", "-1000")])
 # quit()
 
-# cargo run --release rng_seed 0-2047 :: method mcts :: use_cfb false :: mcts.bound_mode lower_bound marginal :: mcts.samples_n 2 4 8 16 32 64 128 256 :: mcts.prioritize_worst_particles_z -1000 1000 :: thread_limit 24
+# cargo run --release rng_seed 0-1023 :: method mcts :: use_cfb false :: mcts.bound_mode lower_bound marginal :: mcts.samples_n 2 4 8 16 32 64 :: mcts.prioritize_worst_particles_z -1000 1000 :: thread_limit 24
+# cargo run --release rng_seed 1024-2047 :: method mcts :: use_cfb false :: mcts.bound_mode lower_bound marginal :: mcts.samples_n 2 4 8 16 32 64 :: mcts.prioritize_worst_particles_z -1000 1000 :: thread_limit 24
 samples_n_kind = FigureKind("samples_n", [2, 4, 8, 16, 32, 64, 128, 256, 512], translations=t10s)
 prioritize_worst_particles_z_mode = FigureMode("prioritize_worst_particles_z", ["-1000", "1000"])
 if True:
     common_filters = [("use_cfb", "false"),
                       ("max.rng_seed", 2047)]
     mcts_filters = [("method", "mcts"),
-                    ("mcts.bound_mode", "marginal")] + common_filters
+                    ("mcts.bound_mode", "lower_bound")] + common_filters
     fixed_filters = [("method", "fixed")] + common_filters
     mpdm_filters = [("method", "mpdm")] + common_filters
     for metric in plot_metrics:

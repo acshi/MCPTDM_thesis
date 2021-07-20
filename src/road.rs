@@ -659,19 +659,11 @@ impl Road {
         let cparams = &self.params.cost;
         let car = &self.cars[0];
 
-        if car.vel < car.preferred_vel {
-            self.cost.efficiency += cparams.efficiency_weight
-                * cparams.efficiency_low_speed_cost
-                * (car.preferred_vel - car.vel)
-                * dt
-                * self.cost.discount;
-        } else if car.vel > car.preferred_vel + cparams.efficiency_high_speed_tolerance {
-            self.cost.efficiency += cparams.efficiency_weight
-                * cparams.efficiency_high_speed_cost
-                * (car.vel - car.preferred_vel - cparams.efficiency_high_speed_tolerance)
-                * dt
-                * self.cost.discount;
-        }
+        self.cost.efficiency += cparams.efficiency_weight
+            * cparams.efficiency_speed_cost
+            * (car.preferred_vel - car.vel).abs()
+            * dt
+            * self.cost.discount;
 
         let min_dist = self.min_unsafe_dist(0);
         if let Some(min_dist) = min_dist {
