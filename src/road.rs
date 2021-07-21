@@ -518,14 +518,7 @@ impl Road {
                 let target_steer = control.choose_steer(self, car_i, &trajectory);
 
                 let car = &mut self.cars[car_i];
-                let target_steer_accel = (target_steer - car.steer) / dt;
-                let steer_accel = target_steer_accel
-                    .max(-car.preferred_steer_accel)
-                    .min(car.preferred_steer_accel);
-
-                car.steer = (car.steer + steer_accel * dt)
-                    .max(-PRIUS_MAX_STEER)
-                    .min(PRIUS_MAX_STEER);
+                car.steer = target_steer.max(-PRIUS_MAX_STEER).min(PRIUS_MAX_STEER);
                 self.cars[car_i].side_control = Some(control);
             }
         }

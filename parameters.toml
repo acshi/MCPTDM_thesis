@@ -27,7 +27,7 @@ cfb_debug = false
 obstacle_car_debug = false
 policy_report_debug = true
 ego_traces_debug = true
-# debugging_scenario = 3
+# debugging_scenario = 1
 
 only_ego_crashes_in_forward_sims = true
 only_crashes_with_ego = true

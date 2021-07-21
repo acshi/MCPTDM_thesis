@@ -42,12 +42,6 @@ pub const PREFERRED_ACCEL_HIGH: f64 = 2.0; // 11.2; // model s, 2.4s zero to six
 pub const PREFERRED_ACCEL_DEFAULT: f64 = 2.0; // 16s zero to sixty, just under max accel for a prius (13s)
 pub const BREAKING_ACCEL: f64 = 6.0;
 
-// maybe needs to be a function of velocity too???
-// also not really tuned/reasonably chosen, ahahah
-pub const PREFERRED_STEER_ACCEL_LOW: f64 = 19.9;
-pub const PREFERRED_STEER_ACCEL_HIGH: f64 = 20.1;
-pub const PREFERRED_STEER_ACCEL_DEFAULT: f64 = 20.0;
-
 #[derive(Clone, Debug)]
 pub struct Car {
     pub car_i: usize,
@@ -66,7 +60,6 @@ pub struct Car {
     // "attitude" properties/constants
     pub preferred_vel: f64,
     pub preferred_accel: f64,
-    pub preferred_steer_accel: f64,
     pub preferred_follow_time: f64,
 
     // current properties/goals
@@ -106,7 +99,6 @@ impl Car {
 
             preferred_vel: SPEED_DEFAULT,
             preferred_accel: PREFERRED_ACCEL_DEFAULT,
-            preferred_steer_accel: PREFERRED_STEER_ACCEL_DEFAULT,
             preferred_follow_time: FOLLOW_TIME_DEFAULT,
 
             target_follow_time: FOLLOW_TIME_DEFAULT,
@@ -142,8 +134,6 @@ impl Car {
         car.vel = car.preferred_vel;
         car.set_x(rng.gen_range(0.0..ROAD_LENGTH) - ROAD_LENGTH / 2.0);
         car.preferred_accel = rng.gen_range(PREFERRED_ACCEL_LOW..PREFERRED_ACCEL_HIGH);
-        car.preferred_steer_accel =
-            rng.gen_range(PREFERRED_STEER_ACCEL_LOW..PREFERRED_STEER_ACCEL_HIGH);
         car.preferred_follow_time = rng.gen_range(FOLLOW_TIME_LOW..FOLLOW_TIME_HIGH);
 
         car
@@ -154,7 +144,6 @@ impl Car {
 
         sim_car.preferred_vel = self.vel.max(SPEED_LOW);
         sim_car.preferred_accel = PREFERRED_ACCEL_DEFAULT;
-        sim_car.preferred_steer_accel = PREFERRED_STEER_ACCEL_DEFAULT;
         sim_car.preferred_follow_time = FOLLOW_TIME_DEFAULT;
 
         sim_car.target_lane_i = sim_car.current_lane();

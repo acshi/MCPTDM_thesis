@@ -195,6 +195,7 @@ impl State {
 fn debugging_scenarios(params: &Parameters, road: &mut Road) {
     match params.debugging_scenario {
         Some(1) => {
+            road.cars[0].set_y(-0.5);
             road.cars.truncate(1);
             road.cars.push(Car::new(params, 1, 1));
             road.cars[1].side_policy =
@@ -243,8 +244,8 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
     while road.cars.len() < params.n_cars + 1 {
         road.add_random_car(&mut scenario_rng);
     }
-    road.init_belief();
     debugging_scenarios(&params, &mut road);
+    road.init_belief();
 
     let mut state = State {
         scenario_rng,

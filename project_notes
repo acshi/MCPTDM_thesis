@@ -80,6 +80,8 @@ Overall for this week:
 
 15 work days left until the end of July. A 20-page paper with an average of 1000 words per page, would be 20,000 words and I would need to write 1,333 words per day!!!
 
+Make it use the real back-wheel pure pursuit.
+
 Tune EUDM plan_change weight.
 
 Maybe do all these with n_samples=32:

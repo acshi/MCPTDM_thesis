@@ -461,6 +461,8 @@ pub fn run_parallel_scenarios() {
 
     if n_scenarios == 1 {
         let (cost, reward) = run_with_parameters(scenarios[0].clone());
+        let scenario_name = scenarios[0].scenario_name.clone().unwrap();
+        println_f!("{scenario_name}");
         println_f!("{cost:?}, {reward:?}");
     } else {
         scenarios.par_iter().for_each(|scenario| {
