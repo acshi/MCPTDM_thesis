@@ -23,6 +23,7 @@ pub struct EudmParameters {
     pub layer_t: f64,
     pub search_depth: u32,
     pub samples_n: usize,
+    pub allow_different_root_policy: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -251,6 +252,9 @@ fn create_scenarios(
                 "mcts.prioritize_worst_particles_z" => {
                     params.mcts.prioritize_worst_particles_z = val.parse().unwrap()
                 }
+                "eudm.allow_different_root_policy" => {
+                    params.eudm.allow_different_root_policy = val.parse().unwrap()
+                }
                 _ => panic!("{} is not a valid parameter!", name),
             }
             if name_value_pairs.len() > 1 {
@@ -326,6 +330,13 @@ fn create_scenarios(
             _ => "".to_string(),
         };
 
+        let allow_different_root_policy = match s.method.as_str() {
+            "eudm" => {
+                format_f!(",allow_different_root_policy={s.eudm.allow_different_root_policy}")
+            }
+            _ => "".to_string(),
+        };
+
         // "smoothness" => params.cost.smoothness_weight = val.parse().unwrap(),
         // "safety" => params.cost.safety_weight = val.parse().unwrap(),
         // "ud" => params.cost.uncomfortable_dec_weight = val.parse().unwrap(),
@@ -338,6 +349,7 @@ fn create_scenarios(
              ,extra_ego_accdec_policies={extra_ego_accdec}\
              {samples_n}{search_depth}{layer_forward_t}\
              {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}\
+             {allow_different_root_policy}\
              ,max_steps={s.max_steps}\
              ,n_cars={s.n_cars}\
              ,safety={s.cost.safety_weight}\

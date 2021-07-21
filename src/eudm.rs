@@ -31,6 +31,8 @@ fn dcp_tree_search(
         );
     }
 
+    let max_car_traces_depth = 3;
+
     let mut best_sub_policy = None;
     let mut best_switch_depth = 0;
     let mut best_cost = Cost::max_value();
@@ -40,7 +42,7 @@ fn dcp_tree_search(
     {
         let mut ongoing_roads = roads.clone();
         for depth_level in 0..eudm.search_depth {
-            if depth_level < 4 {
+            if depth_level < max_car_traces_depth {
                 ongoing_roads.reset_car_traces();
             } else {
                 ongoing_roads.disable_car_traces();
@@ -62,17 +64,28 @@ fn dcp_tree_search(
         }
     }
 
+    // this copy of the roads will be advanced by layer_t each time through the loop
+    // to avoid doing duplicate work.
     let mut init_policy_roads = roads.clone();
     init_policy_roads.set_ego_policy(&operating_policy);
 
-    for switch_depth in 1..=eudm.search_depth {
-        if switch_depth < 4 {
+    let start_depth = if eudm.allow_different_root_policy {
+        0
+    } else {
+        1
+    };
+
+    for switch_depth in start_depth..=eudm.search_depth {
+        if switch_depth < max_car_traces_depth {
             init_policy_roads.reset_car_traces();
         } else {
             init_policy_roads.disable_car_traces();
         }
-        init_policy_roads.take_update_steps(eudm.layer_t, eudm.dt);
-        traces.append(&mut init_policy_roads.make_traces(switch_depth - 1, false));
+
+        if switch_depth > 0 {
+            init_policy_roads.take_update_steps(eudm.layer_t, eudm.dt);
+            traces.append(&mut init_policy_roads.make_traces(switch_depth - 1, false));
+        }
 
         if switch_depth == eudm.search_depth {
             if debug {
@@ -99,7 +112,7 @@ fn dcp_tree_search(
                 roads.set_ego_policy_not_switched(sub_policy);
 
                 for depth_level in switch_depth..eudm.search_depth {
-                    if depth_level < 4 {
+                    if depth_level < max_car_traces_depth {
                         roads.reset_car_traces();
                     } else {
                         roads.disable_car_traces();
@@ -126,56 +139,6 @@ fn dcp_tree_search(
             }
         }
     }
-
-    // if debug && roads.timesteps() == 2000 {
-    //     for delay in [2.0] {
-    //         let test_policy = SidePolicy::DelayedPolicy(DelayedPolicy::new(
-    //             operating_policy.clone(),
-    //             policy_choices[3].clone(),
-    //             delay,
-    //         ));
-
-    //         let mut roads = roads.clone();
-    //         roads.disable_car_traces();
-    //         roads.set_ego_policy(&test_policy);
-    //         for depth_level in 0..eudm.search_depth {
-    //             roads.take_update_steps(eudm.layer_t, eudm.dt);
-
-    //             let cost = roads.cost();
-    //             eprintln_f!("\t{depth_level=:.2} {cost=:?} = {:.2}", cost.total());
-    //         }
-
-    //         let cost = roads.cost();
-    //         eprintln_f!(
-    //             "Delay policy: {delay=:.2} produced {cost=:?} = {:.2}",
-    //             cost.total()
-    //         );
-    //     }
-    //     for switch_depth in [1] {
-    //         let mut roads = roads.clone();
-    //         roads.disable_car_traces();
-    //         roads.set_ego_policy(&operating_policy.clone());
-    //         for depth_level in 0..switch_depth {
-    //             roads.take_update_steps(eudm.layer_t, eudm.dt);
-
-    //             let cost = roads.cost();
-    //             eprintln_f!("\t{depth_level=:.2} {cost=:?} = {:.2}", cost.total());
-    //         }
-    //         roads.set_ego_policy(&policy_choices[3]);
-    //         for depth_level in switch_depth..eudm.search_depth {
-    //             roads.take_update_steps(eudm.layer_t, eudm.dt);
-
-    //             let cost = roads.cost();
-    //             eprintln_f!("\t{depth_level=:.2} {cost=:?} = {:.2}", cost.total());
-    //         }
-
-    //         let cost = roads.cost();
-    //         eprintln_f!(
-    //             "Direct search: {switch_depth=} produced {cost=:?} = {:.2}",
-    //             cost.total()
-    //         );
-    //     }
-    // }
 
     // will be Some if we should switch policies after one layer, and None to stay the same
     if let Some(best_sub_policy) = best_sub_policy {
