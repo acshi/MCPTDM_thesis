@@ -43,7 +43,7 @@ impl std::fmt::Display for Reward {
         let s = self;
         write_f!(
             f,
-            "{s.avg_vel:5.2} {s.safety:5.3} {s.uncomfortable_dec:5.3} {s.curvature_change:5.3} {:7.5} {:7.5} {:7.5} {:7.5} {:7.5}",
+            "{s.avg_vel:5.2} {s.safety:5.3} {s.uncomfortable_dec:5.3} {s.curvature_change:5.3} {:7.5} {:7.5} {:7.5} {:7.5} {:8.6}",
             s.mean_timestep_time.unwrap(),
             s.below95_timestep_time.unwrap(),
             s.below997_timestep_time.unwrap(),
@@ -70,7 +70,7 @@ impl std::fmt::Debug for Reward {
             write_f!(f, ", max: {:.2}", t * 1000.0)?;
         }
         if let Some(t) = self.stddev_timestep_time {
-            write_f!(f, ", stddev: {:.2}", t * 1000.0)?;
+            write_f!(f, ", stddev: {:.3}", t * 1000.0)?;
         }
         Ok(())
     }
