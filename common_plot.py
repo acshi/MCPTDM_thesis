@@ -24,10 +24,7 @@ class FigureMode:
         self.values = values
 
     def matches(self, params, value):
-        return params[self.param] == str(value)
-
-    # def filter(self, results, value):
-    #     return [entry for entry in results if self.matches(entry["params"], value)]
+        return self.param in params and params[self.param] == str(value)
 
 
 def filter_match(params, filter):
@@ -255,6 +252,122 @@ class FigureKind:
         else:
             self._plot(results, result_name, title, xlabel, ylabel,
                        mode, filters, extra_lines, extra_modes)
+
+
+class FigureBuilder:
+    def __init__(self, results, x_param, y_param, translations={}, xlim=None):
+        self.results = results
+        self.x_param = x_param
+        self.y_param = y_param
+        self.modes_description = ""
+        self.translations = translations
+        self.xlim = xlim
+
+        self.fig, self.ax = plt.subplots(dpi=100 if show_only else save_dpi)
+
+    def translate(self, name):
+        if name in self.translations:
+            return self.translations[name]
+        return name
+
+    def filter_entry(self, entry, filters, modes=[]):
+        params = entry["params"]
+        return self.y_param in entry and all(filter_match(params, f) for f in filters) and all(mode_val[0].matches(params, mode_val[1]) for mode_val in modes)
+
+    def collect_vals(self, x_mode, filters, legend_mode, legend_mode_val):
+        x_val_sets = [list() for _ in range(len(x_mode.values))]
+        y_val_sets = [list() for _ in range(len(x_mode.values))]
+        modes = [(legend_mode, legend_mode_val)] if legend_mode else []
+        for entry in self.results:
+            if not self.filter_entry(entry, filters, modes):
+                continue
+            for (i, val_name) in enumerate(x_mode.values):
+                if entry["params"][x_mode.param] == str(val_name):
+                    x_val_sets[i].append((entry[self.x_param]))
+                    y_val_sets[i].append((entry[self.y_param]))
+        return (x_val_sets, y_val_sets)
+
+    def plot(self, x_mode, filters=[], legend_mode=None, label=None):
+        if legend_mode:
+            self.modes_description += f"_{legend_mode.param}"
+
+        for legend_mode_val in legend_mode.values if legend_mode else [None]:
+            import time
+            start_time = time.time()
+            (x_val_sets, y_val_sets) = self.collect_vals(
+                x_mode, filters, legend_mode, legend_mode_val)
+            print(f"collect_vals took {time.time() - start_time:.2} seconds")
+            if len(y_val_sets) == 0:
+                print(
+                    f"Data completely missing for {self.y_param} by {self.x_param} with {filters}")
+                if legend_mode:
+                    print(f"And with {legend_mode.param} = {legend_mode_val}")
+                continue
+            n_vals_in_set = len(y_val_sets[0])
+            for i, vals in enumerate(y_val_sets):
+                if len(vals) == 0:
+                    import pdb
+                    pdb.set_trace()
+                    legend_str = f"and with {legend_mode.param} = {legend_mode_val}" if legend_mode else ""
+                    print(
+                        f"{x_mode.param} = {x_mode.values[i]} has 0 data points for {self.y_param} with {filters} {legend_str}")
+                    vals.append(np.nan)
+                if len(vals) != n_vals_in_set:
+                    legend_str = f"and with {legend_mode.param} = {legend_mode_val}" if legend_mode else ""
+                    print(
+                        f"{len(vals)} != {n_vals_in_set} for {x_mode.param} = {x_mode.values[i]} {legend_str}")
+
+            means = [np.mean(vals) for vals in y_val_sets]
+            stdev_mean = [np.std(vals) / np.sqrt(len(vals))
+                          for vals in y_val_sets]
+
+            x_means = [np.mean(vals) for vals in x_val_sets]
+
+            full_label = label
+            if legend_mode:
+                if full_label:
+                    full_label = f"{label} {self.translate(legend_mode_val)}"
+                else:
+                    full_label = f"{self.translate(legend_mode_val)}"
+
+            self.ax.errorbar(x_means, means,
+                             yerr=np.array(stdev_mean), label=full_label)
+
+    def _set_show_save(self, title, xlabel, ylabel, file_suffix):
+        self.ax.set_title(title)
+        self.ax.set_xlabel(xlabel)
+        self.ax.set_ylabel(ylabel)
+        if self.xlim is not None:
+            self.ax.set_xlim(self.xlim)
+        if show_only:
+            plt.show()
+        else:
+            self.fig.set_figwidth(6.4 * figure_zoom)
+            self.fig.set_figheight(4.8 * figure_zoom)
+
+            file_desc = f"{self.x_param}_{self.y_param}{self.modes_description}{file_suffix}"
+
+            self.fig.tight_layout()
+            if make_pdf_also:
+                self.fig.savefig(f"figures/pdf/by_{file_desc}.pdf",
+                                 bbox_inches="tight", pad_inches=0)
+            self.fig.savefig(f"figures/by_{file_desc}.png")
+
+    def show(self, title=None, xlabel=None, ylabel=None, file_suffix=""):
+        xlabel = xlabel or self.translate(self.x_param)
+        ylabel = ylabel or self.translate(self.y_param)
+        if title is None:
+            title = f"{self.translate(self.y_param)} by {decapitalize(self.translate(self.x_param))}"
+            if self.modes_description:
+                title = f"{title} and {decapitalize(self.translate(self.modes_description))}"
+
+        modes_description = f" and {self.modes_description}" if self.modes_description else ""
+        print(f"{self.y_param} by {self.x_param}{modes_description}")
+
+        self._set_show_save(title, xlabel, ylabel, file_suffix)
+
+    def legend(self):
+        self.ax.legend()
 
 
 def evaluate_conditions(results, metrics, filters):

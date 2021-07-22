@@ -186,7 +186,7 @@ impl State {
         // eprintln_f!("{accel=:.2} {curvature_change=:.2}");
 
         let timestep_time = real_time_start.elapsed().as_secs_f64();
-        self.reward.max_timestep_time = self.reward.max_timestep_time.max(timestep_time);
+        self.reward.timestep_times.push(timestep_time);
 
         self.timesteps += 1;
     }
@@ -300,6 +300,7 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
     state.reward.safety /= state.road.t;
     state.reward.uncomfortable_dec /= km_travelled;
     state.reward.curvature_change /= km_travelled;
+    state.reward.calculate_timestep_metrics();
 
     (state.road.cost, state.reward)
 }

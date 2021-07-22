@@ -28,7 +28,7 @@ impl std::fmt::Debug for Cost {
         let s = self;
         write_f!(
             f,
-            "eff: {s.efficiency:8.2}, safe: {s.safety:8.2}, accel: {s.accel:8.2}, steer: {s.steer:8.2}, plan_change: {s.plan_change:8.2}"
+            "eff: {s.efficiency:.2}, safe: {s.safety:.2}, accel: {s.accel:.2}, steer: {s.steer:.2}, plan_change: {s.plan_change:.2}"
         )
     }
 }
