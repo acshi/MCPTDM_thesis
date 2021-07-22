@@ -9,6 +9,7 @@ pub struct Reward {
     pub below95_timestep_time: Option<f64>,
     pub below997_timestep_time: Option<f64>,
     pub max_timestep_time: Option<f64>,
+    pub stddev_timestep_time: Option<f64>,
 }
 
 impl Reward {
@@ -23,6 +24,15 @@ impl Reward {
 
         let mean = self.timestep_times.iter().sum::<f64>() / n as f64;
         self.mean_timestep_time = Some(mean);
+
+        let stddev = (self
+            .timestep_times
+            .iter()
+            .map(|t| (*t - mean).powi(2))
+            .sum::<f64>()
+            / n as f64)
+            .sqrt();
+        self.stddev_timestep_time = Some(stddev);
     }
 }
 
@@ -31,11 +41,12 @@ impl std::fmt::Display for Reward {
         let s = self;
         write_f!(
             f,
-            "{s.avg_vel:5.2} {s.safety:5.3} {s.uncomfortable_dec:5.3} {s.curvature_change:5.3} {:7.5} {:7.5} {:7.5} {:7.5}",
+            "{s.avg_vel:5.2} {s.safety:5.3} {s.uncomfortable_dec:5.3} {s.curvature_change:5.3} {:7.5} {:7.5} {:7.5} {:7.5} {:7.5}",
             s.mean_timestep_time.unwrap(),
             s.below95_timestep_time.unwrap(),
             s.below997_timestep_time.unwrap(),
-            s.max_timestep_time.unwrap()
+            s.max_timestep_time.unwrap(),
+            s.stddev_timestep_time.unwrap()
         )
     }
 }
@@ -55,6 +66,9 @@ impl std::fmt::Debug for Reward {
         }
         if let Some(t) = self.max_timestep_time {
             write_f!(f, ", max: {:.2}", t * 1000.0)?;
+        }
+        if let Some(t) = self.stddev_timestep_time {
+            write_f!(f, ", stddev: {:.2}", t * 1000.0)?;
         }
         Ok(())
     }
