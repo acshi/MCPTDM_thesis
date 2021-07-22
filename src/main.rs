@@ -111,11 +111,11 @@ impl State {
     fn update(&mut self, dt: f64) {
         let replan_interval = (self.params.replan_dt / self.params.physics_dt).round() as u32;
 
-        let real_time_start = Instant::now();
-
         // method chooses the ego policy
         let policy_rng = &mut self.policy_rng;
         if self.timesteps % replan_interval == 0 && !self.road.cars[0].crashed {
+            let replan_real_time_start = Instant::now();
+
             let (policy, traces) = if false && self.road.super_debug() {
                 mpdm_choose_policy(&self.params, &self.road, policy_rng)
             } else {
@@ -128,6 +128,11 @@ impl State {
                     _ => panic!("invalid method '{}'", self.params.method),
                 }
             };
+
+            self.reward
+                .planning_times
+                .push(replan_real_time_start.elapsed().as_secs_f64());
+
             self.traces = traces;
             if false {
                 check_for_duplicate_shapes(&self.traces);
@@ -184,9 +189,6 @@ impl State {
             self.reward.curvature_change += dt;
         }
         // eprintln_f!("{accel=:.2} {curvature_change=:.2}");
-
-        let timestep_time = real_time_start.elapsed().as_secs_f64();
-        self.reward.timestep_times.push(timestep_time);
 
         self.timesteps += 1;
     }

@@ -259,7 +259,7 @@ class FigureBuilder:
         self.results = results
         self.x_param = x_param
         self.y_param = y_param
-        self.modes_description = ""
+        self.all_modes = []
         self.translations = translations
         self.xlim = xlim
 
@@ -289,7 +289,8 @@ class FigureBuilder:
 
     def plot(self, x_mode, filters=[], legend_mode=None, label=None):
         if legend_mode:
-            self.modes_description += f"_{legend_mode.param}"
+            if not any(legend_mode.param == mode.param for mode in self.all_modes):
+                self.all_modes += [legend_mode]
 
         for legend_mode_val in legend_mode.values if legend_mode else [None]:
             import time
@@ -306,8 +307,6 @@ class FigureBuilder:
             n_vals_in_set = len(y_val_sets[0])
             for i, vals in enumerate(y_val_sets):
                 if len(vals) == 0:
-                    import pdb
-                    pdb.set_trace()
                     legend_str = f"and with {legend_mode.param} = {legend_mode_val}" if legend_mode else ""
                     print(
                         f"{x_mode.param} = {x_mode.values[i]} has 0 data points for {self.y_param} with {filters} {legend_str}")
@@ -345,7 +344,8 @@ class FigureBuilder:
             self.fig.set_figwidth(6.4 * figure_zoom)
             self.fig.set_figheight(4.8 * figure_zoom)
 
-            file_desc = f"{self.x_param}_{self.y_param}{self.modes_description}{file_suffix}"
+            modes_description = "_".join([""] + [mode.param for mode in self.all_modes])
+            file_desc = f"{self.x_param}_{self.y_param}{modes_description}{file_suffix}"
 
             self.fig.tight_layout()
             if make_pdf_also:
@@ -356,13 +356,16 @@ class FigureBuilder:
     def show(self, title=None, xlabel=None, ylabel=None, file_suffix=""):
         xlabel = xlabel or self.translate(self.x_param)
         ylabel = ylabel or self.translate(self.y_param)
+
         if title is None:
             title = f"{self.translate(self.y_param)} by {decapitalize(self.translate(self.x_param))}"
-            if self.modes_description:
-                title = f"{title} and {decapitalize(self.translate(self.modes_description))}"
 
-        modes_description = f" and {self.modes_description}" if self.modes_description else ""
-        print(f"{self.y_param} by {self.x_param}{modes_description}")
+            modes_str = " and ".join([""] + [decapitalize(self.translate(mode.param))
+                                             for mode in self.all_modes])
+            title += modes_str
+
+        modes_str = " and ".join([""] + [mode.param for mode in self.all_modes])
+        print(f"{self.y_param} by {self.x_param}{modes_str}")
 
         self._set_show_save(title, xlabel, ylabel, file_suffix)
 

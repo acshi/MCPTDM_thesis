@@ -427,6 +427,7 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
     fn test_parry_polyline_contact() {
         let contact = parry2d_f64::query::contact(
             &Isometry::identity(),

@@ -5,6 +5,7 @@ import time
 t10s = dict()
 t10s["discount_factor"] = "Discount Factor"
 t10s["safety"] = "Safety"
+t10s["cost.safety"] = "Safety"
 t10s["cost"] = "Cost"
 t10s["efficiency"] = "Efficiency"
 t10s["ud"] = "Uncomfortable decelerations"
@@ -16,7 +17,11 @@ t10s["mcts"] = "MCTS"
 t10s["method"] = "Method"
 t10s["false"] = "Normal"
 t10s["true"] = "CFB"
+t10s["use_cfb"] = "CFB"
 t10s["seconds"] = "Computation time (s)"
+t10s["997_ts"] = "99.7% Computation time (s)"
+t10s["95_ts"] = "95% Computation time (s)"
+t10s["mean_ts"] = "Mean computation time (s)"
 t10s["search_depth"] = "Search depth"
 t10s["samples_n"] = "# Samples"
 t10s["bound_mode"] = "UCB expected-cost rule"
@@ -67,7 +72,11 @@ with open("results.cache", "r") as f:
             entry["safety"] = float(parts[6])
             entry["ud"] = float(parts[7])
             entry["cc"] = float(parts[8])
-            entry["seconds"] = float(parts[9])
+            entry["mean_ts"] = float(parts[9])
+            entry["95_ts"] = float(parts[10])
+            entry["997_ts"] = float(parts[11])
+            entry["max_ts"] = float(parts[12])
+            entry["stddev_ts"] = float(parts[13])
 
             entry["cost.efficiency"] = float(parts[1])
             entry["cost.safety"] = float(parts[2])
@@ -94,13 +103,13 @@ extra_accdec_kind = FigureKind("extra_ego_accdec_policies", [
 method_mode = FigureMode("method", ["fixed", "tree", "mpdm", "eudm", "mcts"])
 cfb_mode = FigureMode("use_cfb", ["false", "true"])
 
-plot_metrics = ["cost", "safety", "efficiency"]
+plot_metrics = ["cost", "cost.safety", "efficiency"]
 evaluate_metrics = ["cost", "safety", "efficiency", "cost.efficiency",
                     "cost.safety", "cost.accel", "cost.steer", "seconds"]
 
-find_filters = [("method", "eudm"), ("use_cfb", "true"), ("samples_n", 2)]
-print(max(filter_extra(results, find_filters), key=lambda entry: entry["seconds"]))
-quit()
+# find_filters = [("method", "eudm"), ("use_cfb", "true"), ("samples_n", 2)]
+# print(max(filter_extra(results, find_filters), key=lambda entry: entry["seconds"]))
+# quit()
 
 # print_all_parameter_values_used(results, [])
 
@@ -150,25 +159,26 @@ if False:
 #     results, [("method", "mcts"), ("mcts.bound_mode", "marginal"), ("use_cfb", "false"), ("max.rng_seed", 2047), ("mcts.prioritize_worst_particles_z", "-1000")])
 # quit()
 
+# cargo run --release rng_seed 0-1023 :: method mcts :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 1024-2047 :: method mcts :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 0-127 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 1024-1151 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
 if True:
     for metric in plot_metrics:
-        seconds_fig = FigureBuilder(results, "seconds", metric, translations=t10s)
+        seconds_fig = FigureBuilder(results, "95_ts", metric, translations=t10s)
 
-        common_filters = [("use_cfb", "false"),
-                          ("max.rng_seed", 2047)]
+        common_filters = [
+            #   ("use_cfb", "false"),
+            ("max.rng_seed", 2047)]
         mcts_filters = [("method", "mcts"),
                         ("mcts.bound_mode", "marginal")] + common_filters
         seconds_fig.plot(FigureMode(
-            "samples_n", [4, 8, 16, 32, 64, 128]), mcts_filters, prioritize_worst_particles_z_mode, label="MCTS ")
+            "samples_n", [4, 8, 16, 32, 64, 128]), mcts_filters, cfb_mode, label="MCTS, ")
 
-        eudm_cfb_true_filters = [("method", "eudm"),
-                                 ("allow_different_root_policy", "true"), ("use_cfb", "true"), ("max.rng_seed", 2047)]
-        eudm_cfb_false_filters = [("method", "eudm"),
-                                  ("allow_different_root_policy", "true"), ("use_cfb", "false"), ("max.rng_seed", 2047)]
+        eudm_filters = [("method", "eudm"),
+                        ("allow_different_root_policy", "true"), ("max.rng_seed", 2047)]
         seconds_fig.plot(FigureMode("samples_n", [2, 4, 8, 16, 32]),
-                         eudm_cfb_true_filters, label="EUDM-CFB")
-        seconds_fig.plot(FigureMode("samples_n", [2, 4, 8, 16, 32]),
-                         eudm_cfb_false_filters, label="EUDM-NoCFB")
+                         eudm_filters, cfb_mode, label="EUDM, ")
         seconds_fig.legend()
 
         seconds_fig.show()

@@ -627,7 +627,7 @@ impl Road {
         self.cars_spatial.clear();
         self.cars_spatial
             .extend(self.cars.iter().map(|c| SpatialCar::from(c)));
-        self.cars_spatial.sort_by(|a, b| a.x.cmp(&b.x));
+        self.cars_spatial.sort_unstable_by(|a, b| a.x.cmp(&b.x));
     }
 
     pub fn update(&mut self, dt: f64) {

@@ -60,6 +60,16 @@ impl Belief {
         }
     }
 
+    #[allow(unused)]
+    pub fn for_all_cars(n_cars: usize, belief: &[f64]) -> Self {
+        let mut single_belief = belief.to_vec();
+        normalize(&mut single_belief);
+
+        Self {
+            belief: vec![single_belief; n_cars],
+        }
+    }
+
     pub fn update(&mut self, road: &Road) {
         let bparams = &road.params.belief;
         for (car_i, belief) in self.belief.iter_mut().enumerate().skip(1) {

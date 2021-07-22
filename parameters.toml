@@ -18,14 +18,14 @@ graphics_speedup = 8
 debug_car_i = 6
 debug_steps_before = 5
 super_debug = true
-ego_policy_change_debug = true
+ego_policy_change_debug = false
 ego_state_debug = false
 separation_debug = false
 intelligent_driver_debug = false
 belief_debug = false
-cfb_debug = false
+cfb_debug = true
 obstacle_car_debug = false
-policy_report_debug = true
+policy_report_debug = false
 ego_traces_debug = true
 # debugging_scenario = 1
 
@@ -69,7 +69,7 @@ large_curvature_change = 0.12
 
 [cfb]
 key_vehicle_base_dist = 10.0
-key_vehicle_dist_time = 4.0
+key_vehicle_dist_time = 8.0
 uncertainty_threshold = 0.3
 risky_delta_threshold = 10.0
 max_n_for_cartesian_product = 4

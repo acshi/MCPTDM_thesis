@@ -1,11 +1,14 @@
+use std::collections::BinaryHeap;
+
 use itertools::Itertools;
+use ordered_float::NotNan;
 
 use crate::{
-    arg_parameters::Parameters, car::SPEED_LOW, mpdm::make_obstacle_vehicle_policy_belief_states,
-    road::Road, road_set::RoadSet,
+    arg_parameters::Parameters, belief::Belief, car::SPEED_LOW,
+    mpdm::make_obstacle_vehicle_policy_belief_states, road::Road, road_set::RoadSet,
 };
 
-fn key_vehicles<'a>(params: &Parameters, road: &Road) -> Vec<usize> {
+fn key_vehicles(params: &Parameters, road: &Road) -> Vec<(usize, f64)> {
     let ego = &road.cars[0];
     let dx_thresh = params.cfb.key_vehicle_base_dist
         + ego.vel.max(SPEED_LOW) * params.cfb.key_vehicle_dist_time;
@@ -21,11 +24,59 @@ fn key_vehicles<'a>(params: &Parameters, road: &Road) -> Vec<usize> {
         //     eprintln_f!("ego to {c.car_i}: {dx=:.2}, {dx_thresh=:.2}");
         // }
         if dx <= dx_thresh {
-            car_ids.push(c.car_i);
+            car_ids.push((c.car_i, dx));
         }
     }
 
     car_ids
+}
+
+fn most_probable_cartesian_product_scenarios(
+    car_is: &[usize],
+    belief: &Belief,
+    n_policies: usize,
+    n_scenarios: usize,
+) -> Vec<(f64, Vec<(usize, usize)>)> {
+    let mut top_n_scenarios: BinaryHeap<(std::cmp::Reverse<NotNan<f64>>, Vec<(usize, usize)>)> =
+        BinaryHeap::new();
+    let mut current_scenario = car_is.iter().map(|a| (*a, 0)).collect_vec();
+    'outer: loop {
+        let probability: f64 = current_scenario
+            .iter()
+            .map(|(car_i, policy_i)| belief.get(*car_i, *policy_i))
+            .product();
+        let probability = NotNan::new(probability).unwrap();
+
+        if top_n_scenarios.len() < n_scenarios {
+            top_n_scenarios.push((std::cmp::Reverse(probability), current_scenario.clone()));
+        } else if top_n_scenarios
+            .peek()
+            .map(|(min_p, _)| probability > min_p.0)
+            .unwrap()
+        {
+            top_n_scenarios.pop();
+            top_n_scenarios.push((std::cmp::Reverse(probability), current_scenario.clone()));
+        }
+
+        // count through `current_scenario`
+        for i in 0..car_is.len() {
+            current_scenario[i].1 += 1;
+            if current_scenario[i].1 < n_policies {
+                continue 'outer;
+            }
+            current_scenario[i].1 = 0;
+        }
+        break;
+    }
+    let mut top_n_scenarios = top_n_scenarios
+        .into_iter()
+        .map(|(p, scenario)| (*p.0, scenario))
+        .rev()
+        .collect_vec();
+
+    top_n_scenarios.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+
+    top_n_scenarios
 }
 
 pub fn conditional_focused_branching(
@@ -42,7 +93,7 @@ pub fn conditional_focused_branching(
     }
     let uncertain_car_ids = key_car_ids
         .into_iter()
-        .filter(|&car_i| belief.is_uncertain(car_i, params.cfb.uncertainty_threshold))
+        .filter(|&(car_i, _dx)| belief.is_uncertain(car_i, params.cfb.uncertainty_threshold))
         .collect_vec();
     if debug {
         eprintln_f!("{uncertain_car_ids=:?}");
@@ -60,7 +111,7 @@ pub fn conditional_focused_branching(
 
     let open_loop_sims = uncertain_car_ids
         .into_iter()
-        .map(|car_i| {
+        .map(|(car_i, dx)| {
             let road = road.open_loop_estimate(car_i);
             let costs = policies
                 .iter()
@@ -78,11 +129,13 @@ pub fn conditional_focused_branching(
                 .iter()
                 .max_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap();
-            if worst_cost > 0.0 {
-                Some((car_i, worst_cost, costs))
-            } else {
-                None
-            }
+            let best_cost = *costs
+                .iter()
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap();
+            let riskiness = worst_cost - best_cost;
+
+            (car_i, riskiness, dx, costs)
         })
         .collect_vec();
 
@@ -93,33 +146,30 @@ pub fn conditional_focused_branching(
         }
     }
 
-    let mut sorted_open_sims = open_loop_sims.into_iter().filter_map(|a| a).collect_vec();
-
-    // only need to give special consideration to an obstacle vehicle if one policy is more dangerous than another
-    sorted_open_sims.retain(|(_, max_cost, costs)| {
-        let min_cost = *costs
-            .iter()
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap();
-        *max_cost > min_cost + params.cfb.risky_delta_threshold
+    let mut sorted_open_sims = open_loop_sims;
+    // descending by riskiness then ascending by dx
+    sorted_open_sims.sort_by(|(_, risk_a, dx_a, _), (_, risk_b, dx_b, _)| {
+        risk_b
+            .partial_cmp(risk_a)
+            .unwrap()
+            .then_with(|| dx_a.partial_cmp(dx_b).unwrap())
     });
 
     if debug {
         eprintln!("Potentially dangerous sims:");
-        for open_loop_sim in sorted_open_sims.iter() {
-            eprintln_f!("{open_loop_sim:.2?}");
+        for sim in sorted_open_sims.iter() {
+            eprintln_f!("{sim:.2?}");
         }
     }
 
-    sorted_open_sims.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     sorted_open_sims.truncate(params.cfb.max_n_for_cartesian_product);
 
     let selected_important_car_ids = sorted_open_sims.iter().map(|a| a.0).collect_vec();
 
     if debug {
         eprintln!("Choosing to consider all permutations of:");
-        for open_loop_sim in sorted_open_sims.iter() {
-            eprintln_f!("{open_loop_sim:.2?}");
+        for sim in sorted_open_sims.iter() {
+            eprintln_f!("{sim:.2?}");
         }
     }
 
@@ -130,38 +180,28 @@ pub fn conditional_focused_branching(
         c.side_policy = Some(policies[policy_i].clone());
     }
 
-    // for each risky car, produces an iter of tuples, of (car_i, each policy_i)
-    let risky_car_policies = sorted_open_sims
-        .iter()
-        .map(|a| a.0)
-        .map(|car_i| (0..policies.len()).map(move |p_i| (car_i, p_i)));
-
-    let mut scenarios = Vec::new();
-
-    for scenario in risky_car_policies.multi_cartesian_product() {
-        let probability: f64 = scenario
-            .iter()
-            .map(|(car_i, policy_i)| belief.get(*car_i, *policy_i))
-            .product();
-
-        let mut sim_road = sim_road.clone();
-        for (car_i, policy_i) in scenario.iter() {
-            sim_road.cars[*car_i].side_policy = Some(policies[*policy_i].clone());
-        }
-
-        scenarios.push((probability, sim_road))
-    }
+    let top_n_scenarios = most_probable_cartesian_product_scenarios(
+        &selected_important_car_ids,
+        belief,
+        policies.len(),
+        n,
+    );
 
     // sort descending and choose just the most probable
-    scenarios.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
-    scenarios.truncate(n);
-    let mut roads = scenarios
+    // ranked_scenarios.sort_unstable_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+    // ranked_scenarios.truncate(n);
+    let mut roads = top_n_scenarios
         .into_iter()
-        .map(|(w, mut r)| {
-            if params.cfb.set_cost_weights {
-                r.cost.weight = w;
+        .map(|(prob, scenario)| {
+            let mut sim_road = sim_road.clone();
+            for (car_i, policy_i) in scenario.iter() {
+                sim_road.cars[*car_i].side_policy = Some(policies[*policy_i].clone());
             }
-            r
+
+            if params.cfb.set_cost_weights {
+                sim_road.cost.weight = prob;
+            }
+            sim_road
         })
         .collect_vec();
 
@@ -170,4 +210,96 @@ pub fn conditional_focused_branching(
     }
 
     (RoadSet::new(roads), selected_important_car_ids)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::belief::Belief;
+
+    use super::*;
+
+    #[test]
+    fn most_probable_cartesian_product() {
+        let n_cars = 5;
+        let policies = vec![0, 1, 2];
+        let risky_car_is = vec![2, 3, 4];
+
+        let beliefs = vec![
+            Belief::for_all_cars(n_cars, &[0.1, 0.2, 0.3]),
+            Belief::for_all_cars(n_cars, &[0.3, 0.4, 0.1]),
+            Belief::for_all_cars(n_cars, &[0.3, 0.2, 0.1]),
+        ];
+
+        for n_scenarios in 2..10 {
+            for belief in beliefs.iter() {
+                let scenarios = most_probable_cartesian_product_scenarios(
+                    &risky_car_is,
+                    belief,
+                    policies.len(),
+                    n_scenarios,
+                );
+
+                let scenarios_reference = most_probable_cartesian_product_reference(
+                    &risky_car_is,
+                    belief,
+                    policies.len(),
+                    n_scenarios,
+                );
+
+                let scenario_policy_sets = scenarios
+                    .into_iter()
+                    .map(|(p, scenario)| {
+                        let mut scenario_policies = scenario
+                            .into_iter()
+                            .map(|(_, policy_i)| policy_i)
+                            .collect_vec();
+                        scenario_policies.sort();
+                        (p, scenario_policies)
+                    })
+                    .collect_vec();
+
+                let scenario_reference_policy_sets = scenarios_reference
+                    .into_iter()
+                    .map(|(p, scenario)| {
+                        let mut scenario_policies = scenario
+                            .into_iter()
+                            .map(|(_, policy_i)| policy_i)
+                            .collect_vec();
+                        scenario_policies.sort();
+                        (p, scenario_policies)
+                    })
+                    .collect_vec();
+
+                assert_eq!(scenario_policy_sets, scenario_reference_policy_sets);
+            }
+        }
+    }
+
+    fn most_probable_cartesian_product_reference(
+        car_is: &[usize],
+        belief: &Belief,
+        n_policies: usize,
+        n_scenarios: usize,
+    ) -> Vec<(f64, Vec<(usize, usize)>)> {
+        let risky_car_policies = car_is
+            .iter()
+            .map(|car_i| (0..n_policies).map(move |p_i| (*car_i, p_i)));
+        let mut ranked_scenarios = Vec::new();
+        let scenarios = risky_car_policies.multi_cartesian_product().collect_vec();
+        for scenario in scenarios.iter() {
+            let probability: f64 = scenario
+                .iter()
+                .map(|(car_i, policy_i)| belief.get(*car_i, *policy_i))
+                .product();
+
+            ranked_scenarios.push((probability, scenario))
+        }
+        ranked_scenarios.sort_unstable_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        ranked_scenarios.truncate(n_scenarios);
+        let ranked_scenarios = ranked_scenarios
+            .into_iter()
+            .map(|(p, scenario)| (p, scenario.clone()))
+            .collect_vec();
+        ranked_scenarios
+    }
 }
