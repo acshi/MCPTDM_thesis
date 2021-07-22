@@ -25,13 +25,15 @@ impl Reward {
         let mean = self.timestep_times.iter().sum::<f64>() / n as f64;
         self.mean_timestep_time = Some(mean);
 
+        // standard deviation of the mean or "standard error"
         let stddev = (self
             .timestep_times
             .iter()
             .map(|t| (*t - mean).powi(2))
             .sum::<f64>()
             / n as f64)
-            .sqrt();
+            .sqrt()
+            / (n as f64).sqrt();
         self.stddev_timestep_time = Some(stddev);
     }
 }
