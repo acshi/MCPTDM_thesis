@@ -1,3 +1,8 @@
+use std::{
+    fs::File,
+    io::{BufWriter, Write},
+};
+
 use itertools::Itertools;
 use progressive_mcts::{klucb::klucb_bernoulli, ChildSelectionMode, CostBoundMode};
 use rand::prelude::{SliceRandom, StdRng};
@@ -53,6 +58,18 @@ impl<'a> MctsNode<'a> {
                 .filter_map(|n| n.expected_cost)
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
         })
+    }
+
+    fn min_child(&self) -> Option<&MctsNode<'a>> {
+        self.sub_nodes
+            .as_ref()
+            .and_then(|sub_nodes| {
+                sub_nodes
+                    .iter()
+                    .filter_map(|n| Some((n, n.expected_cost?)))
+                    .min_by(|a, b| (a.1).partial_cmp(&b.1).unwrap())
+            })
+            .map(|(n, _)| n)
     }
 
     fn mean_cost(&self) -> Cost {
@@ -333,6 +350,37 @@ fn print_report(node: &MctsNode) {
     }
 }
 
+fn tree_exploration_report_best_path(
+    f: &mut BufWriter<File>,
+    node: &MctsNode,
+) -> Result<(), std::io::Error> {
+    let mut n = node;
+    loop {
+        if let Some(min_child) = n.min_child() {
+            write!(f, "{} ", min_child.policy.as_ref().unwrap().policy_id())?;
+            n = min_child;
+        } else {
+            break;
+        }
+    }
+    writeln!(f)?;
+    Ok(())
+}
+
+fn tree_exploration_report(f: &mut BufWriter<File>, node: &MctsNode) -> Result<(), std::io::Error> {
+    for child in node.sub_nodes.as_ref().unwrap() {
+        write!(f, "{} ", child.n_trials)?;
+    }
+    writeln!(f)?;
+    for child in node.sub_nodes.as_ref().unwrap() {
+        if child.sub_nodes.is_some() {
+            write!(f, "{} ", child.policy.as_ref().unwrap().policy_id())?;
+            tree_exploration_report(f, child)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn mcts_choose_policy(
     params: &Parameters,
     true_road: &Road,
@@ -379,6 +427,12 @@ pub fn mcts_choose_policy(
 
     if debug && params.policy_report_debug {
         print_report(&node);
+    }
+
+    if debug && params.mcts.tree_exploration_report {
+        let mut f = BufWriter::new(File::create("tree_exploration_report").unwrap());
+        tree_exploration_report_best_path(&mut f, &node).unwrap();
+        tree_exploration_report(&mut f, &node).unwrap();
     }
 
     (best_policy, traces)

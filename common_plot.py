@@ -283,7 +283,8 @@ class FigureBuilder:
                 continue
             for (i, val_name) in enumerate(x_mode.values):
                 if entry["params"][x_mode.param] == str(val_name):
-                    x_val_sets[i].append((entry[self.x_param]))
+                    x_val_sets[i].append((entry[self.x_param])
+                                         if self.x_param in entry else float(entry["params"][self.x_param]))
                     y_val_sets[i].append((entry[self.y_param]))
         return (x_val_sets, y_val_sets)
 

@@ -4,8 +4,8 @@ import time
 
 t10s = dict()
 t10s["discount_factor"] = "Discount Factor"
-t10s["safety"] = "Safety"
-t10s["cost.safety"] = "Safety"
+t10s["safety"] = "Proportion unsafe"
+t10s["cost.safety"] = "Safety cost"
 t10s["cost"] = "Cost"
 t10s["efficiency"] = "Efficiency"
 t10s["ud"] = "Uncomfortable decelerations"
@@ -13,7 +13,7 @@ t10s["cc"] = "Curvature change"
 t10s["tree"] = "Tree"
 t10s["mpdm"] = "MPDM"
 t10s["eudm"] = "EUDM"
-t10s["mcts"] = "MCTS"
+t10s["mcts"] = "PTDM"
 t10s["method"] = "Method"
 t10s["false"] = "Normal"
 t10s["true"] = "CFB"
@@ -159,29 +159,64 @@ if False:
 #     results, [("method", "mcts"), ("mcts.bound_mode", "marginal"), ("use_cfb", "false"), ("max.rng_seed", 2047), ("mcts.prioritize_worst_particles_z", "-1000")])
 # quit()
 
-# cargo run --release rng_seed 0-1023 :: method mcts :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
-# cargo run --release rng_seed 1024-2047 :: method mcts :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# find_filters = [("method", "eudm"), ("use_cfb", "true"), ("samples_n", 16)]
+# print(max(filter_extra(results, find_filters), key=lambda entry: entry["cost.safety"]))
+# quit()
+
+# cargo run --release rng_seed 0-1023 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 0-1023 :: method mcts :: use_cfb false true :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 0-1023 :: method mpdm :: use_cfb false true :: mpdm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 1024-2047 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 1024-2047 :: method mcts :: use_cfb false true :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 1024-2047 :: method mpdm :: use_cfb false true :: mpdm.samples_n 2 4 8 16 32 :: thread_limit 24
+#
 # cargo run --release rng_seed 0-127 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 0-127 :: method mcts :: use_cfb false true :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 0-127 :: method mpdm :: use_cfb false true :: mpdm.samples_n 2 4 8 16 32 :: thread_limit 24
 # cargo run --release rng_seed 1024-1151 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
-if True:
+# cargo run --release rng_seed 1024-1151 :: method mcts :: use_cfb false true :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 1024-1151 :: method mpdm :: use_cfb false true :: mpdm.samples_n 2 4 8 16 32 :: thread_limit 24
+if False:
     for metric in plot_metrics:
         seconds_fig = FigureBuilder(results, "95_ts", metric, translations=t10s)
 
-        common_filters = [
-            #   ("use_cfb", "false"),
-            ("max.rng_seed", 2047)]
         mcts_filters = [("method", "mcts"),
-                        ("mcts.bound_mode", "marginal")] + common_filters
+                        ("mcts.bound_mode", "marginal"), ("max.rng_seed", 2047)]
         seconds_fig.plot(FigureMode(
-            "samples_n", [4, 8, 16, 32, 64, 128]), mcts_filters, cfb_mode, label="MCTS, ")
+            "samples_n", [4, 8, 16, 32, 64, 128]), mcts_filters, cfb_mode, label="PTDM, ")
 
         eudm_filters = [("method", "eudm"),
                         ("allow_different_root_policy", "true"), ("max.rng_seed", 2047)]
         seconds_fig.plot(FigureMode("samples_n", [2, 4, 8, 16, 32]),
                          eudm_filters, cfb_mode, label="EUDM, ")
-        seconds_fig.legend()
 
+        mpdm_filters = [("method", "mpdm"),
+                        ("max.rng_seed", 2047)]
+        seconds_fig.plot(FigureMode("samples_n", [2, 4, 8, 16, 32]),
+                         mpdm_filters, cfb_mode, label="MPDM, ")
+
+        seconds_fig.legend()
         seconds_fig.show()
+
+# cargo run --release rng_seed 0-127 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method mpdm :: mpdm.samples_n 8 :: use_cfb false :: thread_limit 7
+# cargo run --release rng_seed 0-511 :: replan_dt 0.25 0.2 0.1:: method mpdm :: mpdm.samples_n 8 :: use_cfb false :: thread_limit 7
+# cargo run --release rng_seed 0-1023 :: replan_dt 1 0.5 :: method mpdm :: mpdm.samples_n 8 :: use_cfb false :: thread_limit 7
+# cargo run --release rng_seed 0-127 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method eudm :: eudm.samples_n 8 :: use_cfb false :: thread_limit 7
+# cargo run --release rng_seed 0-511 :: replan_dt 0.25 0.2 0.1 :: method eudm :: eudm.samples_n 8 :: use_cfb false :: thread_limit 7
+# cargo run --release rng_seed 0-1023 :: replan_dt 1 0.5 :: method eudm :: eudm.samples_n 8 :: use_cfb false :: thread_limit 7
+if True:
+    common_filters = [("samples_n", 8), ("use_cfb", "false")]
+    mpdm_filters = common_filters + [("method", "mpdm")]
+    eudm_filters = common_filters + [("method", "eudm")]
+
+    replan_fig = FigureBuilder(results, "replan_dt", "cost.safety", translations=t10s)
+    replan_fig.plot(FigureMode("replan_dt", [1, 0.5, 0.25,
+                                             0.2, 0.1, 0.05]), mpdm_filters, label="MPDM")
+    replan_fig.plot(FigureMode("replan_dt", [1, 0.5, 0.25,
+                                             0.2, 0.1, 0.05]), eudm_filters, label="EUDM")
+    replan_fig.legend()
+    replan_fig.show()
+
 
 # cargo run --release rng_seed 0-31 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
 # cargo run --release rng_seed 32-63 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24

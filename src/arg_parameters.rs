@@ -47,6 +47,7 @@ pub struct MctsParameters {
     pub selection_mode: ChildSelectionMode,
     pub klucb_max_cost: f64,
     pub prioritize_worst_particles_z: f64,
+    pub tree_exploration_report: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -87,7 +88,6 @@ pub struct CfbParameters {
     pub key_vehicle_base_dist: f64,
     pub key_vehicle_dist_time: f64,
     pub uncertainty_threshold: f64,
-    pub risky_delta_threshold: f64,
     pub max_n_for_cartesian_product: usize,
     pub dt: f64,
     pub horizon_t: f64,
@@ -226,6 +226,7 @@ fn create_scenarios(
                 "max_steps" => params.max_steps = val.parse().unwrap(),
                 "n_cars" => params.n_cars = val.parse().unwrap(),
                 "discount_factor" => params.cost.discount_factor = val.parse().unwrap(),
+                "replan_dt" => params.replan_dt = val.parse().unwrap(),
                 "rng_seed" => params.rng_seed = val.parse().unwrap(),
                 "run_fast" => params.run_fast = val.parse().unwrap(),
                 "thread_limit" => params.thread_limit = val.parse().unwrap(),
@@ -358,6 +359,7 @@ fn create_scenarios(
              ,accel={s.cost.accel_weight}\
              ,steer={s.cost.steer_weight}\
              ,plan_change={s.cost.plan_change_weight}\
+             ,replan_dt={s.replan_dt}\
              ,discount_factor={s.cost.discount_factor}\
              ,rng_seed={s.rng_seed}\
              ,"

@@ -3,3 +3,4 @@
 *.png
 *.pdf
 **/__pycache__
+tree_exploration_report
