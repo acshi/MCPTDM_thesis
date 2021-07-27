@@ -43,7 +43,7 @@ impl std::fmt::Display for Reward {
         let s = self;
         write_f!(
             f,
-            "{s.avg_vel:5.2} {s.safety:5.3} {s.uncomfortable_dec:5.3} {s.curvature_change:5.3} {:7.5} {:7.5} {:7.5} {:7.5} {:8.6}",
+            "{s.avg_vel:5.2} {s.safety:5.5} {s.uncomfortable_dec:5.3} {s.curvature_change:5.3} {:7.5} {:7.5} {:7.5} {:7.5} {:8.6}",
             s.mean_planning_time.unwrap(),
             s.below95_planning_time.unwrap(),
             s.below997_planning_time.unwrap(),
@@ -56,7 +56,7 @@ impl std::fmt::Display for Reward {
 impl std::fmt::Debug for Reward {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = self;
-        write_f!(f, "avg_vel: {s.avg_vel:.2}, safety: {s.safety:.3}, ud: {s.uncomfortable_dec:.3}, cc: {s.curvature_change:.3}")?;
+        write_f!(f, "avg_vel: {s.avg_vel:.2}, safety: {s.safety:.5}, ud: {s.uncomfortable_dec:.3}, cc: {s.curvature_change:.3}")?;
         if let Some(t) = self.mean_planning_time {
             write_f!(f, ", mean ts: {:.2}", t * 1000.0)?;
         }
