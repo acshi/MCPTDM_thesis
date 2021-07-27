@@ -39,6 +39,7 @@ pub struct MctsParameters {
     pub dt: f64,
     pub layer_t: f64,
     pub search_depth: u32,
+    pub total_forward_t: Option<f64>,
     pub samples_n: usize,
     pub prefer_same_policy: bool,
     pub choose_random_policy: bool,
@@ -241,6 +242,7 @@ fn create_scenarios(
                 "tree.layer_t" => params.tree.layer_t = val.parse().unwrap(),
                 "eudm.layer_t" => params.eudm.layer_t = val.parse().unwrap(),
                 "mcts.layer_t" => params.mcts.layer_t = val.parse().unwrap(),
+                "mcts.total_forward_t" => params.mcts.total_forward_t = Some(val.parse().unwrap()),
                 "safety" => params.cost.safety_weight = val.parse().unwrap(),
                 "safety_margin_low" => params.cost.safety_margin_low = val.parse().unwrap(),
                 "safety_margin_high" => params.cost.safety_margin_high = val.parse().unwrap(),
@@ -292,12 +294,23 @@ fn create_scenarios(
             _ => panic!("Unknown method {}", s.method),
         };
 
-        let layer_forward_t = match s.method.as_str() {
+        let forward_t = match s.method.as_str() {
             "fixed" => "".to_string(),
             "tree" => format_f!(",layer_t={s.tree.layer_t}"),
             "mpdm" => format_f!(",forward_t={s.mpdm.forward_t}"),
             "eudm" => format_f!(",layer_t={s.eudm.layer_t}"),
-            "mcts" => format_f!(",layer_t={s.mcts.layer_t}"),
+            "mcts" => {
+                if let Some(total_forward_t) = s.mcts.total_forward_t {
+                    let calc_layer_t = total_forward_t / s.mcts.search_depth as f64;
+                    if (calc_layer_t - s.mcts.layer_t).abs() > 1e-3 {
+                        format_f!(",total_forward_t={total_forward_t}")
+                    } else {
+                        format_f!(",layer_t={s.mcts.layer_t}")
+                    }
+                } else {
+                    format_f!(",layer_t={s.mcts.layer_t}")
+                }
+            }
             _ => panic!("Unknown method {}", s.method),
         };
 
@@ -348,7 +361,7 @@ fn create_scenarios(
             ",method={s.method}\
              ,use_cfb={s.use_cfb}\
              ,extra_ego_accdec_policies={extra_ego_accdec}\
-             {samples_n}{search_depth}{layer_forward_t}\
+             {samples_n}{search_depth}{forward_t}\
              {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}\
              {allow_different_root_policy}\
              ,max_steps={s.max_steps}\

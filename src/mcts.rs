@@ -386,6 +386,12 @@ pub fn mcts_choose_policy(
     true_road: &Road,
     rng: &mut StdRng,
 ) -> (Option<SidePolicy>, Vec<rvx::Shape>) {
+    let mut params = params.clone();
+    if let Some(total_forward_t) = params.mcts.total_forward_t {
+        params.mcts.layer_t = total_forward_t / params.mcts.search_depth as f64;
+    }
+    let params = &params;
+
     let roads = road_set_for_scenario(params, true_road, rng, params.mcts.samples_n);
 
     let policy_choices = make_policy_choices(params);
