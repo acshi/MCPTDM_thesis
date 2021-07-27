@@ -54,7 +54,7 @@ impl Parameters {
             bound_mode: CostBoundMode::Marginal,
             final_choice_mode: CostBoundMode::Same,
             selection_mode: ChildSelectionMode::KLUCB,
-            portion_bernoulli: 1.0,
+            portion_bernoulli: 0.5,
             special_situation_p: 0.2,
             bad_threshold_cost: 10000.0,
             prioritize_worst_particles_z: 1000.0,

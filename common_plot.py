@@ -80,7 +80,8 @@ class FigureKind:
             if any(isinstance(val, numbers.Number) and abs(val) >= 1e5 for val in ticks):
                 self.tick_labels = [short_num_string(val) for val in ticks]
         else:
-            self.val_names = val_names
+            self.val_names = [str(val) for val in val_names]
+            self.tick_labels = self.ticks
         if locs is None and ticks is not None:
             self.locs = [i for i in range(len(ticks))]
         else:
@@ -88,6 +89,7 @@ class FigureKind:
         self.translations = translations
 
     def translate(self, name):
+        name = str(name)
         if name in self.translations:
             return self.translations[name]
         return name
@@ -255,13 +257,17 @@ class FigureKind:
 
 
 class FigureBuilder:
-    def __init__(self, results, x_param, y_param, translations={}, xlim=None):
+    def __init__(self, results, x_param, y_param, translations={}):
         self.results = results
         self.x_param = x_param
+        self.defacto_x_param = x_param
         self.y_param = y_param
         self.all_modes = []
         self.translations = translations
-        self.xlim = xlim
+        self.min_x = None
+        self.max_x = None
+        self.x_locs = []
+        self.axins = None
 
         self.fig, self.ax = plt.subplots(dpi=100 if show_only else save_dpi)
 
@@ -283,12 +289,16 @@ class FigureBuilder:
                 continue
             for (i, val_name) in enumerate(x_mode.values):
                 if entry["params"][x_mode.param] == str(val_name):
-                    x_val_sets[i].append((entry[self.x_param])
-                                         if self.x_param in entry else float(entry["params"][self.x_param]))
+                    if self.x_param is not None:
+                        x_val_sets[i].append((entry[self.x_param])
+                                             if self.x_param in entry else float(entry["params"][self.x_param]))
                     y_val_sets[i].append((entry[self.y_param]))
         return (x_val_sets, y_val_sets)
 
     def plot(self, x_mode, filters=[], legend_mode=None, label=None):
+        if self.defacto_x_param is None:
+            self.defacto_x_param = x_mode.param
+
         if legend_mode:
             if not any(legend_mode.param == mode.param for mode in self.all_modes):
                 self.all_modes += [legend_mode]
@@ -300,28 +310,35 @@ class FigureBuilder:
                 x_mode, filters, legend_mode, legend_mode_val)
             print(f"collect_vals took {time.time() - start_time:.2} seconds")
             if len(y_val_sets) == 0:
+                label_str = f"{label}: " if label else ""
                 print(
-                    f"Data completely missing for {self.y_param} by {self.x_param} with {filters}")
+                    f"{label_str}Data completely missing for {self.y_param} by {x_mode.param} with {filters}")
                 if legend_mode:
                     print(f"And with {legend_mode.param} = {legend_mode_val}")
                 continue
             n_vals_in_set = len(y_val_sets[0])
             for i, vals in enumerate(y_val_sets):
                 if len(vals) == 0:
+                    label_str = f"{label}: " if label else ""
                     legend_str = f"and with {legend_mode.param} = {legend_mode_val}" if legend_mode else ""
                     print(
-                        f"{x_mode.param} = {x_mode.values[i]} has 0 data points for {self.y_param} with {filters} {legend_str}")
+                        f"{label_str}{x_mode.param} = {x_mode.values[i]} has 0 data points for {self.y_param} with {filters} {legend_str}")
                     vals.append(np.nan)
                 if len(vals) != n_vals_in_set:
+                    label_str = f"{label}: " if label else ""
                     legend_str = f"and with {legend_mode.param} = {legend_mode_val}" if legend_mode else ""
                     print(
-                        f"{len(vals)} != {n_vals_in_set} for {x_mode.param} = {x_mode.values[i]} {legend_str}")
+                        f"{label_str}{len(vals)} != {n_vals_in_set} for {x_mode.param} = {x_mode.values[i]} {legend_str}")
 
             means = [np.mean(vals) for vals in y_val_sets]
             stdev_mean = [np.std(vals) / np.sqrt(len(vals))
                           for vals in y_val_sets]
 
-            x_means = [np.mean(vals) for vals in x_val_sets]
+            if self.x_param is None:
+                x_means = [i for i in range(len(x_val_sets))]
+            else:
+                x_means = [np.mean(vals) for vals in x_val_sets]
+            self.x_locs = x_means
 
             full_label = label
             if legend_mode:
@@ -333,12 +350,35 @@ class FigureBuilder:
             self.ax.errorbar(x_means, means,
                              yerr=np.array(stdev_mean), label=full_label)
 
+            if self.axins:
+                self.axins.errorbar(x_means, means, yerr=np.array(stdev_mean))
+
+            x_mean_min = np.min(x_means)
+            if self.min_x is None:
+                self.min_x = x_mean_min
+            else:
+                self.min_x = min(self.min_x, x_mean_min)
+
+            x_mean_max = np.max(x_means)
+            if self.max_x is None:
+                self.max_x = x_mean_max
+            else:
+                self.max_x = max(self.max_x, x_mean_max)
+
+    def line(self, filters, label):
+        vals = [entry[self.y_param] for entry in filter_extra(self.results, filters)]
+        mean = np.mean(vals)
+        stdev_mean = np.std(vals) / np.sqrt(len(vals))
+        self.ax.errorbar([self.min_x, self.max_x], [mean, mean],
+                         yerr=[stdev_mean, stdev_mean], label=label)
+        if self.axins:
+            self.axins.errorbar([self.min_x, self.max_x], [mean, mean],
+                                yerr=[stdev_mean, stdev_mean])
+
     def _set_show_save(self, title, xlabel, ylabel, file_suffix):
         self.ax.set_title(title)
         self.ax.set_xlabel(xlabel)
         self.ax.set_ylabel(ylabel)
-        if self.xlim is not None:
-            self.ax.set_xlim(self.xlim)
         if show_only:
             plt.show()
         else:
@@ -346,7 +386,7 @@ class FigureBuilder:
             self.fig.set_figheight(4.8 * figure_zoom)
 
             modes_description = "_".join([""] + [mode.param for mode in self.all_modes])
-            file_desc = f"{self.x_param}_{self.y_param}{modes_description}{file_suffix}"
+            file_desc = f"{self.defacto_x_param}_{self.y_param}{modes_description}{file_suffix}"
 
             self.fig.tight_layout()
             if make_pdf_also:
@@ -355,23 +395,53 @@ class FigureBuilder:
             self.fig.savefig(f"figures/by_{file_desc}.png")
 
     def show(self, title=None, xlabel=None, ylabel=None, file_suffix=""):
-        xlabel = xlabel or self.translate(self.x_param)
+        xlabel = xlabel or self.translate(self.defacto_x_param)
         ylabel = ylabel or self.translate(self.y_param)
 
         if title is None:
-            title = f"{self.translate(self.y_param)} by {decapitalize(self.translate(self.x_param))}"
+            title = f"{self.translate(self.y_param)} by {decapitalize(self.translate(self.defacto_x_param))}"
 
             modes_str = " and ".join([""] + [decapitalize(self.translate(mode.param))
                                              for mode in self.all_modes])
             title += modes_str
 
         modes_str = " and ".join([""] + [mode.param for mode in self.all_modes])
-        print(f"{self.y_param} by {self.x_param}{modes_str}")
+        print(f"{self.y_param} by {self.defacto_x_param}{modes_str}")
 
         self._set_show_save(title, xlabel, ylabel, file_suffix)
 
-    def legend(self):
-        self.ax.legend()
+    def legend(self, loc=None):
+        self.ax.legend(loc=loc)
+
+    def xlim(self, xlim):
+        self.ax.set_xlim(xlim)
+
+    def ylim(self, ylim):
+        self.ax.set_ylim(ylim)
+
+    def ticks(self, labels, locs=None):
+        if locs is None:
+            locs = self.x_locs
+
+        self.ax.set_xticks(locs)
+        self.ax.set_xticklabels(labels)
+
+    def ax(self):
+        return self.ax
+
+    def fig(self):
+        return self.fig
+
+    # Call this before any plotting to also have things plot in the inset
+    def inset_plot(self, xlim, ylim, bounds=[0.5, 0.5, 0.47, 0.47]):
+        self.axins = self.ax.inset_axes(bounds)
+
+        self.axins.set_xlim(xlim)
+        self.axins.set_ylim(ylim)
+        self.axins.set_xticklabels('')
+        self.axins.set_yticklabels('')
+
+        return self.ax.indicate_inset_zoom(self.axins, edgecolor="black")
 
 
 def evaluate_conditions(results, metrics, filters):

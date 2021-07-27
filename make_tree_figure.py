@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 import matplotlib.pyplot as plt
 
-#
-
 dy = -10
 initial_dx = 100
 branching_factor = 1
 max_depth = 4
+
+plt.gcf().set_figwidth(6.4)
+plt.gcf().set_figheight(6.4 / 3)
 
 
 def draw_level(f, depth, start_x, start_y, nums, best_path):
