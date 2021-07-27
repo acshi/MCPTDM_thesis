@@ -301,12 +301,7 @@ fn create_scenarios(
             "eudm" => format_f!(",layer_t={s.eudm.layer_t}"),
             "mcts" => {
                 if let Some(total_forward_t) = s.mcts.total_forward_t {
-                    let calc_layer_t = total_forward_t / s.mcts.search_depth as f64;
-                    if (calc_layer_t - s.mcts.layer_t).abs() > 1e-3 {
-                        format_f!(",total_forward_t={total_forward_t}")
-                    } else {
-                        format_f!(",layer_t={s.mcts.layer_t}")
-                    }
+                    format_f!(",total_forward_t={total_forward_t}")
                 } else {
                     format_f!(",layer_t={s.mcts.layer_t}")
                 }
