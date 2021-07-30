@@ -115,16 +115,6 @@ fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &MctsNode, roa
         / costs.len() as f64)
         .sqrt();
 
-    // let mut costs = costs.to_vec();
-    // // first remove duplicate particles (since we may have already replayed some)
-    // costs.sort_by(|a, b| {
-    //     b.1.partial_cmp(&a.1)
-    //         .unwrap()
-    //         .then_with(|| b.0.partial_cmp(&a.0).unwrap())
-    // });
-    // // will keep the first occuring of any duplicates, so we keep the highest-cost copy of each particle
-    // costs.dedup_by(|a, b| a.1 == b.1);
-
     // sort descending by cost, then particle
     costs.sort_by(|a, b| b.partial_cmp(a).unwrap());
 

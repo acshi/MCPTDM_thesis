@@ -40,7 +40,7 @@ def filter_match(params, filter):
             return True
         param = param_split[1]
 
-    return params[param] == str(param_value)
+    return param in params and params[param] == str(param_value)
 
 
 def filter_extra(results, filters):
@@ -456,7 +456,7 @@ def evaluate_conditions(results, metrics, filters):
         vals = [entry[metric] for entry in results]
         mean = np.mean(vals)
         stdev_mean = np.std(vals) / np.sqrt(len(vals))
-        print(f"  {metric} has mean: {mean:6.4} and mean std dev: {stdev_mean:6.4}")
+        print(f"  {metric} has mean: {mean:6.4} and mean std dev: {stdev_mean:6.4} and a total of {len(vals)} samples")
         return_results.append(mean)
     print()
 

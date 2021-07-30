@@ -62,6 +62,7 @@ all_metrics = ["regret"]  # , "estimation_error"]
 
 # Fig. 1.
 # cargo run --release rng_seed 0-32767 :: samples_n 256 :: portion_bernoulli 0.5 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode same :: ucb_const -680 -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 256 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode same :: ucb_const -680 -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
 # results.cache_ucb_const_bound_mode
 bound_mode = FigureMode("bound_mode", ["normal", "bubble_best", "lower_bound", "marginal"])
 ucb_const_vals = [-680, -1000, -1500, -2200, -3300, -4700, -
@@ -75,8 +76,7 @@ if False:
     for metric in all_metrics:
         ucb_const_kind.plot(results, metric, filters=[
                             ("samples_n", 256),
-                            ("selection_mode", "ucb"),
-                            ("portion_bernoulli", "0.5")], mode=bound_mode, title="Regret by UCB constant factor and expected-cost rule", xlabel="UCB constant factor * 10^-2")
+                            ("selection_mode", "ucb")], mode=bound_mode, title="Regret by UCB constant factor and expected-cost rule", xlabel="UCB constant factor * 10^-2")
 
 # print_all_parameter_values_used(results, [])
 # print_all_parameter_values_used(
@@ -87,20 +87,22 @@ if False:
 # Fig. 2.
 # cargo run --release rng_seed 0-32767 :: samples_n 256 :: portion_bernoulli 0.5 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: ucb_const -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 7
 # cargo run --release rng_seed 0-32767 :: samples_n 256 :: portion_bernoulli 0.5 :: selection_mode uniform :: final_choice_mode marginal :: thread_limit 7
+# cargo run --release rng_seed 0-4095 :: samples_n 256 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: ucb_const -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 7
+# cargo run --release rng_seed 0-4095 :: samples_n 256 :: selection_mode uniform :: final_choice_mode marginal :: thread_limit 7
 # results.cache_bound_mode_final_choice_marginal
 if False:
     for metric in all_metrics:
         fig = FigureBuilder(results, None, metric, translations=t10s)
 
         common_filters = [("final_choice_mode", "marginal"),
-                          ("portion_bernoulli", "0.5"), ("samples_n", 256), ("max.rng_seed", 32767)]
+                          ("samples_n", 256), ("max.rng_seed", 32767)]
         uniform_filters = common_filters + [("selection_mode", "uniform")]
         fig.plot(FigureMode("ucb_const", ucb_const_vals[1:]),
                  common_filters + [("selection_mode", "ucb")], bound_mode)
 
         fig.line(uniform_filters, "Uniform")
 
-        fig.ylim([75, 110])
+        # fig.ylim([75, 110])
         fig.ticks(ucb_const_ticknames[1:])
         fig.legend()
 
@@ -115,20 +117,22 @@ if False:
 # Fig. 3.
 # cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: portion_bernoulli 0.5 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: normal.ucb_const -10000 :: bubble_best.ucb_const -6800 :: lower_bound.ucb_const -15000 :: marginal.ucb_const -6800 :: thread_limit 24
 # cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: portion_bernoulli 0.5 :: selection_mode uniform :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: normal.ucb_const -4700 :: bubble_best.ucb_const -3300 :: lower_bound.ucb_const -3300 :: marginal.ucb_const -3300 :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode uniform :: thread_limit 24
 # results.cache_bound_mode_samples_n
 if False:
     for metric in all_metrics:
-        common_filters = [("portion_bernoulli", 0.5)]
+        common_filters = []
         filters = [("selection_mode", "ucb"),
                    ("final_choice_mode", "marginal")] + common_filters
         uniform_filters = [("selection_mode", "uniform")] + common_filters
 
         fig = FigureBuilder(results, None, metric, translations=t10s)
         samples_n_mode = FigureMode(
-            "samples_n", [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768])
+            "samples_n", [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096])
 
         # (rect, connections) = fig.inset_plot([8.8, 12.2], [-1, 48], [0.4, 0.4, 0.57, 0.57])
-        (rect, connections) = fig.inset_plot([9.8, 12.2], [-1, 30], [0.4, 0.4, 0.57, 0.57])
+        (rect, connections) = fig.inset_plot([5.8, 9.2], [-1, 35], [0.4, 0.4, 0.57, 0.57])
         for connection in connections:
             connection.set_visible(False)
         rect.set_label(None)
@@ -137,14 +141,15 @@ if False:
         fig.plot(samples_n_mode, uniform_filters, label="Uniform")
 
         fig.legend("lower left")
-        fig.ticks(["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"])
+        fig.ticks(["3", "4", "5", "6", "7", "8", "9", "10", "11", "12"])
         fig.show(xlabel="log2(# of samples)")
 
 
 # Fig. 4.
 # cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: portion_bernoulli 0.5 :: bound_mode marginal :: selection_mode ucb ucbv ucbd klucb klucb+ uniform :: ucb_const -6800 :: ucbv.ucb_const -4700 :: ucbv.ucbv_const 0 :: ucbd.ucb_const -22000 :: ucbd.ucbd_const 1 :: klucb.ucb_const -1.5 :: klucb.klucb_max_cost 10000 :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: thread_limit 24
+# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: bound_mode marginal :: selection_mode ucb ucbv ucbd klucb klucb+ uniform :: ucb_const -6800 :: ucbv.ucb_const -4700 :: ucbv.ucbv_const 0 :: ucbd.ucb_const -22000 :: ucbd.ucbd_const 1 :: klucb.ucb_const -1.5 :: klucb.klucb_max_cost 10000 :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: thread_limit 24
 # results.cache_selection_mode
-if True:
+if False:
     for metric in all_metrics:
         selection_mode = FigureMode(
             "selection_mode", ["ucb", "ucbv", "ucbd", "klucb", "klucb+", "uniform"])
@@ -239,15 +244,42 @@ if False:
                 "_selection_mode_klucb_", "_ucb_const_-1_", "_samples_n_64_", f"_portion_bernoulli_{portion_bernoulli}_"], mode=bound_mode)
 
 prioritize_worst_particles_z_kind = FigureKind(
-    "prioritize_worst_particles_z", [-1000, -3.5, -3, -2.5, -2, -1.5, -1, -.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 1000], translations=t10s)
-# cargo run --release rng_seed 0-16383 :: prioritize_worst_particles_z -1000 -3.5 -3 -2.5 -2 -1.5 -1 -.5 0 0.5 1 1.5 2 2.5 3 3.5 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: samples_n 512 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
+    "prioritize_worst_particles_z", [-1000, -2, -1, -.5, 0, 0.5, 1, 2, 1000], translations=t10s)
+# cargo run --release rng_seed 0-4095 :: samples_n 128 256 512 :: prioritize_worst_particles_z -1000 -2 -1 -0.5 0 0.5 1 2 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: bound_mode marginal :: thread_limit 24
 if False:
-    bound_mode = FigureMode("bound_mode", ["normal", "bubble_best", "lower_bound", "marginal"])
+    # repeat_at_all_levels_mode = FigureMode(
+    #     "repeat_at_all_levels", ["false", "true"])
+    samples_n_mode = FigureMode(
+        "samples_n", [512, 1024, 2048])
     for metric in all_metrics:
-        for portion_bernoulli in [0.5]:
-            filters = [("selection_mode", "klucb+"), ("samples_n", 512),
-                       ("portion_bernoulli", portion_bernoulli)]
-            prioritize_worst_particles_z_kind.plot(results, metric, filters=filters)
+        filters = [("selection_mode", "klucb+"), ("repeat_at_all_levels", "false")]
+        prioritize_worst_particles_z_kind.plot(
+            results, metric, filters=filters, mode=samples_n_mode)
+
+# cargo run --release rng_seed 0-4095 :: samples_n 512 1024 2048 :: repeat_const 0 16 64 256 1024 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: bound_mode marginal :: thread_limit 24
+if False:
+    repeat_const_kind = FigureKind(
+        "repeat_const", [0, 16, 64, 256, 1024], translations=t10s)
+    samples_n_mode = FigureMode(
+        "samples_n", [512, 1024, 2048])
+    for metric in all_metrics:
+        filters = [("selection_mode", "klucb+"),
+                   ("repeat_at_all_levels", "false")]
+        repeat_const_kind.plot(
+            results, metric, filters=filters, mode=samples_n_mode)
+
+# cargo run --release rng_seed 0-4095 :: n_actions 4 5 6 7 8 9 :: samples_n 512 :: repeat_const 0 64 128 256 512 1024 2048 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: bound_mode marginal :: thread_limit 24
+if True:
+    repeat_const_kind = FigureKind(
+        "repeat_const", [0, 64, 128, 256, 512, 1024, 2048], translations=t10s)
+    n_actions_mode = FigureMode(
+        "n_actions", [5, 6, 7, 8, 9])
+    for metric in all_metrics:
+        filters = [("selection_mode", "klucb+"),
+                   ("samples_n", 512),
+                   ("repeat_at_all_levels", "false")]
+        repeat_const_kind.plot(
+            results, metric, filters=filters, mode=n_actions_mode)
 
 # cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
 # cargo run --release rng_seed 0-4095 :: samples_n 64 128 256 512 1024 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
@@ -265,3 +297,26 @@ if False:
                        ("portion_bernoulli", portion_bernoulli)]
             samples_n_kind.plot(results, metric, filters=filters,
                                 mode=repeat_particles_mode, xlabel="log2(# of samples)")
+
+# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 :: repeat_at_all_levels false true :: prioritize_worst_particles_z -1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 64 128 256 512 1024 :: repeat_at_all_levels false true :: prioritize_worst_particles_z -1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-1023 :: samples_n 2048 4096 8192 16384 32768 :: repeat_at_all_levels false true :: prioritize_worst_particles_z -1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
+#
+# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 :: repeat_at_all_levels false true :: prioritize_worst_particles_z -1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 64 128 256 :: repeat_at_all_levels false true :: prioritize_worst_particles_z -1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-511 :: samples_n 512 1024 2048 :: repeat_at_all_levels false true :: prioritize_worst_particles_z -1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-127 :: samples_n 4096 8192 16384 32768 :: repeat_at_all_levels false true :: prioritize_worst_particles_z -1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
+if False:
+    samples_n_kind = FigureKind(
+        "samples_n", ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"], [
+            8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768],
+        translations=t10s)
+    repeat_at_all_levels_mode = FigureMode(
+        "repeat_at_all_levels", ["false", "true"])
+    for metric in all_metrics:
+        for portion_bernoulli in [0.5]:
+            filters = [("selection_mode", "klucb+"),
+                       ("prioritize_worst_particles_z", -1000),
+                       ("portion_bernoulli", portion_bernoulli)]
+            samples_n_kind.plot(results, metric, filters=filters,
+                                mode=repeat_at_all_levels_mode, xlabel="log2(# of samples)")

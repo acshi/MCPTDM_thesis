@@ -15,7 +15,7 @@ t10s["mpdm"] = "MPDM"
 t10s["eudm"] = "EUDM"
 t10s["mcts"] = "PTDM"
 t10s["method"] = "Method"
-t10s["false"] = "Normal"
+t10s["false"] = "w/o CFB"
 t10s["true"] = "CFB"
 t10s["use_cfb"] = "CFB"
 t10s["seconds"] = "Computation time (s)"
@@ -34,31 +34,6 @@ t10s["marginal"] = "Using marginal action costs"
 t10s["ucb_const"] = "UCB constant factor"
 t10s["prioritize_worst_particles_z"] = "Prioritize worst particles with z-scores above"
 t10s[None] = "Average"
-
-# sed -i 's/_samples_n/,samples_n/g' results.cache
-# sed -i 's/_search_depth/,search_depth/g' results.cache
-# sed -i 's/_layer_t/,layer_t/g' results.cache
-# sed -i 's/_forward_t/,forward_t/g' results.cache
-# sed -i 's/_selection_mode/,selection_mode/g' results.cache
-# sed -i 's/_bound_mode/,bound_mode/g' results.cache
-# sed -i 's/_klucb_max_cost/,klucb_max_cost/g' results.cache
-# sed -i 's/_prioritize_worst_particles_z/,prioritize_worst_particles_z/g' results.cache
-# sed -i 's/_method/,method/g' results.cache
-# sed -i 's/_use_cfb/,use_cfb/g' results.cache
-# sed -i 's/_extra_ego_accdec_policies/,extra_ego_accdec_policies/g' results.cache
-# sed -i 's/_max_steps/,max_steps/g' results.cache
-# sed -i 's/_n_cars/,n_cars/g' results.cache
-# sed -i 's/_safety_margin_low/,safety_margin_low/g' results.cache
-# sed -i 's/_safety_margin_high/,safety_margin_high/g' results.cache
-# sed -i 's/_safety/,safety/g' results.cache
-# sed -i 's/_accel/,accel/g' results.cache
-# sed -i 's/_steer/,steer/g' results.cache
-# sed -i 's/_discount_factor/,discount_factor/g' results.cache
-# sed -i 's/_rng_seed/,rng_seed/g' results.cache
-# sed -i 's/^method/,method/g' results.cache
-# sed -i -E 's/(rng_seed=[0-9]{1,9})/\1,/g' results.cache
-#!!! sed -i 's/_/=/g' results.cache
-
 
 start_time = time.time()
 results = []
@@ -156,67 +131,145 @@ if False:
                 results, metric, mode=prioritize_worst_particles_z_mode, filters=mcts_filters, extra_lines=extra_lines, extra_modes=extra_modes)
 
 # print_all_parameter_values_used(
-#     results, [("method", "mcts"), ("mcts.bound_mode", "marginal"), ("use_cfb", "false"), ("max.rng_seed", 2047), ("mcts.prioritize_worst_particles_z", "-1000")])
+#     results, [("discount_factor", 0.8), ("replan_dt", 0.25), ("method", "mcts"), ("bound_mode", "marginal"), ("search_depth", 4), ("use_cfb", "false"), ("max.rng_seed", 8191), ("prioritize_worst_particles_z", -1000)])
+# print_all_parameter_values_used(
+#     results, [("discount_factor", 0.8), ("replan_dt", 0.05), ("method", "mpdm"), ("use_cfb", "false"), ("max.rng_seed", 8191)])
 # quit()
 
 # find_filters = [("method", "eudm"), ("use_cfb", "true"), ("samples_n", 16)]
 # print(max(filter_extra(results, find_filters), key=lambda entry: entry["cost.safety"]))
 # quit()
 
-# cargo run --release rng_seed 0-1023 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
-# cargo run --release rng_seed 0-1023 :: method mcts :: use_cfb false true :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
-# cargo run --release rng_seed 0-1023 :: method mpdm :: use_cfb false true :: mpdm.samples_n 2 4 8 16 32 :: thread_limit 24
-# cargo run --release rng_seed 1024-2047 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
-# cargo run --release rng_seed 1024-2047 :: method mcts :: use_cfb false true :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
-# cargo run --release rng_seed 1024-2047 :: method mpdm :: use_cfb false true :: mpdm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 0000-2047 :: method mpdm :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64 :: thread_limit 24
+# cargo run --release rng_seed 0000-2047 :: method eudm :: replan_dt 0.25 0.1 0.05 :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 0000-2047 :: method mcts :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 2048-4095 :: method mpdm :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64 :: thread_limit 24
+# cargo run --release rng_seed 2048-4095 :: method eudm :: replan_dt 0.25 0.1 0.05 :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 2048-4095 :: method mcts :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
 #
-# cargo run --release rng_seed 0-127 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
-# cargo run --release rng_seed 0-127 :: method mcts :: use_cfb false true :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
-# cargo run --release rng_seed 0-127 :: method mpdm :: use_cfb false true :: mpdm.samples_n 2 4 8 16 32 :: thread_limit 24
-# cargo run --release rng_seed 1024-1151 :: method eudm :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
-# cargo run --release rng_seed 1024-1151 :: method mcts :: use_cfb false true :: mcts.bound_mode marginal :: mcts.samples_n 4 8 16 32 64 128 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
-# cargo run --release rng_seed 1024-1151 :: method mpdm :: use_cfb false true :: mpdm.samples_n 2 4 8 16 32 :: thread_limit 24
-if False:
-    for metric in plot_metrics:
+# cargo run --release rng_seed 4096-6143 :: method mpdm :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64 :: thread_limit 24
+# cargo run --release rng_seed 4096-6143 :: method eudm :: replan_dt 0.25 0.1 0.05 :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 4096-6143 :: method mcts :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 6144-8191 :: method mpdm :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64 :: thread_limit 24
+# cargo run --release rng_seed 6144-8191 :: method eudm :: replan_dt 0.25 0.1 0.05 :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 6144-8191 :: method mcts :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+#
+# cargo run --release rng_seed 8192-12287 :: method mpdm :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64 :: thread_limit 24
+# cargo run --release rng_seed 8192-12287 :: method eudm :: replan_dt 0.25 0.1 0.05 :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 8192-12287 :: method mcts :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 12288-16383 :: method mpdm :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64 :: thread_limit 24
+# cargo run --release rng_seed 12288-16383 :: method eudm :: replan_dt 0.25 0.1 0.05 :: use_cfb false true :: eudm.samples_n 2 4 8 16 32 :: thread_limit 24
+# cargo run --release rng_seed 12288-16383 :: method mcts :: replan_dt 0.25 0.1 0.05 :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+#
+# cargo run --release rng_seed 0-8191 :: method fixed :: use_cfb false :: thread_limit 7
+if True:
+    for metric in plot_metrics + ["safety"]:
         seconds_fig = FigureBuilder(results, "95_ts", metric, translations=t10s)
 
+        common_filters = [("max.rng_seed", 8191), ("discount_factor", 0.8), ("replan_dt", 0.25)]
+
         mcts_filters = [("method", "mcts"),
-                        ("mcts.bound_mode", "marginal"), ("max.rng_seed", 2047)]
+                        ("search_depth", 4),
+                        ("use_cfb", "false"),
+                        ("prioritize_worst_particles_z", -1000),
+                        ("selection_mode", "klucb"),
+                        ("bound_mode", "marginal")] + common_filters
         seconds_fig.plot(FigureMode(
-            "samples_n", [4, 8, 16, 32, 64, 128]), mcts_filters, cfb_mode, label="PTDM, ")
+            "samples_n", [8, 16, 32, 64, 128, 256]), mcts_filters, label="PTDM")
 
         eudm_filters = [("method", "eudm"),
-                        ("allow_different_root_policy", "true"), ("max.rng_seed", 2047)]
+                        ("allow_different_root_policy", "true")] + common_filters
         seconds_fig.plot(FigureMode("samples_n", [2, 4, 8, 16, 32]),
                          eudm_filters, cfb_mode, label="EUDM, ")
 
-        mpdm_filters = [("method", "mpdm"),
-                        ("max.rng_seed", 2047)]
-        seconds_fig.plot(FigureMode("samples_n", [2, 4, 8, 16, 32]),
-                         mpdm_filters, cfb_mode, label="MPDM, ")
+        mpdm_filters = [("method", "mpdm"), ("use_cfb", "false")] + common_filters
+        seconds_fig.plot(FigureMode("samples_n", [2, 4, 8, 16, 32, 64]),
+                         mpdm_filters, label="MPDM")
 
         seconds_fig.legend()
         seconds_fig.show()
 
-# cargo run --release rng_seed 0-127 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method mpdm :: mpdm.samples_n 8 :: use_cfb false :: thread_limit 7
-# cargo run --release rng_seed 0-511 :: replan_dt 0.25 0.2 0.1:: method mpdm :: mpdm.samples_n 8 :: use_cfb false :: thread_limit 7
-# cargo run --release rng_seed 0-1023 :: replan_dt 1 0.5 :: method mpdm :: mpdm.samples_n 8 :: use_cfb false :: thread_limit 7
-# cargo run --release rng_seed 0-127 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method eudm :: eudm.samples_n 8 :: use_cfb false :: thread_limit 7
-# cargo run --release rng_seed 0-511 :: replan_dt 0.25 0.2 0.1 :: method eudm :: eudm.samples_n 8 :: use_cfb false :: thread_limit 7
-# cargo run --release rng_seed 0-1023 :: replan_dt 1 0.5 :: method eudm :: eudm.samples_n 8 :: use_cfb false :: thread_limit 7
-if True:
-    common_filters = [("samples_n", 8), ("use_cfb", "false")]
-    mpdm_filters = common_filters + [("method", "mpdm")]
-    eudm_filters = common_filters + [("method", "eudm")]
+# cargo run --release rng_seed 0-2047 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method mcts :: mcts.samples_n 64 :: mcts.bound_mode marginal :: mcts.prioritize_worst_particles_z -1000 :: use_cfb false :: thread_limit 24
+# cargo run --release rng_seed 0-2047 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method mpdm :: mpdm.samples_n 16 :: use_cfb false :: thread_limit 24
+# cargo run --release rng_seed 0-2047 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method eudm :: eudm.samples_n 8 :: use_cfb false :: thread_limit 24
+# cargo run --release rng_seed 2048-4095 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method mcts :: mcts.samples_n 64 :: mcts.bound_mode marginal :: mcts.prioritize_worst_particles_z -1000 :: use_cfb false :: thread_limit 24
+# cargo run --release rng_seed 2048-4095 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method mpdm :: mpdm.samples_n 16 :: use_cfb false :: thread_limit 24
+# cargo run --release rng_seed 2048-4095 :: replan_dt 1 0.5 0.25 0.2 0.1 0.05 :: method eudm :: eudm.samples_n 8 :: use_cfb false :: thread_limit 24
+# cargo run --release rng_seed 4096-8191 :: replan_dt 1 :: method mcts :: mcts.samples_n 64 :: mcts.bound_mode marginal :: mcts.prioritize_worst_particles_z -1000 :: use_cfb false :: thread_limit 24
+# cargo run --release rng_seed 4096-8191 :: replan_dt 1 :: method mpdm :: mpdm.samples_n 16 :: use_cfb false :: thread_limit 24
+# cargo run --release rng_seed 4096-8191 :: replan_dt 1 :: method eudm :: eudm.samples_n 8 :: use_cfb false :: thread_limit 24
+if False:
+    common_filters = [("discount_factor", 0.8), ("use_cfb", "false")]
+    mcts_filters = common_filters + [("method", "mcts"), ("samples_n", 64)]
+    mpdm_filters = common_filters + [("method", "mpdm"), ("samples_n", 16)]
+    eudm_filters = common_filters + [("method", "eudm"), ("samples_n", 8)]
 
-    replan_fig = FigureBuilder(results, "replan_dt", "cost.safety", translations=t10s)
-    replan_fig.plot(FigureMode("replan_dt", [1, 0.5, 0.25,
-                                             0.2, 0.1, 0.05]), mpdm_filters, label="MPDM")
-    replan_fig.plot(FigureMode("replan_dt", [1, 0.5, 0.25,
-                                             0.2, 0.1, 0.05]), eudm_filters, label="EUDM")
-    replan_fig.legend()
-    replan_fig.show()
+    for metric in plot_metrics:
+        replan_fig = FigureBuilder(results, "replan_dt", metric, translations=t10s)
+        replan_fig.plot(FigureMode("replan_dt", [1, 0.5, 0.25,
+                                                 0.2, 0.1, 0.05]), mcts_filters, label="PTDM")
+        replan_fig.plot(FigureMode("replan_dt", [1, 0.5, 0.25,
+                                                 0.2, 0.1, 0.05]), mpdm_filters, label="MPDM")
+        replan_fig.plot(FigureMode("replan_dt", [1, 0.5, 0.25,
+                                                 0.2, 0.1, 0.05]), eudm_filters, label="EUDM")
+        replan_fig.legend()
+        replan_fig.show()
 
+
+# print_all_parameter_values_used(
+#     results, [("discount_factor", 0.8), ("replan_dt", 0.25), ("method", "mcts"), ("total_forward_t", 8), ("samples_n", 64), ("mcts.bound_mode", "marginal"), ("use_cfb", "false"), ("max.rng_seed", 4095), ("mcts.prioritize_worst_particles_z", "-1000")])
+# quit()
+
+# cargo run --release rng_seed 0-2047 :: method mcts :: use_cfb false :: replan_dt 0.25 :: mcts.total_forward_t 8 :: mcts.search_depth 3 4 5 :: mcts.bound_mode marginal :: mcts.samples_n 64 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 2048-2303 :: method mcts :: use_cfb false :: replan_dt 0.25 :: mcts.total_forward_t 8 :: mcts.search_depth 3 4 5 :: mcts.bound_mode marginal :: mcts.samples_n 64 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+if False:
+    for metric in plot_metrics:
+        seconds_fig = FigureBuilder(results, "95_ts", metric, translations=t10s)
+
+        common_filters = [("max.rng_seed", 4095), ("discount_factor", 0.8), ("replan_dt", 0.25)]
+
+        mcts_filters = [("method", "mcts"),
+                        ("total_forward_t", 8),
+                        ("samples_n", 64),
+                        ("mcts.prioritize_worst_particles_z", "-1000"),
+                        ("mcts.bound_mode", "marginal")] + common_filters
+        seconds_fig.plot(FigureMode(
+            "search_depth", [2, 3, 4, 5, 6]), mcts_filters, label="PTDM, ")
+
+        # eudm_filters = [("method", "eudm"),
+        #                 ("allow_different_root_policy", "true")] + common_filters
+        # seconds_fig.plot(FigureMode("samples_n", [2, 4, 8, 16, 32]),
+        #                  eudm_filters, label="EUDM, ")
+
+        # mpdm_filters = [("method", "mpdm")] + common_filters
+        # seconds_fig.plot(FigureMode("samples_n", [2, 4, 8, 16, 32, 64]),
+        #                  mpdm_filters, label="MPDM, ")
+
+        seconds_fig.legend()
+        seconds_fig.show(file_suffix="_search_depth")
+
+# cargo run --release rng_seed 2048-5119 :: method eudm :: discount_factor 0.6 0.7 0.8 0.9 1 :: use_cfb false :: eudm.samples_n 16 :: thread_limit 24
+# cargo run --release rng_seed 2048-5119 :: method mpdm :: discount_factor 0.6 0.7 0.8 0.9 1 :: use_cfb false :: mpdm.samples_n 16 :: thread_limit 24
+# cargo run --release rng_seed 2048-5119 :: method mcts :: discount_factor 0.6 0.7 0.8 0.9 1 :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 64 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+# cargo run --release rng_seed 5120-8191 :: method eudm :: discount_factor 0.6 0.7 0.8 0.9 1 :: use_cfb false :: eudm.samples_n 16 :: thread_limit 24
+# cargo run --release rng_seed 5120-8191 :: method mpdm :: discount_factor 0.6 0.7 0.8 0.9 1 :: use_cfb false :: mpdm.samples_n 16 :: thread_limit 24
+# cargo run --release rng_seed 5120-8191 :: method mcts :: discount_factor 0.6 0.7 0.8 0.9 1 :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 64 :: mcts.prioritize_worst_particles_z -1000 :: thread_limit 24
+if False:
+    common_filters = [("use_cfb", "false")]
+    mcts_filters = common_filters + [("samples_n", 64), ("method", "mcts"),
+                                     ("mcts.bound_mode", "marginal"), ("mcts.prioritize_worst_particles_z", "-1000")]
+    mpdm_filters = common_filters + [("samples_n", 16), ("method", "mpdm")]
+    eudm_filters = common_filters + [("samples_n", 16), ("method", "eudm")]
+
+    fig = FigureBuilder(results, "discount_factor", "cost", translations=t10s)
+    fig.plot(FigureMode("discount_factor", [
+        0.6, 0.7, 0.8, 0.9, 1]), mcts_filters, label="PTDM")
+    fig.plot(FigureMode("discount_factor", [
+        0.6, 0.7, 0.8, 0.9, 1]), mpdm_filters, label="MPDM")
+    fig.plot(FigureMode("discount_factor", [
+        0.6, 0.7, 0.8, 0.9, 1]), eudm_filters, label="EUDM")
+    fig.legend()
+    fig.show()
 
 # cargo run --release rng_seed 0-31 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
 # cargo run --release rng_seed 32-63 :: use_cfb false true :: method mcts :: mcts.samples_n 32 :: mcts.bound_mode normal lower_bound marginal :: mcts.selection_mode ucb klucb :: mcts.klucb_max_cost 10 30 100 300 1000 3000 :: thread_limit 24
@@ -312,24 +365,32 @@ if False:
     #   cost has mean:  454.1 and mean std dev:  11.49
     #   safety has mean: 0.00471 and mean std dev: 0.001229
 
+table_metrics = ["cost", "safety", "efficiency"]
 latex_table = ""
 if False:
-    fixed_filters = [("method", "fixed")]
-    import pdb
-    res = evaluate_conditions(results, plot_metrics, filters=fixed_filters)
-    latex_table += f"Fixed & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f}\n"
+    res = evaluate_conditions(results, table_metrics, filters=[("method", "fixed")])
+    latex_table += f"    Fixed & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f} \\\\\n"
 
-    mpdm_filters = [("method", "mpdm"), ("forward_t", 8)]
-    res = evaluate_conditions(results, plot_metrics, filters=mpdm_filters)
-    latex_table += f"MPDM & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f}\n"
+    common_filters = [("discount_factor", 0.8), ("replan_dt", 0.25), ("max.rng_seed", 8191)]
 
-    eudm_filters = [("method", "eudm"), ("search_depth", 4), ("use_cfb", "true")]
-    res = evaluate_conditions(results, plot_metrics, filters=eudm_filters)
-    latex_table += f"EUDM & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f}\n"
+    mpdm_filters = [("method", "mpdm"), ("use_cfb", "false"),
+                    ("forward_t", 8), ("samples_n", 16)] + common_filters
+    res = evaluate_conditions(results, table_metrics, filters=mpdm_filters)
+    latex_table += f"    MPDM & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f} \\\\\n"
 
-    mcts_filters = [("method", "mcts"), ("bound_mode", "lower_bound"), ("selection_mode", "klucb"),
-                    ("search_depth", 4), ("samples_n", 64), ("use_cfb", "false"), ("prioritize_worst_particles_z", -1000)]
-    res = evaluate_conditions(results, plot_metrics, filters=mcts_filters)
-    latex_table += f"Ours & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f}\n"
+    eudm_filters = [("method", "eudm"), ("use_cfb", "true"), ("search_depth", 4),
+                    ("samples_n", 8)] + common_filters
+    res = evaluate_conditions(results, table_metrics, filters=eudm_filters)
+    latex_table += f"    EUDM w/ CFB & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f} \\\\\n"
+
+    eudm_filters = [("method", "eudm"), ("use_cfb", "false"), ("search_depth", 4),
+                    ("samples_n", 8)] + common_filters
+    res = evaluate_conditions(results, table_metrics, filters=eudm_filters)
+    latex_table += f"    EUDM w/o CFB & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f} \\\\\n"
+
+    mcts_filters = [("method", "mcts"), ("use_cfb", "false"), ("bound_mode", "marginal"), ("selection_mode", "klucb"),
+                    ("search_depth", 4), ("samples_n", 64), ("prioritize_worst_particles_z", -1000)] + common_filters
+    res = evaluate_conditions(results, table_metrics, filters=mcts_filters)
+    latex_table += f"    PTDM (proposed) & {res[0]:.0f} & {res[1]:.4f} & {res[2]:.1f} \\\\\n"
 
 print(latex_table)

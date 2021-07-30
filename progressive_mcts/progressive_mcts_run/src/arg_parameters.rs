@@ -28,41 +28,41 @@ pub(crate) struct Parameters {
     pub bound_mode: CostBoundMode,
     pub final_choice_mode: CostBoundMode,
     pub selection_mode: ChildSelectionMode,
-    pub portion_bernoulli: f64,
-    pub special_situation_p: f64,
-    pub bad_threshold_cost: f64,
     pub prioritize_worst_particles_z: f64,
+    pub repeat_const: f64,
+    pub repeat_at_all_levels: bool,
 
     pub thread_limit: usize,
     pub scenario_name: Option<String>,
 
     pub print_report: bool,
+    pub stats_analysis: bool,
     pub is_single_run: bool,
 }
 
 impl Parameters {
     fn new() -> Self {
         Self {
-            search_depth: 4,
+            search_depth: 3,
             n_actions: 5,
-            ucb_const: -1.0, // -3000 for UCB
+            ucb_const: -2.2, // -3000 for UCB
             ucbv_const: 0.001,
             ucbd_const: 1.0,
-            klucb_max_cost: 4000.0,
+            klucb_max_cost: 10000.0,
             rng_seed: 0,
             samples_n: 64,
             bound_mode: CostBoundMode::Marginal,
             final_choice_mode: CostBoundMode::Same,
-            selection_mode: ChildSelectionMode::KLUCB,
-            portion_bernoulli: 0.5,
-            special_situation_p: 0.2,
-            bad_threshold_cost: 10000.0,
+            selection_mode: ChildSelectionMode::KLUCBP,
             prioritize_worst_particles_z: 1000.0,
+            repeat_const: -1.0,
+            repeat_at_all_levels: false,
 
             thread_limit: 1,
             scenario_name: None,
 
             print_report: false,
+            stats_analysis: false,
             is_single_run: false,
         }
     }
@@ -120,15 +120,18 @@ fn create_scenarios(
                 params.ucb_const = val.parse().unwrap();
             } else {
                 match name.as_str() {
+                    "search_depth" => params.search_depth = val.parse().unwrap(),
+                    "n_actions" => params.n_actions = val.parse().unwrap(),
                     "thread_limit" => params.thread_limit = val.parse().unwrap(),
                     "samples_n" => params.samples_n = val.parse().unwrap(),
                     "bound_mode" => params.bound_mode = val.parse().unwrap(),
                     "final_choice_mode" => params.final_choice_mode = val.parse().unwrap(),
                     "selection_mode" => params.selection_mode = val.parse().unwrap(),
-                    "portion_bernoulli" => params.portion_bernoulli = val.parse().unwrap(),
                     "prioritize_worst_particles_z" => {
                         params.prioritize_worst_particles_z = val.parse().unwrap()
                     }
+                    "repeat_const" => params.repeat_const = val.parse().unwrap(),
+                    "repeat_at_all_levels" => params.repeat_at_all_levels = val.parse().unwrap(),
                     "ucb_const" => params.ucb_const = val.parse().unwrap(),
                     "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
                     "ucbd.ucbd_const" => {
@@ -139,6 +142,7 @@ fn create_scenarios(
                     "klucb+.klucb_max_cost" => params.klucb_max_cost = val.parse().unwrap(),
                     "rng_seed" => params.rng_seed = val.parse().unwrap(),
                     "print_report" => params.print_report = val.parse().unwrap(),
+                    "stats_analysis" => params.stats_analysis = val.parse().unwrap(),
                     _ => panic!("{} is not a valid parameter!", name),
                 }
             }
@@ -169,13 +173,15 @@ fn create_scenarios(
         };
 
         s.scenario_name = Some(format_f!(
-            ",samples_n={s.samples_n}\
+            ",search_depth={s.search_depth}\
+             ,n_actions={s.n_actions}\
+             ,samples_n={s.samples_n}\
              ,bound_mode={s.bound_mode}\
              ,final_choice_mode={s.final_choice_mode}\
              ,selection_mode={s.selection_mode}\
-             ,portion_bernoulli={s.portion_bernoulli}\
-             ,prioritize_worst_particles_n=0\
              ,prioritize_worst_particles_z={s.prioritize_worst_particles_z}\
+             ,repeat_const={s.repeat_const}\
+             ,repeat_at_all_levels={s.repeat_at_all_levels}\
              ,ucb_const={s.ucb_const}\
              {ucbv_const}\
              {ucbd_const}\
@@ -322,9 +328,21 @@ pub fn run_parallel_scenarios() {
                         n_scenarios_completed.load(Ordering::Relaxed),
                         n_scenarios
                     );
-                    println_f!("{res}");
+                    if scenario.stats_analysis {
+                        println_f!("{res} {scenario.search_depth} {scenario.n_actions} {scenario.samples_n}");
+                    } else {
+                        println_f!("{res}");
+                    }
                 }
-                writeln_f!(file.lock().unwrap(), "{scenario_name} {res}").unwrap();
+                if scenario.stats_analysis {
+                    writeln_f!(
+                        file.lock().unwrap(),
+                        "{res} {scenario.search_depth} {scenario.n_actions} {scenario.samples_n}"
+                    )
+                    .unwrap();
+                } else {
+                    writeln_f!(file.lock().unwrap(), "{scenario_name} {res}").unwrap();
+                }
 
                 cumulative_results.lock().unwrap().insert(scenario_name, ());
             });

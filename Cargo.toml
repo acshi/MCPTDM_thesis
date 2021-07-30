@@ -7,8 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-progressive_mcts = { path="progressive_mcts/progressive_mcts" }
-rvx = { path="../rvx" }
+progressive_mcts = { path = "progressive_mcts/progressive_mcts" }
+rvx = { path = "../rvx" }
 rand = "0.8.3"
 parry2d-f64 = "0.5.1"
 enum_dispatch = "0.3.7"
@@ -20,6 +20,7 @@ itertools = "0.10.0"
 config = "0.11.0"
 nalgebra = "0.27.1"
 ordered-float = "2.5.1"
+rolling-stats = "0.4"
 
 [dev-dependencies]
 criterion = "0.3.4"

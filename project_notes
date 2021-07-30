@@ -76,21 +76,7 @@ Ed's recommended order: contributions, abstract, results/evaluation, everything 
 EUDM uses 0 steer weight and plan_change weight of 2 or so
 
 FROM ED:
-tree explortation figure... maybe use 64 samples and then hide the branches with only 1 sample.
-
-make figure insets for the synthetic figures going from 16 to 16384, to show the significance of differences at the high end
-
-show how particle repeating benefit drops off when we get to higher numbers of samples
-
-use "proposed" instead of "ours"
-
 give him the paper to do a "high level" review by end of Monday
-
-The original MPDM paper didn't claim it could replan at 40hz... (if we simulate at lower than 20hz, we can do a lot more in less time.)
-
-"Safety cost" instead of "Safety"
-
-Clarify "replicates risky particle samples" in the contributions, to not say that using particles is risky!
 
 Tasks:
 Overall for this week:
