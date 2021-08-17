@@ -410,7 +410,7 @@ fn possibly_modify_particle(
     let mut z = node.params.prioritize_worst_particles_z;
     let repeat_const = node.params.repeat_const;
     if z >= 1000.0 && repeat_const >= 0.0 {
-        // using regret const and NOT z, so to disable z, we set to 0
+        // using repeat const and NOT z, so to disable z, we set to 0
         z = 0.0;
     }
 
