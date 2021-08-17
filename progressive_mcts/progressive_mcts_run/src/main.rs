@@ -410,8 +410,8 @@ fn possibly_modify_particle(
     let mut z = node.params.prioritize_worst_particles_z;
     let repeat_const = node.params.repeat_const;
     if z >= 1000.0 && repeat_const >= 0.0 {
-        // using repeat const and NOT z, so to disable z, we set to 0
-        z = 0.0;
+        // using repeat const and NOT z, so to disable z, we set to -1000
+        z = -1000.0;
     }
 
     if z >= 1000.0 {
@@ -430,62 +430,34 @@ fn possibly_modify_particle(
         if node.particles_repeated >= repeat_n {
             return;
         }
+    }
 
-        if let Some((c, particle)) = costs
-            .iter()
-            .filter(|(c, particle)| !node.seen_particles[particle.id] && *c - mean >= std_dev * z)
-            .max_by(|a, b| match node.params.repeat_particle_sign {
-                -1 => b.0.partial_cmp(&a.0).unwrap(),
-                1 => a.0.partial_cmp(&b.0).unwrap(),
-                0 => {
-                    if node.particles_repeated % 2 == 0 {
-                        a.0.partial_cmp(&b.0).unwrap()
-                    } else {
-                        b.0.partial_cmp(&a.0).unwrap()
-                    }
+    if let Some((c, particle)) = costs
+        .iter()
+        .filter(|(c, particle)| !node.seen_particles[particle.id] && *c - mean >= std_dev * z)
+        .max_by(|a, b| match node.params.repeat_particle_sign {
+            -1 => b.0.partial_cmp(&a.0).unwrap(),
+            1 => a.0.partial_cmp(&b.0).unwrap(),
+            0 => {
+                if node.particles_repeated % 2 == 0 {
+                    a.0.partial_cmp(&b.0).unwrap()
+                } else {
+                    b.0.partial_cmp(&a.0).unwrap()
                 }
-                _ => panic!("repeat_particle_sign must be -1, 1, or 0"),
-            })
-        {
-            sim.particle = *particle;
-            node.particles_repeated += 1;
-            let z_score = (*c - costs.mean()) / costs.std_dev();
-            if z_score.is_finite() {
-                node.repeated_particle_costs.push(z_score);
             }
-            // eprintln!(
-            //     "Replaying particle {:?} w/ c {}, mean {}, std_dev {}",
-            //     sim.particle, c, mean, std_dev
-            // );
+            _ => panic!("repeat_particle_sign must be -1, 1, or 0"),
+        })
+    {
+        sim.particle = *particle;
+        node.particles_repeated += 1;
+        let z_score = (*c - costs.mean()) / costs.std_dev();
+        if z_score.is_finite() {
+            node.repeated_particle_costs.push(z_score);
         }
-    } else {
-        if let Some((c, particle)) = costs
-            .iter()
-            .filter(|(c, particle)| !node.seen_particles[particle.id] && *c - mean >= std_dev * z)
-            .max_by(|a, b| match node.params.repeat_particle_sign {
-                -1 => b.0.partial_cmp(&a.0).unwrap(),
-                1 => a.0.partial_cmp(&b.0).unwrap(),
-                0 => {
-                    if node.particles_repeated % 2 == 0 {
-                        a.0.partial_cmp(&b.0).unwrap()
-                    } else {
-                        b.0.partial_cmp(&a.0).unwrap()
-                    }
-                }
-                _ => panic!("repeat_particle_sign must be -1, 1, or 0"),
-            })
-        {
-            sim.particle = *particle;
-            node.particles_repeated += 1;
-            let z_score = (*c - costs.mean()) / costs.std_dev();
-            if z_score.is_finite() {
-                node.repeated_particle_costs.push(z_score);
-            }
-            // eprintln!(
-            //     "Replaying particle {:?} w/ c {}, mean {}, std_dev {}",
-            //     sim.particle, _c, mean, std_dev
-            // );
-        }
+        // eprintln!(
+        //     "Replaying particle {:?} w/ c {}, mean {}, std_dev {}",
+        //     sim.particle, c, mean, std_dev
+        // );
     }
 }
 
