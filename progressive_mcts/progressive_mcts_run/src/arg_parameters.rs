@@ -29,8 +29,12 @@ pub(crate) struct Parameters {
     pub final_choice_mode: CostBoundMode,
     pub selection_mode: ChildSelectionMode,
     pub prioritize_worst_particles_z: f64,
+    pub consider_repeats_after_portion: f64,
+    pub repeat_confidence_interval: f64,
     pub repeat_const: f64,
+    pub repeat_particle_sign: i8,
     pub repeat_at_all_levels: bool,
+    pub throwout_extreme_costs_z: f64,
 
     pub thread_limit: usize,
     pub scenario_name: Option<String>,
@@ -55,8 +59,12 @@ impl Parameters {
             final_choice_mode: CostBoundMode::Same,
             selection_mode: ChildSelectionMode::KLUCBP,
             prioritize_worst_particles_z: 1000.0,
+            consider_repeats_after_portion: 0.0,
+            repeat_confidence_interval: 1000.0,
             repeat_const: -1.0,
+            repeat_particle_sign: 1,
             repeat_at_all_levels: false,
+            throwout_extreme_costs_z: 1000.0,
 
             thread_limit: 1,
             scenario_name: None,
@@ -130,8 +138,18 @@ fn create_scenarios(
                     "prioritize_worst_particles_z" => {
                         params.prioritize_worst_particles_z = val.parse().unwrap()
                     }
+                    "consider_repeats_after_portion" => {
+                        params.consider_repeats_after_portion = val.parse().unwrap()
+                    }
+                    "repeat_confidence_interval" => {
+                        params.repeat_confidence_interval = val.parse().unwrap()
+                    }
                     "repeat_const" => params.repeat_const = val.parse().unwrap(),
+                    "repeat_particle_sign" => params.repeat_particle_sign = val.parse().unwrap(),
                     "repeat_at_all_levels" => params.repeat_at_all_levels = val.parse().unwrap(),
+                    "throwout_extreme_costs_z" => {
+                        params.throwout_extreme_costs_z = val.parse().unwrap()
+                    }
                     "ucb_const" => params.ucb_const = val.parse().unwrap(),
                     "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
                     "ucbd.ucbd_const" => {
@@ -180,8 +198,12 @@ fn create_scenarios(
              ,final_choice_mode={s.final_choice_mode}\
              ,selection_mode={s.selection_mode}\
              ,prioritize_worst_particles_z={s.prioritize_worst_particles_z}\
+             ,consider_repeats_after_portion={s.consider_repeats_after_portion}\
+             ,repeat_confidence_interval={s.repeat_confidence_interval}\
              ,repeat_const={s.repeat_const}\
+             ,repeat_particle_sign={s.repeat_particle_sign}\
              ,repeat_at_all_levels={s.repeat_at_all_levels}\
+             ,throwout_extreme_costs_z={s.throwout_extreme_costs_z}\
              ,ucb_const={s.ucb_const}\
              {ucbv_const}\
              {ucbd_const}\

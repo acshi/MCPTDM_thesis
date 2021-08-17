@@ -268,18 +268,32 @@ if False:
         repeat_const_kind.plot(
             results, metric, filters=filters, mode=samples_n_mode)
 
-# cargo run --release rng_seed 0-4095 :: n_actions 4 5 6 7 8 9 :: samples_n 512 :: repeat_const 0 64 128 256 512 1024 2048 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: bound_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-8191 :: repeat_particle_sign -1 0 1 :: n_actions 5 6 7 8 9 10 :: samples_n 512 :: repeat_const 0 64 128 256 512 1024 2048 :: thread_limit 24
 if True:
     repeat_const_kind = FigureKind(
-        "repeat_const", [0, 64, 128, 256, 512, 1024, 2048], translations=t10s)
+        "repeat_const", [0, 64, 128, 256, 512, 1024, 2048], translations=t10s, ylim=[10, 35])
     n_actions_mode = FigureMode(
-        "n_actions", [5, 6, 7, 8, 9])
+        "n_actions", [5, 6, 7, 8, 9, 10])
+    for repeat_particle_sign in [0, 1, -1]:
+        for metric in all_metrics:
+            filters = [("selection_mode", "klucb+"),
+                       ("samples_n", 512),
+                       ("repeat_at_all_levels", "false"),
+                       ("repeat_particle_sign", repeat_particle_sign)]
+            repeat_const_kind.plot(
+                results, metric, filters=filters, mode=n_actions_mode)
+
+# cargo run --release rng_seed 0-4095 :: throwout_extreme_costs_z 1 1.5 2 2.5 3 1000 :: samples_n 256 384 512 1024 :: thread_limit 24
+# cargo run --release rng_seed 0-8191 :: throwout_extreme_costs_z 1 1.5 2 2.5 3 1000 :: samples_n 256 384 512 :: thread_limit 24
+if False:
+    throwout_extreme_costs_z_kind = FigureKind(
+        "throwout_extreme_costs_z", [1, 1.5, 2, 2.5, 3, 1000], translations=t10s)
+    samples_n_mode = FigureMode(
+        "samples_n", [256, 384, 512, 1024])
     for metric in all_metrics:
-        filters = [("selection_mode", "klucb+"),
-                   ("samples_n", 512),
-                   ("repeat_at_all_levels", "false")]
-        repeat_const_kind.plot(
-            results, metric, filters=filters, mode=n_actions_mode)
+        filters = [("selection_mode", "klucb+")]
+        throwout_extreme_costs_z_kind.plot(
+            results, metric, filters=filters, mode=samples_n_mode)
 
 # cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
 # cargo run --release rng_seed 0-4095 :: samples_n 64 128 256 512 1024 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24

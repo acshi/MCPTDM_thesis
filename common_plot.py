@@ -69,10 +69,11 @@ def decapitalize(title):
 
 
 class FigureKind:
-    def __init__(self, param, ticks=None, val_names=None, locs=None, xlim=None, translations={}):
+    def __init__(self, param, ticks=None, val_names=None, locs=None, xlim=None, ylim=None, translations={}):
         self.param = param
         self.ticks = ticks
         self.xlim = xlim
+        self.ylim = ylim
         if val_names is None and ticks is not None:
             self.val_names = [str(val) for val in ticks]
             self.tick_labels = self.val_names
@@ -121,6 +122,8 @@ class FigureKind:
         self.ax.set_ylabel(ylabel)
         if self.xlim is not None:
             self.ax.set_xlim(self.xlim)
+        if self.ylim is not None:
+            self.ax.set_ylim(self.ylim)
         if show_only:
             plt.show()
         else:
