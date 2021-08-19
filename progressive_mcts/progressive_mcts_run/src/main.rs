@@ -141,16 +141,6 @@ impl<'a> MctsNode<'a> {
             / self.costs.len() as f64
     }
 
-    fn std_dev_of_mean(&self) -> f64 {
-        if self.costs.is_empty() {
-            0.0
-        } else if self.costs.len() == 1 {
-            10000.0
-        } else {
-            self.costs.std_dev() / (self.costs.len() as f64).sqrt()
-        }
-    }
-
     fn min_child_expected_cost_and_std_dev(&self) -> Option<(f64, f64)> {
         self.sub_nodes.as_ref().and_then(|nodes| {
             nodes
@@ -162,6 +152,16 @@ impl<'a> MctsNode<'a> {
 
     fn mean_cost(&self) -> f64 {
         self.costs.mean()
+    }
+
+    fn std_dev_of_mean(&self) -> f64 {
+        if self.costs.is_empty() {
+            0.0
+        } else if self.costs.len() == 1 {
+            1000.0
+        } else {
+            self.costs.std_dev() / (self.costs.len() as f64).sqrt()
+        }
     }
 
     fn intermediate_cost(&self) -> f64 {
@@ -176,7 +176,7 @@ impl<'a> MctsNode<'a> {
         if self.intermediate_costs.is_empty() {
             0.0
         } else if self.intermediate_costs.len() == 1 {
-            10000.0
+            1000.0
         } else {
             self.intermediate_costs.std_dev() / (self.intermediate_costs.len() as f64).sqrt()
         }
@@ -194,7 +194,7 @@ impl<'a> MctsNode<'a> {
         if self.marginal_costs.is_empty() {
             0.0
         } else if self.marginal_costs.len() == 1 {
-            10000.0
+            1000.0
         } else {
             self.marginal_costs.std_dev() / (self.marginal_costs.len() as f64).sqrt()
         }
@@ -249,61 +249,50 @@ impl<'a> MctsNode<'a> {
             return 1000.0;
         }
 
-        let mut best_i = None;
-        let mut best_sub_node = None;
-        let mut best_expected_cost = f64::MAX;
-        for (i, sub_node) in self.sub_nodes.as_ref().unwrap().iter().enumerate() {
-            if let Some(expected_cost) = sub_node.expected_cost {
-                if expected_cost < best_expected_cost {
-                    best_expected_cost = expected_cost;
-                    best_i = Some(i);
-                    best_sub_node = Some(sub_node);
-                }
-            }
+        let mut sorted_sub_nodes = self
+            .sub_nodes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .filter(|n| n.expected_cost.is_some())
+            .collect_vec();
+        sorted_sub_nodes.sort_by(|a, b| a.expected_cost.partial_cmp(&b.expected_cost).unwrap());
+
+        if sorted_sub_nodes.len() < 2 {
+            // not expanded enough yet for a comparison, so no confidence!
+            return 1000.0;
         }
-        let best_i = best_i.unwrap();
-        let best_sub_node = best_sub_node.unwrap();
+
+        let best_sub_node = sorted_sub_nodes[0];
+        let second_sub_node = sorted_sub_nodes[1];
 
         let remaining_samples_n = self.params.samples_n - n_completed;
 
-        let mut closest_z_gap = f64::MAX;
-        for (i, sub_node) in self.sub_nodes.as_ref().unwrap().iter().enumerate() {
-            if best_i == i {
-                continue;
-            }
-            if sub_node.expected_cost.is_none() {
-                continue;
-            }
+        let mean_diff =
+            second_sub_node.expected_cost.unwrap() - best_sub_node.expected_cost.unwrap();
+        let expected_cost_std_dev = best_sub_node.expected_cost_std_dev.unwrap();
+        let z_gap1 = if self.params.correct_future_std_dev_mean {
+            mean_diff
+                / (expected_cost_std_dev
+                    * (best_sub_node.costs.len() as f64
+                        / (best_sub_node.costs.len() + remaining_samples_n) as f64)
+                        .sqrt())
+        } else {
+            mean_diff / expected_cost_std_dev
+        };
 
-            let mean_diff = sub_node.expected_cost.unwrap() - best_sub_node.expected_cost.unwrap();
-            let expected_cost_std_dev = best_sub_node.expected_cost_std_dev.unwrap();
-            let z_gap = if self.params.correct_future_std_dev_mean {
-                mean_diff
-                    / (expected_cost_std_dev
-                        * (best_sub_node.costs.len() as f64
-                            / (best_sub_node.costs.len() + remaining_samples_n) as f64)
-                            .sqrt())
-            } else {
-                mean_diff / expected_cost_std_dev
-            };
-            // eprintln_f!("{best_i=}, {i=}, {mean_diff=:.0}, {z_gap=:.1}");
-            closest_z_gap = closest_z_gap.min(z_gap);
+        let expected_cost_std_dev = second_sub_node.expected_cost_std_dev.unwrap();
+        let z_gap2 = if self.params.correct_future_std_dev_mean {
+            mean_diff
+                / (expected_cost_std_dev
+                    * (second_sub_node.costs.len() as f64
+                        / (second_sub_node.costs.len() + remaining_samples_n) as f64)
+                        .sqrt())
+        } else {
+            mean_diff / expected_cost_std_dev
+        };
 
-            let expected_cost_std_dev = sub_node.expected_cost_std_dev.unwrap();
-            let z_gap = if self.params.correct_future_std_dev_mean {
-                mean_diff
-                    / (expected_cost_std_dev
-                        * (sub_node.costs.len() as f64
-                            / (sub_node.costs.len() + remaining_samples_n) as f64)
-                            .sqrt())
-            } else {
-                mean_diff / expected_cost_std_dev
-            };
-            // eprintln_f!("{best_i=}, {i=}, {mean_diff=:.0}, {z_gap=:.1}");
-            closest_z_gap = closest_z_gap.min(z_gap);
-        }
-
-        closest_z_gap
+        z_gap1.min(z_gap2)
     }
 
     fn update_expected_cost(&mut self, bound_mode: CostBoundMode) {
