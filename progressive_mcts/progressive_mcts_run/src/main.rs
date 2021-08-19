@@ -123,11 +123,12 @@ struct MctsNode<'a> {
     marginal_costs: CostSet,
 
     seen_particles: Vec<bool>,
-    particles_repeated: usize,
+    n_particles_repeated: usize,
     repeated_particle_costs: Vec<f64>,
 
     sub_nodes: Option<Vec<MctsNode<'a>>>,
     costs: CostSet<SituationParticle>,
+    sub_node_repeated_particles: Vec<(f64, SituationParticle)>,
 }
 
 impl<'a> MctsNode<'a> {
@@ -377,10 +378,11 @@ fn find_and_run_trial(
                         intermediate_costs: CostSet::new(params.throwout_extreme_costs_z),
                         marginal_costs: CostSet::new(params.throwout_extreme_costs_z),
                         seen_particles: vec![false; params.samples_n],
-                        particles_repeated: 0,
+                        n_particles_repeated: 0,
                         repeated_particle_costs: Vec::new(),
                         sub_nodes: None,
                         costs: CostSet::new(params.throwout_extreme_costs_z),
+                        sub_node_repeated_particles: Vec::new(),
                     })
                     .collect(),
             );
@@ -403,6 +405,7 @@ fn find_and_run_trial(
                 let sub_node_i = *unexplored.choose(rng).unwrap();
                 possibly_modify_particle(
                     &mut node.costs,
+                    &mut node.sub_node_repeated_particles,
                     &mut sub_nodes[sub_node_i],
                     sim,
                     n_completed,
@@ -440,6 +443,7 @@ fn find_and_run_trial(
 
             possibly_modify_particle(
                 &mut node.costs,
+                &mut node.sub_node_repeated_particles,
                 &mut sub_nodes[chosen_i],
                 sim,
                 n_completed,
@@ -468,6 +472,7 @@ fn find_and_run_trial(
 
 fn possibly_modify_particle(
     costs: &mut CostSet<SituationParticle>,
+    already_repeated: &mut Vec<(f64, SituationParticle)>,
     node: &mut MctsNode,
     sim: &mut Simulator,
     n_completed: usize,
@@ -508,9 +513,30 @@ fn possibly_modify_particle(
             * node.params.n_actions.pow(node.params.search_depth - 1) as f64
             / (node.params.samples_n as f64)) as usize;
 
-        if node.particles_repeated >= repeat_n {
+        if node.n_particles_repeated >= repeat_n {
             return;
         }
+    }
+
+    // Prioritize repeating particles that have already been repeated by other sub nodes
+    if let Some((c, particle)) = already_repeated
+        .iter()
+        .filter(|(_c, particle)| !node.seen_particles[particle.id])
+        .nth(0)
+    {
+        sim.particle = *particle;
+        node.n_particles_repeated += 1;
+        let z_score = (*c - costs.mean()) / costs.std_dev();
+        if z_score.is_finite() {
+            node.repeated_particle_costs.push(z_score);
+        }
+
+        if node.params.is_single_run {
+            eprintln_f!(
+                "{n_completed}: {} Replaying particle {sim.particle.id:3} w/ z {z_score:.2}, {choice_confidence_interval:.2?}", node.policy.unwrap()
+            );
+        }
+        return;
     }
 
     if let Some((c, particle)) = costs
@@ -520,7 +546,7 @@ fn possibly_modify_particle(
             -1 => b.0.partial_cmp(&a.0).unwrap(),
             1 => a.0.partial_cmp(&b.0).unwrap(),
             0 => {
-                if node.particles_repeated % 2 == 0 {
+                if node.n_particles_repeated % 2 == 0 {
                     a.0.partial_cmp(&b.0).unwrap()
                 } else {
                     b.0.partial_cmp(&a.0).unwrap()
@@ -530,14 +556,19 @@ fn possibly_modify_particle(
         })
     {
         sim.particle = *particle;
-        node.particles_repeated += 1;
+        node.n_particles_repeated += 1;
         let z_score = (*c - costs.mean()) / costs.std_dev();
         if z_score.is_finite() {
             node.repeated_particle_costs.push(z_score);
         }
-        // eprintln_f!(
-        //     "{n_completed}: Replaying particle {sim.particle.id:3} w/ z {z_score:.2}, {choice_confidence_interval:.2?}"
-        // );
+
+        if node.params.is_single_run {
+            eprintln_f!(
+                "{n_completed}: {} Replaying particle {sim.particle.id:3} w/ z {z_score:.2}, {choice_confidence_interval:.2?}", node.policy.unwrap()
+            );
+        }
+
+        already_repeated.push((*c, *particle));
     }
 }
 
@@ -704,11 +735,12 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         intermediate_costs: CostSet::new(params.throwout_extreme_costs_z),
         marginal_costs: CostSet::new(params.throwout_extreme_costs_z),
         seen_particles: vec![false; params.samples_n],
-        particles_repeated: 0,
+        n_particles_repeated: 0,
         repeated_particle_costs: Vec::new(),
 
         sub_nodes: None,
         costs: CostSet::new(params.throwout_extreme_costs_z),
+        sub_node_repeated_particles: Vec::new(),
     };
 
     let mut full_seed = [0; 32];
@@ -758,10 +790,10 @@ fn run_with_parameters(params: Parameters) -> RunResults {
 
     for (i, sub_node) in node.sub_nodes.as_ref().unwrap().iter().enumerate() {
         if params.is_single_run {
-            println_f!("{i}: {sub_node.particles_repeated=}");
+            println_f!("{i}: {sub_node.n_particles_repeated=}");
         }
-        sum_repeated += sub_node.particles_repeated;
-        max_repeated = max_repeated.max(sub_node.particles_repeated);
+        sum_repeated += sub_node.n_particles_repeated;
+        max_repeated = max_repeated.max(sub_node.n_particles_repeated);
         repeated_cost_avg += sub_node.repeated_particle_costs.iter().sum::<f64>();
         n_repeated_cost_avg += sub_node.repeated_particle_costs.len();
     }
