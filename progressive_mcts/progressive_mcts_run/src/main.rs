@@ -223,19 +223,21 @@ impl<'a> MctsNode<'a> {
     }
 
     fn choice_confidence_interval(&self, n_completed: usize) -> f64 {
-        if self.sub_nodes.is_none() {
+        if self.expected_cost.is_none() {
             // not expanded yet... no confidence!
             return 1000.0;
         }
 
         let mut best_i = None;
         let mut best_sub_node = None;
-        let mut best_mean_cost = f64::MAX;
+        let mut best_expected_cost = f64::MAX;
         for (i, sub_node) in self.sub_nodes.as_ref().unwrap().iter().enumerate() {
-            if sub_node.mean_cost() < best_mean_cost {
-                best_mean_cost = sub_node.mean_cost();
-                best_i = Some(i);
-                best_sub_node = Some(sub_node);
+            if let Some(expected_cost) = sub_node.expected_cost {
+                if expected_cost < best_expected_cost {
+                    best_expected_cost = expected_cost;
+                    best_i = Some(i);
+                    best_sub_node = Some(sub_node);
+                }
             }
         }
         let best_i = best_i.unwrap();
@@ -248,22 +250,31 @@ impl<'a> MctsNode<'a> {
             if best_i == i {
                 continue;
             }
+            if sub_node.expected_cost.is_none() {
+                continue;
+            }
 
-            let mean_diff = sub_node.mean_cost() - best_sub_node.mean_cost();
-            let expected_cost_std_dev = best_sub_node.expected_cost_std_dev.unwrap_or(10000.0);
+            let mean_diff = sub_node.expected_cost.unwrap() - best_sub_node.expected_cost.unwrap();
+            let expected_cost_std_dev = best_sub_node.expected_cost_std_dev.unwrap();
             let z_gap = if self.params.correct_future_std_dev_mean {
-                mean_diff / expected_cost_std_dev
-                    * ((best_sub_node.costs.len() + remaining_samples_n) as f64).sqrt()
+                mean_diff
+                    / (expected_cost_std_dev
+                        * (best_sub_node.costs.len() as f64
+                            / (best_sub_node.costs.len() + remaining_samples_n) as f64)
+                            .sqrt())
             } else {
                 mean_diff / expected_cost_std_dev
             };
             // eprintln_f!("{best_i=}, {i=}, {mean_diff=:.0}, {z_gap=:.1}");
             closest_z_gap = closest_z_gap.min(z_gap);
 
-            let expected_cost_std_dev = sub_node.expected_cost_std_dev.unwrap_or(10000.0);
+            let expected_cost_std_dev = sub_node.expected_cost_std_dev.unwrap();
             let z_gap = if self.params.correct_future_std_dev_mean {
-                mean_diff / expected_cost_std_dev
-                    * ((sub_node.costs.len() + remaining_samples_n) as f64).sqrt()
+                mean_diff
+                    / (expected_cost_std_dev
+                        * (sub_node.costs.len() as f64
+                            / (sub_node.costs.len() + remaining_samples_n) as f64)
+                            .sqrt())
             } else {
                 mean_diff / expected_cost_std_dev
             };
@@ -296,7 +307,7 @@ impl<'a> MctsNode<'a> {
                     .min_child_expected_cost_and_std_dev()
                     .unwrap_or((0.0, 0.0));
                 expected_cost += self.marginal_cost();
-                std_dev += self.marginal_cost_std_dev();
+                std_dev = std_dev.hypot(self.marginal_cost_std_dev());
                 (expected_cost, std_dev)
             }
             CostBoundMode::Same => panic!("Bound mode cannot be 'Same'"),
