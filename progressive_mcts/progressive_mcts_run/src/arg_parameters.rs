@@ -31,6 +31,7 @@ pub(crate) struct Parameters {
     pub prioritize_worst_particles_z: f64,
     pub consider_repeats_after_portion: f64,
     pub repeat_confidence_interval: f64,
+    pub correct_future_std_dev_mean: bool,
     pub repeat_const: f64,
     pub repeat_particle_sign: i8,
     pub repeat_at_all_levels: bool,
@@ -61,6 +62,7 @@ impl Parameters {
             prioritize_worst_particles_z: 1000.0,
             consider_repeats_after_portion: 0.0,
             repeat_confidence_interval: 1000.0,
+            correct_future_std_dev_mean: false,
             repeat_const: -1.0,
             repeat_particle_sign: 1,
             repeat_at_all_levels: false,
@@ -144,6 +146,9 @@ fn create_scenarios(
                     "repeat_confidence_interval" => {
                         params.repeat_confidence_interval = val.parse().unwrap()
                     }
+                    "correct_future_std_dev_mean" => {
+                        params.correct_future_std_dev_mean = val.parse().unwrap()
+                    }
                     "repeat_const" => params.repeat_const = val.parse().unwrap(),
                     "repeat_particle_sign" => params.repeat_particle_sign = val.parse().unwrap(),
                     "repeat_at_all_levels" => params.repeat_at_all_levels = val.parse().unwrap(),
@@ -200,6 +205,7 @@ fn create_scenarios(
              ,prioritize_worst_particles_z={s.prioritize_worst_particles_z}\
              ,consider_repeats_after_portion={s.consider_repeats_after_portion}\
              ,repeat_confidence_interval={s.repeat_confidence_interval}\
+             ,correct_future_std_dev_mean={s.correct_future_std_dev_mean}\
              ,repeat_const={s.repeat_const}\
              ,repeat_particle_sign={s.repeat_particle_sign}\
              ,repeat_at_all_levels={s.repeat_at_all_levels}\

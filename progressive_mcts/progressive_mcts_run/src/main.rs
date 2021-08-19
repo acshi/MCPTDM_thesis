@@ -108,6 +108,7 @@ struct MctsNode<'a> {
     depth: u32,
     n_trials: usize,
     expected_cost: Option<f64>,
+    expected_cost_std_dev: Option<f64>,
     intermediate_costs: CostSet,
     marginal_costs: CostSet,
 
@@ -133,11 +134,11 @@ impl<'a> MctsNode<'a> {
         self.costs.std_dev() / (self.costs.len() as f64).sqrt()
     }
 
-    fn min_child_expected_cost(&self) -> Option<f64> {
+    fn min_child_expected_cost_and_std_dev(&self) -> Option<(f64, f64)> {
         self.sub_nodes.as_ref().and_then(|nodes| {
             nodes
                 .iter()
-                .filter_map(|n| n.expected_cost)
+                .filter_map(|n| Some((n.expected_cost?, n.expected_cost_std_dev?)))
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
         })
     }
@@ -154,11 +155,27 @@ impl<'a> MctsNode<'a> {
         }
     }
 
+    fn intermediate_cost_std_dev(&self) -> f64 {
+        if self.intermediate_costs.is_empty() {
+            0.0
+        } else {
+            self.intermediate_costs.std_dev() / (self.intermediate_costs.len() as f64).sqrt()
+        }
+    }
+
     fn marginal_cost(&self) -> f64 {
         if self.marginal_costs.is_empty() {
             0.0
         } else {
             self.marginal_costs.mean()
+        }
+    }
+
+    fn marginal_cost_std_dev(&self) -> f64 {
+        if self.marginal_costs.is_empty() {
+            0.0
+        } else {
+            self.marginal_costs.std_dev() / (self.marginal_costs.len() as f64).sqrt()
         }
     }
 
@@ -205,7 +222,7 @@ impl<'a> MctsNode<'a> {
         index
     }
 
-    fn choice_confidence_interval(&self) -> f64 {
+    fn choice_confidence_interval(&self, n_completed: usize) -> f64 {
         if self.sub_nodes.is_none() {
             // not expanded yet... no confidence!
             return 1000.0;
@@ -224,6 +241,8 @@ impl<'a> MctsNode<'a> {
         let best_i = best_i.unwrap();
         let best_sub_node = best_sub_node.unwrap();
 
+        let remaining_samples_n = self.params.samples_n - n_completed;
+
         let mut closest_z_gap = f64::MAX;
         for (i, sub_node) in self.sub_nodes.as_ref().unwrap().iter().enumerate() {
             if best_i == i {
@@ -231,16 +250,59 @@ impl<'a> MctsNode<'a> {
             }
 
             let mean_diff = sub_node.mean_cost() - best_sub_node.mean_cost();
-            let z_gap = mean_diff / best_sub_node.std_dev_of_mean();
+            let expected_cost_std_dev = best_sub_node.expected_cost_std_dev.unwrap_or(10000.0);
+            let z_gap = if self.params.correct_future_std_dev_mean {
+                mean_diff / expected_cost_std_dev
+                    * ((best_sub_node.costs.len() + remaining_samples_n) as f64).sqrt()
+            } else {
+                mean_diff / expected_cost_std_dev
+            };
             // eprintln_f!("{best_i=}, {i=}, {mean_diff=:.0}, {z_gap=:.1}");
             closest_z_gap = closest_z_gap.min(z_gap);
 
-            let z_gap = mean_diff / sub_node.std_dev_of_mean();
+            let expected_cost_std_dev = sub_node.expected_cost_std_dev.unwrap_or(10000.0);
+            let z_gap = if self.params.correct_future_std_dev_mean {
+                mean_diff / expected_cost_std_dev
+                    * ((sub_node.costs.len() + remaining_samples_n) as f64).sqrt()
+            } else {
+                mean_diff / expected_cost_std_dev
+            };
             // eprintln_f!("{best_i=}, {i=}, {mean_diff=:.0}, {z_gap=:.1}");
             closest_z_gap = closest_z_gap.min(z_gap);
         }
 
         closest_z_gap
+    }
+
+    fn update_expected_cost(&mut self, bound_mode: CostBoundMode) {
+        let (expected_cost, std_dev) = match bound_mode {
+            CostBoundMode::Normal => (self.mean_cost(), self.std_dev_of_mean()),
+            CostBoundMode::BubbleBest => self
+                .min_child_expected_cost_and_std_dev()
+                .unwrap_or((self.mean_cost(), self.std_dev_of_mean())),
+            CostBoundMode::LowerBound => {
+                let (mut expected_cost, mut std_dev) = self
+                    .min_child_expected_cost_and_std_dev()
+                    .unwrap_or((0.0, 0.0));
+                let intermediate_cost = self.intermediate_cost();
+                if intermediate_cost > expected_cost {
+                    expected_cost = intermediate_cost;
+                    std_dev = self.intermediate_cost_std_dev();
+                }
+                (expected_cost, std_dev)
+            }
+            CostBoundMode::Marginal => {
+                let (mut expected_cost, mut std_dev) = self
+                    .min_child_expected_cost_and_std_dev()
+                    .unwrap_or((0.0, 0.0));
+                expected_cost += self.marginal_cost();
+                std_dev += self.marginal_cost_std_dev();
+                (expected_cost, std_dev)
+            }
+            CostBoundMode::Same => panic!("Bound mode cannot be 'Same'"),
+        };
+        self.expected_cost = Some(expected_cost);
+        self.expected_cost_std_dev = Some(std_dev);
     }
 }
 
@@ -280,6 +342,7 @@ fn find_and_run_trial(
                         depth: sub_depth,
                         n_trials: 0,
                         expected_cost: None,
+                        expected_cost_std_dev: None,
                         intermediate_costs: CostSet::new(params.throwout_extreme_costs_z),
                         marginal_costs: CostSet::new(params.throwout_extreme_costs_z),
                         seen_particles: vec![false; params.samples_n],
@@ -367,20 +430,7 @@ fn find_and_run_trial(
     node.seen_particles[sim.particle.id] = true;
     node.n_trials = node.costs.len();
 
-    let expected_cost = match params.bound_mode {
-        CostBoundMode::Normal => node.mean_cost(),
-        CostBoundMode::BubbleBest => node.min_child_expected_cost().unwrap_or(node.mean_cost()),
-        CostBoundMode::LowerBound => node
-            .min_child_expected_cost()
-            .unwrap_or(0.0)
-            .max(node.intermediate_cost()),
-        CostBoundMode::Marginal => {
-            node.min_child_expected_cost().unwrap_or(0.0) + node.marginal_cost()
-        }
-        CostBoundMode::Same => panic!("Bound mode cannot be 'Same'"),
-    };
-
-    node.expected_cost = Some(expected_cost);
+    node.update_expected_cost(params.bound_mode);
 
     trial_final_cost
 }
@@ -454,10 +504,9 @@ fn possibly_modify_particle(
         if z_score.is_finite() {
             node.repeated_particle_costs.push(z_score);
         }
-        // eprintln!(
-        //     "Replaying particle {:?} w/ c {}, mean {}, std_dev {}",
-        //     sim.particle, c, mean, std_dev
-        // );
+        eprintln_f!(
+            "{n_completed}: Replaying particle {sim.particle.id:3} w/ z {z_score:.2}, {choice_confidence_interval:.2?}"
+        );
     }
 }
 
@@ -564,20 +613,7 @@ fn set_final_choice_expected_values(params: &Parameters, node: &mut MctsNode) {
         params.final_choice_mode
     };
 
-    let expected_cost = match final_choice_mode {
-        CostBoundMode::Normal => node.mean_cost(),
-        CostBoundMode::BubbleBest => node.min_child_expected_cost().unwrap_or(node.mean_cost()),
-        CostBoundMode::LowerBound => node
-            .min_child_expected_cost()
-            .unwrap_or(0.0)
-            .max(node.intermediate_cost()),
-        CostBoundMode::Marginal => {
-            node.min_child_expected_cost().unwrap_or(0.0) + node.marginal_cost()
-        }
-        CostBoundMode::Same => panic!("Bound mode cannot be 'Same'"),
-    };
-
-    node.expected_cost = Some(expected_cost);
+    node.update_expected_cost(final_choice_mode);
 }
 
 fn get_best_policy(node: &MctsNode) -> u32 {
@@ -599,22 +635,24 @@ fn get_best_policy(node: &MctsNode) -> u32 {
 
 fn print_variance_report(node: &MctsNode) {
     eprintln!(
-        "Overall std_dev of mean: {:5.0} and mean: {:5.0}",
-        node.std_dev_of_mean(),
-        node.mean_cost()
+        "Overall n: {:4}, expected cost: {:5.0} and std dev: {:5.0}",
+        node.costs.len(),
+        node.expected_cost.unwrap(),
+        node.expected_cost_std_dev.unwrap(),
     );
     for (i, sub_node) in node.sub_nodes.as_ref().unwrap().iter().enumerate() {
         eprintln!(
-            "{}:      std_dev of mean: {:5.0} and mean: {:5.0}",
+            "{}:      n: {:4}, expected cost: {:5.0} and std dev: {:5.0}",
             i,
-            sub_node.std_dev_of_mean(),
-            sub_node.mean_cost()
+            sub_node.costs.len(),
+            sub_node.expected_cost.unwrap(),
+            sub_node.expected_cost_std_dev.unwrap(),
         );
     }
 
     eprintln!(
         "Choice confidence (z-score): {:.1}",
-        node.choice_confidence_interval()
+        node.choice_confidence_interval(node.params.samples_n)
     );
 }
 
@@ -629,6 +667,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         depth: 0,
         n_trials: 0,
         expected_cost: None,
+        expected_cost_std_dev: None,
         intermediate_costs: CostSet::new(params.throwout_extreme_costs_z),
         marginal_costs: CostSet::new(params.throwout_extreme_costs_z),
         seen_particles: vec![false; params.samples_n],
@@ -648,7 +687,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
     for i in 0..params.samples_n {
         let mut choice_confidence_interval = None;
         if params.repeat_confidence_interval < 1000.0 {
-            choice_confidence_interval = Some(node.choice_confidence_interval());
+            choice_confidence_interval = Some(node.choice_confidence_interval(i));
         }
 
         find_and_run_trial(
