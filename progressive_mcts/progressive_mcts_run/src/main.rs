@@ -35,12 +35,22 @@ impl std::fmt::Display for RunResults {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct CostSet<T = ()> {
     throwout_extreme_z: f64,
     costs: Vec<(f64, T)>,
     raw_stats: Stats<f64>,
     stats: Stats<f64>,
+}
+
+impl std::fmt::Debug for CostSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CostSet")
+            .field("costs", &self.costs)
+            .field("mean", &self.stats.mean)
+            .field("std_dev", &self.stats.std_dev)
+            .finish()
+    }
 }
 
 impl<T: Clone> CostSet<T> {
@@ -131,7 +141,13 @@ impl<'a> MctsNode<'a> {
     }
 
     fn std_dev_of_mean(&self) -> f64 {
-        self.costs.std_dev() / (self.costs.len() as f64).sqrt()
+        if self.costs.is_empty() {
+            0.0
+        } else if self.costs.len() == 1 {
+            10000.0
+        } else {
+            self.costs.std_dev() / (self.costs.len() as f64).sqrt()
+        }
     }
 
     fn min_child_expected_cost_and_std_dev(&self) -> Option<(f64, f64)> {
@@ -158,6 +174,8 @@ impl<'a> MctsNode<'a> {
     fn intermediate_cost_std_dev(&self) -> f64 {
         if self.intermediate_costs.is_empty() {
             0.0
+        } else if self.intermediate_costs.len() == 1 {
+            10000.0
         } else {
             self.intermediate_costs.std_dev() / (self.intermediate_costs.len() as f64).sqrt()
         }
@@ -174,6 +192,8 @@ impl<'a> MctsNode<'a> {
     fn marginal_cost_std_dev(&self) -> f64 {
         if self.marginal_costs.is_empty() {
             0.0
+        } else if self.marginal_costs.len() == 1 {
+            10000.0
         } else {
             self.marginal_costs.std_dev() / (self.marginal_costs.len() as f64).sqrt()
         }
@@ -533,6 +553,7 @@ fn print_report(
         }
         let policy = node.policy.as_ref();
         let cost = node.expected_cost.unwrap();
+        let std_dev = node.expected_cost_std_dev.unwrap();
         let mut additional_true_cost = 0.0;
         if let Some(dist_mean) = scenario.distribution.as_ref().map(|d| d.mean()) {
             additional_true_cost = dist_mean;
@@ -550,14 +571,15 @@ fn print_report(
         //  interm = {_intermediate_cost:6.1?}, \
         //  {node.intermediate_costs=:.2?}, \
         eprintln_f!(
-            "n_trials: {node.n_trials}, {policy=:?}, {cost=:6.1}, \
-             {index=:.8}, \
+            "n_trials: {node.n_trials}, {policy=:?}, {cost=:6.1}, {std_dev=:6.1}, \
+             {index=:.3}, \
              marginal = {marginal_cost:6.1?}, \
              true = {additional_true_cost:6.1} ({true_intermediate_cost:6.1}), \
-             {node.marginal_costs=:.2?}, \
-             "
-             //  {_costs_only=:.2?}, \
-             //  {node.costs=:.2?}" //,
+             marginal_costs = {:.2?}, \
+             ",
+            &node.marginal_costs.costs.iter().map(|a| a.0).collect_vec()
+            //  {_costs_only=:.2?}, \
+            //  {node.costs=:.2?}" //,
         );
     }
     if let Some(sub_nodes) = &node.sub_nodes {
