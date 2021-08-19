@@ -504,9 +504,9 @@ fn possibly_modify_particle(
         if z_score.is_finite() {
             node.repeated_particle_costs.push(z_score);
         }
-        eprintln_f!(
-            "{n_completed}: Replaying particle {sim.particle.id:3} w/ z {z_score:.2}, {choice_confidence_interval:.2?}"
-        );
+        // eprintln_f!(
+        //     "{n_completed}: Replaying particle {sim.particle.id:3} w/ z {z_score:.2}, {choice_confidence_interval:.2?}"
+        // );
     }
 }
 
