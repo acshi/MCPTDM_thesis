@@ -17,6 +17,7 @@ use rolling_stats::Stats;
 
 #[derive(Clone, Copy, Debug)]
 struct RunResults {
+    steps_taken: usize,
     chosen_cost: f64,
     chosen_true_cost: f64,
     true_best_cost: f64,
@@ -30,7 +31,7 @@ impl std::fmt::Display for RunResults {
         let s = self;
         write_f!(
             f,
-            "{s.chosen_cost:7.2} {s.chosen_true_cost:7.2} {s.true_best_cost:7.2} {s.sum_repeated} {s.max_repeated} {s.repeated_cost_avg:7.3}"
+            "{s.steps_taken:6} {s.chosen_cost:7.2} {s.chosen_true_cost:7.2} {s.true_best_cost:7.2} {s.sum_repeated} {s.max_repeated} {s.repeated_cost_avg:7.3}"
         )
     }
 }
@@ -1107,6 +1108,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
     }
 
     RunResults {
+        steps_taken,
         chosen_cost: node.expected_cost.unwrap(),
         chosen_true_cost,
         true_best_cost,
