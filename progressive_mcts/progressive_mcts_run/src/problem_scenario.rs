@@ -148,7 +148,7 @@ impl ProblemScenario {
     }
 }
 
-// #[derive(Clone)]
+#[derive(Clone)]
 pub struct Simulator<'a> {
     pub scenario: &'a ProblemScenario,
     pub particle: SituationParticle,
@@ -161,8 +161,8 @@ impl<'a> Simulator<'a> {
         Self {
             scenario,
             particle: SituationParticle::sample(id, rng),
-            cost: 0.0,
             depth: 0,
+            cost: 0.0,
         }
     }
 

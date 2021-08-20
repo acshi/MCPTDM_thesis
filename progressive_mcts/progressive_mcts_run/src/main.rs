@@ -5,7 +5,7 @@ use arg_parameters::{run_parallel_scenarios, Parameters};
 #[allow(unused)]
 use fstrings::{eprintln_f, format_args_f, println_f, write_f};
 use itertools::Itertools;
-use problem_scenario::{ProblemScenario, Simulator, SituationParticle};
+use problem_scenario::{ProblemScenario, Simulator};
 use progressive_mcts::klucb::klucb_bernoulli;
 use progressive_mcts::{ChildSelectionMode, CostBoundMode};
 use rand::Rng;
@@ -128,8 +128,8 @@ struct MctsNode<'a> {
     repeated_particle_costs: Vec<f64>,
 
     sub_nodes: Option<Vec<MctsNode<'a>>>,
-    costs: CostSet<SituationParticle>,
-    sub_node_repeated_particles: Vec<(f64, SituationParticle)>,
+    costs: CostSet<Simulator<'a>>,
+    sub_node_repeated_particles: Vec<(f64, Simulator<'a>)>,
 }
 
 impl<'a> MctsNode<'a> {
@@ -542,10 +542,10 @@ fn find_trial_path(node: &mut MctsNode, rng: &mut StdRng, mut path: Vec<usize>) 
     }
 }
 
-fn should_replay_particle_at(
-    node: &MctsNode,
+fn should_replay_particle_at<'a>(
+    node: &MctsNode<'a>,
     sub_node_i: usize,
-) -> Option<(u32, f64, f64, SituationParticle)> {
+) -> Option<(u32, f64, f64, Simulator<'a>)> {
     if node.depth > 0 && !node.params.repeat_at_all_levels {
         return None;
     }
@@ -567,20 +567,22 @@ fn should_replay_particle_at(
     let std_dev = node.costs.std_dev();
 
     // Prioritize repeating particles that have already been repeated by other sub nodes
-    if let Some((c, particle)) = node
+    if let Some((c, sim)) = node
         .sub_node_repeated_particles
         .iter()
-        .filter(|(_c, particle)| !sub_node.seen_particles[particle.id])
+        .filter(|(_c, sim)| !sub_node.seen_particles[sim.particle.id])
         .nth(0)
     {
         let z_score = (*c - mean) / std_dev;
-        return Some((sub_node.depth, *c, z_score, *particle));
+        assert_eq!(sim.depth, node.depth);
+        assert!(node.depth < 4);
+        return Some((sub_node.depth, *c, z_score, sim.clone()));
     }
 
-    if let Some((c, particle)) = node
+    if let Some((c, sim)) = node
         .costs
         .iter()
-        .filter(|(c, particle)| !sub_node.seen_particles[particle.id] && *c - mean >= std_dev * z)
+        .filter(|(c, sim)| !sub_node.seen_particles[sim.particle.id] && *c - mean >= std_dev * z)
         .max_by(|a, b| match node.params.repeat_particle_sign {
             -1 => b.0.partial_cmp(&a.0).unwrap(),
             1 => a.0.partial_cmp(&b.0).unwrap(),
@@ -595,18 +597,20 @@ fn should_replay_particle_at(
         })
     {
         let z_score = (*c - mean) / std_dev;
-        return Some((sub_node.depth, *c, z_score, *particle));
+        assert_eq!(sim.depth, node.depth);
+        assert!(node.depth < 4);
+        return Some((sub_node.depth, *c, z_score, sim.clone()));
     }
 
     None
 }
 
-fn should_replay_particle(
-    node: &MctsNode,
+fn should_replay_particle<'a>(
+    node: &MctsNode<'a>,
     path: &[usize],
     n_completed: usize,
     choice_confidence_interval: Option<f64>,
-) -> Option<(u32, f64, f64, SituationParticle)> {
+) -> Option<(u32, f64, f64, Simulator<'a>)> {
     let finished_portion = n_completed as f64 / node.params.samples_n as f64;
     if finished_portion < node.params.consider_repeats_after_portion {
         return None;
@@ -645,24 +649,28 @@ fn should_replay_particle(
     None
 }
 
-fn find_and_run_trial(
-    node: &mut MctsNode,
-    sim: &mut Simulator,
+fn find_and_run_trial<'a>(
+    node: &mut MctsNode<'a>,
+    sim: &mut Simulator<'a>,
     steps_taken: &mut usize,
     rng: &mut StdRng,
     n_completed: usize,
     choice_confidence_interval: Option<f64>,
 ) -> f64 {
     let path = find_trial_path(node, rng, Vec::new());
-    if let Some((depth, c, z_score, particle)) =
+    if let Some((depth, c, z_score, s)) =
         should_replay_particle(node, &path, n_completed, choice_confidence_interval)
     {
-        sim.particle = particle;
+        // copy the simulation scenario and then back it up a single step to try a different action
+        *sim = s.clone();
+
+        assert_eq!(sim.depth + 1, depth);
+
         let score = run_trial(node, sim, rng, steps_taken, &path, depth as i32);
 
-        for_node_in_path(node, &path[0..depth as usize], |_| ())
+        for_node_in_path(node, &path[0..depth as usize - 1], |_| ())
             .sub_node_repeated_particles
-            .push((c, particle));
+            .push((c, s));
 
         let mut depth1_action = None;
         let final_node = for_node_in_path(node, &path[0..depth as usize + 1], |n| {
@@ -722,9 +730,9 @@ where
     node
 }
 
-fn run_trial(
-    node: &mut MctsNode,
-    sim: &mut Simulator,
+fn run_trial<'a>(
+    node: &mut MctsNode<'a>,
+    sim: &mut Simulator<'a>,
     rng: &mut StdRng,
     steps_taken: &mut usize,
     path: &[usize],
@@ -743,8 +751,10 @@ fn run_trial(
         }
     }
 
+    let orig_sim = sim.clone();
+
     let trial_final_cost = if path.is_empty() {
-        // assert_eq!(sim.depth, node.params.search_depth);
+        assert_eq!(sim.depth, node.params.search_depth);
         sim.cost
     } else {
         run_trial(
@@ -757,9 +767,13 @@ fn run_trial(
         )
     };
 
-    node.costs.push((trial_final_cost, sim.particle));
-    node.seen_particles[sim.particle.id] = true;
-    node.n_trials = node.costs.len();
+    if skip_depth <= 0 {
+        println_f!("pushing {orig_sim.depth=}");
+        assert_eq!(node.depth, orig_sim.depth);
+        node.costs.push((trial_final_cost, orig_sim));
+        node.seen_particles[sim.particle.id] = true;
+        node.n_trials = node.costs.len();
+    }
 
     node.update_expected_cost(params.bound_mode);
 
