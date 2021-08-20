@@ -148,7 +148,7 @@ impl ProblemScenario {
     }
 }
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct Simulator<'a> {
     pub scenario: &'a ProblemScenario,
     pub particle: SituationParticle,
