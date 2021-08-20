@@ -768,7 +768,6 @@ fn run_trial<'a>(
     };
 
     if skip_depth <= 0 {
-        println_f!("pushing {orig_sim.depth=}");
         assert_eq!(node.depth, orig_sim.depth);
         node.costs.push((trial_final_cost, orig_sim));
         node.seen_particles[sim.particle.id] = true;
