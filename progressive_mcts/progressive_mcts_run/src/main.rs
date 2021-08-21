@@ -133,6 +133,43 @@ struct MctsNode<'a> {
 }
 
 impl<'a> MctsNode<'a> {
+    // expand node?
+    fn get_or_expand_sub_nodes_mut(&mut self) -> &mut Vec<MctsNode<'a>> {
+        let params = self.params;
+        if self.sub_nodes.is_none() {
+            let policy_choices = self.policy_choices;
+
+            self.sub_nodes = Some(
+                policy_choices
+                    .iter()
+                    .map(|p| MctsNode {
+                        params,
+                        policy_choices,
+                        policy: Some(p.clone()),
+                        depth: self.depth + 1,
+                        n_trials: 0,
+                        expected_cost: None,
+                        expected_cost_std_dev: None,
+                        intermediate_costs: CostSet::new(params.throwout_extreme_costs_z),
+                        marginal_costs: CostSet::new(params.throwout_extreme_costs_z),
+                        seen_particles: vec![false; params.samples_n],
+                        n_particles_repeated: 0,
+                        repeated_particle_costs: Vec::new(),
+                        sub_nodes: None,
+                        costs: CostSet::new(params.throwout_extreme_costs_z),
+                        sub_node_repeated_particles: Vec::new(),
+                    })
+                    .collect(),
+            );
+        }
+
+        self.sub_nodes.as_mut().unwrap()
+    }
+
+    fn get_or_expand_sub_nodes(&mut self) -> &Vec<MctsNode<'a>> {
+        self.get_or_expand_sub_nodes_mut()
+    }
+
     fn variance(&self) -> f64 {
         let mean = self.mean_cost();
         self.costs
@@ -201,9 +238,9 @@ impl<'a> MctsNode<'a> {
         }
     }
 
-    fn compute_selection_index(&self, total_n: f64, ln_t: f64) -> f64 {
+    fn compute_selection_index(&self, total_n: f64, ln_t: f64) -> Option<f64> {
         let params = self.params;
-        let mean_cost = self.expected_cost.unwrap();
+        let mean_cost = self.expected_cost?;
         let n = self.n_trials as f64;
         let ln_t_over_n = ln_t / n;
         let index = match params.selection_mode {
@@ -241,7 +278,32 @@ impl<'a> MctsNode<'a> {
             ChildSelectionMode::Uniform => n,
             ChildSelectionMode::Random => unimplemented!("No index for Random ChildSelectionMode"),
         };
-        index
+        Some(index)
+    }
+
+    fn confidence_interval(
+        mean1: f64,
+        std_dev1: f64,
+        n1: usize,
+        mean2: f64,
+        std_dev2: f64,
+        n2: usize,
+        additional_n: usize,
+    ) -> f64 {
+        let mean_diff = (mean1 - mean2).abs();
+        let z_gap1 = if additional_n > 0 {
+            mean_diff / (std_dev1 * (n1 as f64 / (n1 + additional_n) as f64).sqrt())
+        } else {
+            mean_diff / std_dev1
+        };
+
+        let z_gap2 = if additional_n > 0 {
+            mean_diff / (std_dev2 * (n2 as f64 / (n2 + additional_n) as f64).sqrt())
+        } else {
+            mean_diff / std_dev2
+        };
+
+        z_gap1.min(z_gap2)
     }
 
     fn choice_confidence_interval(&self, n_completed: usize) -> f64 {
@@ -267,33 +329,56 @@ impl<'a> MctsNode<'a> {
         let best_sub_node = sorted_sub_nodes[0];
         let second_sub_node = sorted_sub_nodes[1];
 
-        let remaining_samples_n = self.params.samples_n - n_completed;
-
-        let mean_diff =
-            second_sub_node.expected_cost.unwrap() - best_sub_node.expected_cost.unwrap();
-        let expected_cost_std_dev = best_sub_node.expected_cost_std_dev.unwrap();
-        let z_gap1 = if self.params.correct_future_std_dev_mean {
-            mean_diff
-                / (expected_cost_std_dev
-                    * (best_sub_node.costs.len() as f64
-                        / (best_sub_node.costs.len() + remaining_samples_n) as f64)
-                        .sqrt())
+        let remaining_samples_n = if self.params.correct_future_std_dev_mean {
+            self.params.samples_n - n_completed
         } else {
-            mean_diff / expected_cost_std_dev
+            0
         };
 
-        let expected_cost_std_dev = second_sub_node.expected_cost_std_dev.unwrap();
-        let z_gap2 = if self.params.correct_future_std_dev_mean {
-            mean_diff
-                / (expected_cost_std_dev
-                    * (second_sub_node.costs.len() as f64
-                        / (second_sub_node.costs.len() + remaining_samples_n) as f64)
-                        .sqrt())
+        Self::confidence_interval(
+            best_sub_node.expected_cost.unwrap(),
+            best_sub_node.expected_cost_std_dev.unwrap(),
+            best_sub_node.costs.len(),
+            second_sub_node.expected_cost.unwrap(),
+            second_sub_node.expected_cost_std_dev.unwrap(),
+            second_sub_node.costs.len(),
+            remaining_samples_n,
+        )
+    }
+
+    fn marginal_cost_confidence_interval(&self, n_completed: usize) -> f64 {
+        let mut sorted_sub_nodes = self
+            .sub_nodes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .filter(|n| !n.marginal_costs.is_empty())
+            .collect_vec();
+        sorted_sub_nodes.sort_by(|a, b| a.marginal_cost().partial_cmp(&b.marginal_cost()).unwrap());
+
+        if sorted_sub_nodes.len() < 2 {
+            // not expanded enough yet for a comparison, so no confidence!
+            return 0.0;
+        }
+
+        let best_sub_node = sorted_sub_nodes[0];
+        let second_sub_node = sorted_sub_nodes[1];
+
+        let remaining_samples_n = if self.params.correct_future_std_dev_mean {
+            self.params.samples_n - n_completed
         } else {
-            mean_diff / expected_cost_std_dev
+            0
         };
 
-        z_gap1.min(z_gap2)
+        Self::confidence_interval(
+            best_sub_node.marginal_cost(),
+            best_sub_node.marginal_cost_std_dev(),
+            best_sub_node.marginal_costs.len(),
+            second_sub_node.marginal_cost(),
+            second_sub_node.marginal_cost_std_dev(),
+            second_sub_node.marginal_costs.len(),
+            remaining_samples_n,
+        )
     }
 
     fn update_expected_cost(&mut self, bound_mode: CostBoundMode) {
@@ -328,193 +413,37 @@ impl<'a> MctsNode<'a> {
     }
 }
 
-// fn old_find_and_run_trial(
-//     node: &mut MctsNode,
-//     sim: &mut Simulator,
-//     steps_taken: &mut usize,
-//     rng: &mut StdRng,
-//     n_completed: usize,
-//     choice_confidence_interval: Option<f64>,
-// ) -> f64 {
-//     let params = node.params;
-
-//     if let Some(policy) = node.policy.as_ref() {
-//         let prev_cost = sim.cost;
-//         sim.take_step(*policy, rng);
-//         node.intermediate_costs.push((sim.cost, ()));
-//         node.marginal_costs.push((sim.cost - prev_cost, ()));
-
-//         *steps_taken += 1;
-//     }
-
-//     let sub_depth = node.depth + 1;
-
-//     let mut trial_final_cost = None;
-//     if sub_depth > params.search_depth {
-//         trial_final_cost = Some(sim.cost);
-//     } else {
-//         // expand node?
-//         if node.sub_nodes.is_none() {
-//             let policy_choices = node.policy_choices;
-
-//             node.sub_nodes = Some(
-//                 policy_choices
-//                     .iter()
-//                     .map(|p| MctsNode {
-//                         params,
-//                         policy_choices,
-//                         policy: Some(p.clone()),
-//                         depth: sub_depth,
-//                         n_trials: 0,
-//                         expected_cost: None,
-//                         expected_cost_std_dev: None,
-//                         intermediate_costs: CostSet::new(params.throwout_extreme_costs_z),
-//                         marginal_costs: CostSet::new(params.throwout_extreme_costs_z),
-//                         seen_particles: vec![false; params.samples_n],
-//                         n_particles_repeated: 0,
-//                         repeated_particle_costs: Vec::new(),
-//                         sub_nodes: None,
-//                         costs: CostSet::new(params.throwout_extreme_costs_z),
-//                         sub_node_repeated_particles: Vec::new(),
-//                     })
-//                     .collect(),
-//             );
-//         }
-
-//         let sub_nodes = node.sub_nodes.as_mut().unwrap();
-
-//         // choose a node to recurse down into!
-//         let mut has_run_trial = false;
-
-//         // choose any unexplored branch
-//         if !has_run_trial {
-//             let unexplored = sub_nodes
-//                 .iter()
-//                 .enumerate()
-//                 .filter(|(_, n)| n.n_trials == 0)
-//                 .map(|(i, _)| i)
-//                 .collect_vec();
-//             if unexplored.len() > 0 {
-//                 let sub_node_i = *unexplored.choose(rng).unwrap();
-//                 possibly_modify_particle(
-//                     &mut node.costs,
-//                     &mut node.sub_node_repeated_particles,
-//                     &mut sub_nodes[sub_node_i],
-//                     sim,
-//                     n_completed,
-//                     choice_confidence_interval,
-//                 );
-//                 trial_final_cost = Some(find_and_run_trial(
-//                     &mut sub_nodes[sub_node_i],
-//                     sim,
-//                     steps_taken,
-//                     rng,
-//                     n_completed,
-//                     choice_confidence_interval,
-//                 ));
-//                 has_run_trial = true;
-//             }
-//         }
-
-//         // Everything has been explored at least once: UCB time!
-//         if !has_run_trial {
-//             let chosen_i = if params.selection_mode == ChildSelectionMode::Random {
-//                 rng.gen_range(0..sub_nodes.len())
-//             } else {
-//                 let total_n = node.n_trials as f64;
-//                 let ln_t = total_n.ln();
-//                 let (_best_ucb, chosen_i) = sub_nodes
-//                     .iter()
-//                     .enumerate()
-//                     .map(|(i, node)| {
-//                         let index = node.compute_selection_index(total_n, ln_t);
-//                         (index, i)
-//                     })
-//                     .min_by(|a, b| a.partial_cmp(b).unwrap())
-//                     .unwrap();
-//                 chosen_i
-//             };
-
-//             possibly_modify_particle(
-//                 &mut node.costs,
-//                 &mut node.sub_node_repeated_particles,
-//                 &mut sub_nodes[chosen_i],
-//                 sim,
-//                 n_completed,
-//                 choice_confidence_interval,
-//             );
-//             trial_final_cost = Some(find_and_run_trial(
-//                 &mut sub_nodes[chosen_i],
-//                 sim,
-//                 steps_taken,
-//                 rng,
-//                 n_completed,
-//                 choice_confidence_interval,
-//             ));
-//         }
-//     }
-
-//     let trial_final_cost = trial_final_cost.unwrap();
-
-//     node.costs.push((trial_final_cost, sim.particle));
-//     node.seen_particles[sim.particle.id] = true;
-//     node.n_trials = node.costs.len();
-
-//     node.update_expected_cost(params.bound_mode);
-
-//     trial_final_cost
-// }
-
 fn find_trial_path(node: &mut MctsNode, rng: &mut StdRng, mut path: Vec<usize>) -> Vec<usize> {
     let params = node.params;
-    let mut node = node;
 
     let sub_depth = node.depth + 1;
-
     if sub_depth > params.search_depth {
         return path;
     } else {
-        // expand node?
-        if node.sub_nodes.is_none() {
-            let policy_choices = node.policy_choices;
-
-            node.sub_nodes = Some(
-                policy_choices
-                    .iter()
-                    .map(|p| MctsNode {
-                        params,
-                        policy_choices,
-                        policy: Some(p.clone()),
-                        depth: sub_depth,
-                        n_trials: 0,
-                        expected_cost: None,
-                        expected_cost_std_dev: None,
-                        intermediate_costs: CostSet::new(params.throwout_extreme_costs_z),
-                        marginal_costs: CostSet::new(params.throwout_extreme_costs_z),
-                        seen_particles: vec![false; params.samples_n],
-                        n_particles_repeated: 0,
-                        repeated_particle_costs: Vec::new(),
-                        sub_nodes: None,
-                        costs: CostSet::new(params.throwout_extreme_costs_z),
-                        sub_node_repeated_particles: Vec::new(),
-                    })
-                    .collect(),
-            );
-        }
-
-        let sub_nodes = node.sub_nodes.as_mut().unwrap();
+        let n_trials = node.n_trials;
+        let sub_nodes = node.get_or_expand_sub_nodes_mut();
 
         // choose a node to recurse down into!
 
         // choose any unexplored branch
-        let unexplored = sub_nodes
+        let mut unexplored = sub_nodes
             .iter()
             .enumerate()
             .filter(|(_, n)| n.n_trials == 0)
-            .map(|(i, _)| i)
+            .map(|(i, _)| (sub_nodes[i].marginal_cost(), i))
             .collect_vec();
         if unexplored.len() > 0 {
-            let sub_node_i = *unexplored.choose(rng).unwrap();
+            // can we choose from the unexplored by marginal cost (from bootstrapping?)
+            if unexplored.len() > 1 {
+                unexplored.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                if unexplored[0].0 < unexplored[1].0 {
+                    let sub_node_i = unexplored[0].1;
+                    path.push(sub_node_i);
+                    return find_trial_path(&mut sub_nodes[sub_node_i], rng, path);
+                }
+            }
+
+            let sub_node_i = unexplored.choose(rng).unwrap().1;
             path.push(sub_node_i);
             return find_trial_path(&mut sub_nodes[sub_node_i], rng, path);
         }
@@ -523,13 +452,13 @@ fn find_trial_path(node: &mut MctsNode, rng: &mut StdRng, mut path: Vec<usize>) 
         let chosen_i = if params.selection_mode == ChildSelectionMode::Random {
             rng.gen_range(0..sub_nodes.len())
         } else {
-            let total_n = node.n_trials as f64;
+            let total_n = n_trials as f64;
             let ln_t = total_n.ln();
             let (_best_ucb, chosen_i) = sub_nodes
                 .iter()
                 .enumerate()
                 .map(|(i, node)| {
-                    let index = node.compute_selection_index(total_n, ln_t);
+                    let index = node.compute_selection_index(total_n, ln_t).unwrap();
                     (index, i)
                 })
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
@@ -652,8 +581,8 @@ fn should_replay_particle<'a>(
 fn find_and_run_trial<'a>(
     node: &mut MctsNode<'a>,
     sim: &mut Simulator<'a>,
-    steps_taken: &mut usize,
     rng: &mut StdRng,
+    steps_taken: &mut usize,
     n_completed: usize,
     choice_confidence_interval: Option<f64>,
 ) -> f64 {
@@ -661,7 +590,6 @@ fn find_and_run_trial<'a>(
     if let Some((depth, c, z_score, s)) =
         should_replay_particle(node, &path, n_completed, choice_confidence_interval)
     {
-        // copy the simulation scenario and then back it up a single step to try a different action
         *sim = s.clone();
 
         assert_eq!(sim.depth + 1, depth);
@@ -693,16 +621,14 @@ fn find_and_run_trial<'a>(
     }
 
     let score = run_trial(node, sim, rng, steps_taken, &path, 0);
-    // let node = node_for_path(node, &path);
-
-    let mut depth1_action = None;
-    for_node_in_path(node, &path[0..2], |n| {
-        if n.depth == 1 {
-            depth1_action = Some(n.policy.unwrap());
-        }
-    });
 
     if node.params.is_single_run {
+        let mut depth1_action = None;
+        for_node_in_path(node, &path[0..2], |n| {
+            if n.depth == 1 {
+                depth1_action = Some(n.policy.unwrap());
+            }
+        });
         eprintln_f!(
             "{n_completed}: {} Playing new particle {sim.particle.id:3}, {choice_confidence_interval:.2?}", depth1_action.unwrap()
         );
@@ -730,6 +656,25 @@ where
     node
 }
 
+fn run_step<'a>(
+    node: &mut MctsNode<'a>,
+    sim: &mut Simulator<'a>,
+    rng: &mut StdRng,
+    steps_taken: &mut usize,
+) -> Option<f64> {
+    if let Some(policy) = node.policy.as_ref() {
+        let prev_cost = sim.cost;
+        sim.take_step(*policy, rng);
+        node.intermediate_costs.push((sim.cost, ()));
+        node.marginal_costs.push((sim.cost - prev_cost, ()));
+
+        *steps_taken += 1;
+
+        return Some(sim.cost);
+    }
+    None
+}
+
 fn run_trial<'a>(
     node: &mut MctsNode<'a>,
     sim: &mut Simulator<'a>,
@@ -740,15 +685,10 @@ fn run_trial<'a>(
 ) -> f64 {
     let params = node.params;
 
-    if skip_depth <= 0 {
-        if let Some(policy) = node.policy.as_ref() {
-            let prev_cost = sim.cost;
-            sim.take_step(*policy, rng);
-            node.intermediate_costs.push((sim.cost, ()));
-            node.marginal_costs.push((sim.cost - prev_cost, ()));
-
-            *steps_taken += 1;
-        }
+    // skip over when we are repeating a particle and it has already been evaluated at this level
+    let skip_over = skip_depth > 0;
+    if !skip_over {
+        run_step(node, sim, rng, steps_taken);
     }
 
     let orig_sim = sim.clone();
@@ -767,7 +707,7 @@ fn run_trial<'a>(
         )
     };
 
-    if skip_depth <= 0 {
+    if !skip_over {
         assert_eq!(node.depth, orig_sim.depth);
         node.costs.push((trial_final_cost, orig_sim));
         node.seen_particles[sim.particle.id] = true;
@@ -779,107 +719,21 @@ fn run_trial<'a>(
     trial_final_cost
 }
 
-// fn possibly_modify_particle(
-//     costs: &mut CostSet<SituationParticle>,
-//     already_repeated: &mut Vec<(f64, SituationParticle)>,
-//     node: &mut MctsNode,
-//     sim: &mut Simulator,
-//     n_completed: usize,
-//     choice_confidence_interval: Option<f64>,
-// ) {
-//     if sim.depth != 0 && !node.params.repeat_at_all_levels {
-//         return;
-//     }
+fn bootstrap_run_trial<'a>(
+    node: &mut MctsNode<'a>,
+    sim: &mut Simulator<'a>,
+    rng: &mut StdRng,
+    steps_taken: &mut usize,
+) {
+    eprint!("Bootstrap trial: ");
+    for sub_node in node.get_or_expand_sub_nodes_mut().iter_mut() {
+        let score = run_step(sub_node, &mut sim.clone(), rng, steps_taken).unwrap();
+        eprint!("{:.2} ", score);
+    }
+    eprintln!();
 
-//     let finished_portion = n_completed as f64 / node.params.samples_n as f64;
-//     if finished_portion < node.params.consider_repeats_after_portion {
-//         return;
-//     }
-
-//     if let Some(choice_confidence_interval) = choice_confidence_interval {
-//         if choice_confidence_interval >= node.params.repeat_confidence_interval {
-//             return;
-//         }
-//     }
-
-//     let mut z = node.params.prioritize_worst_particles_z;
-//     let repeat_const = node.params.repeat_const;
-//     if z >= 1000.0 && repeat_const >= 0.0 {
-//         // using repeat const and NOT z, so to disable z, we set to -1000
-//         z = -1000.0;
-//     }
-
-//     if z >= 1000.0 {
-//         // take this high z value to mean don't prioritize like this!
-//         return;
-//     }
-
-//     let mean = costs.mean();
-//     let std_dev = costs.std_dev();
-
-//     if repeat_const >= 0.0 {
-//         let repeat_n = (repeat_const
-//             * node.params.n_actions.pow(node.params.search_depth - 1) as f64
-//             / (node.params.samples_n as f64)) as usize;
-
-//         if node.n_particles_repeated >= repeat_n {
-//             return;
-//         }
-//     }
-
-//     // Prioritize repeating particles that have already been repeated by other sub nodes
-//     if let Some((c, particle)) = already_repeated
-//         .iter()
-//         .filter(|(_c, particle)| !node.seen_particles[particle.id])
-//         .nth(0)
-//     {
-//         sim.particle = *particle;
-//         node.n_particles_repeated += 1;
-//         let z_score = (*c - costs.mean()) / costs.std_dev();
-//         if z_score.is_finite() {
-//             node.repeated_particle_costs.push(z_score);
-//         }
-
-//         if node.params.is_single_run {
-//             eprintln_f!(
-//                 "{n_completed}: {} Replaying particle {sim.particle.id:3} w/ z {z_score:.2}, {choice_confidence_interval:.2?}", node.policy.unwrap()
-//             );
-//         }
-//         return;
-//     }
-
-//     if let Some((c, particle)) = costs
-//         .iter()
-//         .filter(|(c, particle)| !node.seen_particles[particle.id] && *c - mean >= std_dev * z)
-//         .max_by(|a, b| match node.params.repeat_particle_sign {
-//             -1 => b.0.partial_cmp(&a.0).unwrap(),
-//             1 => a.0.partial_cmp(&b.0).unwrap(),
-//             0 => {
-//                 if node.n_particles_repeated % 2 == 0 {
-//                     a.0.partial_cmp(&b.0).unwrap()
-//                 } else {
-//                     b.0.partial_cmp(&a.0).unwrap()
-//                 }
-//             }
-//             _ => panic!("repeat_particle_sign must be -1, 1, or 0"),
-//         })
-//     {
-//         sim.particle = *particle;
-//         node.n_particles_repeated += 1;
-//         let z_score = (*c - costs.mean()) / costs.std_dev();
-//         if z_score.is_finite() {
-//             node.repeated_particle_costs.push(z_score);
-//         }
-
-//         if node.params.is_single_run {
-//             eprintln_f!(
-//                 "{n_completed}: {} Replaying particle {sim.particle.id:3} w/ z {z_score:.2}, {choice_confidence_interval:.2?}", node.policy.unwrap()
-//             );
-//         }
-
-//         already_repeated.push((*c, *particle));
-//     }
-// }
+    node.update_expected_cost(node.params.bound_mode);
+}
 
 fn print_report(
     scenario: &ProblemScenario,
@@ -906,7 +760,7 @@ fn print_report(
 
         let _costs_only = node.costs.iter().map(|(c, _)| *c).collect_vec();
 
-        let index = node.compute_selection_index(parent_n_trials, parent_n_trials.ln());
+        let index = node.compute_selection_index(parent_n_trials, parent_n_trials.ln()).unwrap_or(99999.0);
 
         //  interm = {_intermediate_cost:6.1?}, \
         //  {node.intermediate_costs=:.2?}, \
@@ -1010,16 +864,16 @@ fn print_variance_report(node: &MctsNode) {
     eprintln!(
         "Overall n: {:4}, expected cost: {:5.0} and std dev: {:5.0}",
         node.costs.len(),
-        node.expected_cost.unwrap(),
-        node.expected_cost_std_dev.unwrap(),
+        node.expected_cost.unwrap_or(99999.0),
+        node.expected_cost_std_dev.unwrap_or(99999.0),
     );
     for (i, sub_node) in node.sub_nodes.as_ref().unwrap().iter().enumerate() {
         eprintln!(
             "{}:      n: {:4}, expected cost: {:5.0} and std dev: {:5.0}",
             i,
             sub_node.costs.len(),
-            sub_node.expected_cost.unwrap(),
-            sub_node.expected_cost_std_dev.unwrap(),
+            sub_node.expected_cost.unwrap_or(99999.0),
+            sub_node.expected_cost_std_dev.unwrap_or(99999.0),
         );
     }
 
@@ -1027,6 +881,32 @@ fn print_variance_report(node: &MctsNode) {
         "Choice confidence (z-score): {:.1}",
         node.choice_confidence_interval(node.params.samples_n)
     );
+
+    for (i, sub_node) in node.sub_nodes.as_ref().unwrap().iter().enumerate() {
+        eprintln!(
+            "{}:      n: {:4}, marginal cost: {:5.0} and std dev: {:5.0}",
+            i,
+            sub_node.marginal_costs.len(),
+            sub_node.marginal_cost(),
+            sub_node.marginal_cost_std_dev(),
+        );
+    }
+
+    eprintln!(
+        "Marginal cost confidence (z-score): {:.1}",
+        node.marginal_cost_confidence_interval(node.params.samples_n)
+    );
+
+    eprintln!("UCB indices:");
+    let n = node.costs.len() as f64;
+    let ln_n = n.ln();
+    for (i, sub_node) in node.sub_nodes.as_ref().unwrap().iter().enumerate() {
+        eprintln!(
+            "{}: UCB index: {}",
+            i,
+            sub_node.compute_selection_index(n, ln_n).unwrap_or(99999.0)
+        );
+    }
 }
 
 fn run_with_parameters(params: Parameters) -> RunResults {
@@ -1060,7 +940,22 @@ fn run_with_parameters(params: Parameters) -> RunResults {
 
     let mut steps_taken = 0;
 
+    // Expand first level so marginal_cost_confidence_interval has enough to go on
+    node.get_or_expand_sub_nodes();
+
     for i in 0..params.samples_n {
+        let marginal_confidence = node.marginal_cost_confidence_interval(i);
+        eprintln_f!("{i}: {marginal_confidence=:.2}");
+        if params.bootstrap_confidence_z > marginal_confidence {
+            bootstrap_run_trial(
+                &mut node,
+                &mut Simulator::sample(&scenario, i, &mut rng),
+                &mut rng,
+                &mut steps_taken,
+            );
+            continue;
+        }
+
         let mut choice_confidence_interval = None;
         if params.repeat_confidence_interval < 1000.0 {
             choice_confidence_interval = Some(node.choice_confidence_interval(i));
@@ -1069,8 +964,8 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         find_and_run_trial(
             &mut node,
             &mut Simulator::sample(&scenario, i, &mut rng),
-            &mut steps_taken,
             &mut rng,
+            &mut steps_taken,
             i,
             choice_confidence_interval,
         );
@@ -1122,7 +1017,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
 
     RunResults {
         steps_taken,
-        chosen_cost: node.expected_cost.unwrap(),
+        chosen_cost: node.expected_cost.unwrap_or(99999.0),
         chosen_true_cost,
         true_best_cost,
         sum_repeated,

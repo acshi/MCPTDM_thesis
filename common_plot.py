@@ -422,6 +422,12 @@ class FigureBuilder:
     def ylim(self, ylim):
         self.ax.set_ylim(ylim)
 
+    def xscale(self, xscale):
+        self.ax.set_xscale(xscale)
+
+    def yscale(self, yscale):
+        self.ax.set_yscale(yscale)
+
     def ticks(self, labels, locs=None):
         if locs is None:
             locs = self.x_locs
