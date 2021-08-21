@@ -179,6 +179,27 @@ impl<'a> MctsNode<'a> {
             / self.costs.len() as f64
     }
 
+    fn min_child_marginal_index_mut(&mut self) -> Option<&mut MctsNode<'a>> {
+        let total_n = self
+            .get_or_expand_sub_nodes()
+            .iter()
+            .map(|a| a.marginal_costs.len())
+            .sum::<usize>() as f64;
+        let ln_total_n = total_n.ln();
+        self.sub_nodes.as_mut().and_then(|nodes| {
+            nodes
+                .iter_mut()
+                .map(|a| {
+                    (
+                        a.compute_marginal_cost_index(total_n, ln_total_n).unwrap(),
+                        a,
+                    )
+                })
+                .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+                .map(|a| a.1)
+        })
+    }
+
     fn min_child_expected_cost_and_std_dev(&self) -> Option<(f64, f64)> {
         self.sub_nodes.as_ref().and_then(|nodes| {
             nodes
@@ -238,12 +259,36 @@ impl<'a> MctsNode<'a> {
         }
     }
 
-    fn compute_selection_index(&self, total_n: f64, ln_t: f64) -> Option<f64> {
+    fn compute_expected_cost_index(&self, total_n: f64, ln_total_n: f64) -> Option<f64> {
+        self.compute_selection_index(
+            total_n,
+            ln_total_n,
+            self.expected_cost.unwrap(),
+            self.params.selection_mode,
+        )
+    }
+
+    fn compute_marginal_cost_index(&self, total_n: f64, ln_total_n: f64) -> Option<f64> {
+        self.compute_selection_index(
+            total_n,
+            ln_total_n,
+            self.marginal_cost(),
+            self.params.selection_mode,
+        )
+    }
+
+    fn compute_selection_index(
+        &self,
+        total_n: f64,
+        ln_total_n: f64,
+        cost: f64,
+        mode: ChildSelectionMode,
+    ) -> Option<f64> {
         let params = self.params;
-        let mean_cost = self.expected_cost?;
+        let mean_cost = cost;
         let n = self.n_trials as f64;
-        let ln_t_over_n = ln_t / n;
-        let index = match params.selection_mode {
+        let ln_t_over_n = ln_total_n / n;
+        let index = match mode {
             ChildSelectionMode::UCB => {
                 let upper_margin = params.ucb_const * ln_t_over_n.sqrt();
                 mean_cost + upper_margin
@@ -458,7 +503,7 @@ fn find_trial_path(node: &mut MctsNode, rng: &mut StdRng, mut path: Vec<usize>) 
                 .iter()
                 .enumerate()
                 .map(|(i, node)| {
-                    let index = node.compute_selection_index(total_n, ln_t).unwrap();
+                    let index = node.compute_expected_cost_index(total_n, ln_t).unwrap();
                     (index, i)
                 })
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
@@ -724,13 +769,26 @@ fn bootstrap_run_trial<'a>(
     sim: &mut Simulator<'a>,
     rng: &mut StdRng,
     steps_taken: &mut usize,
+    n_completed: usize,
 ) {
-    eprint!("Bootstrap trial: ");
-    for sub_node in node.get_or_expand_sub_nodes_mut().iter_mut() {
+    let is_single_run = node.params.is_single_run;
+
+    // do search_depth single step trials so the total cost of a bootstrap run is the same
+    // as a normal one
+    for _ in 0..node.params.search_depth {
+        let sub_node = node.min_child_marginal_index_mut().unwrap();
         let score = run_step(sub_node, &mut sim.clone(), rng, steps_taken).unwrap();
-        eprint!("{:.2} ", score);
+        if is_single_run {
+            eprintln!(
+                "{}: Bootstrap trial: {} got {:.2}",
+                n_completed,
+                sub_node.policy.unwrap(),
+                score
+            );
+        }
+
+        // sub_node.update_expected_cost(sub_node.params.bound_mode);
     }
-    eprintln!();
 
     node.update_expected_cost(node.params.bound_mode);
 }
@@ -760,7 +818,7 @@ fn print_report(
 
         let _costs_only = node.costs.iter().map(|(c, _)| *c).collect_vec();
 
-        let index = node.compute_selection_index(parent_n_trials, parent_n_trials.ln()).unwrap_or(99999.0);
+        let index = node.compute_expected_cost_index(parent_n_trials, parent_n_trials.ln()).unwrap_or(99999.0);
 
         //  interm = {_intermediate_cost:6.1?}, \
         //  {node.intermediate_costs=:.2?}, \
@@ -882,6 +940,7 @@ fn print_variance_report(node: &MctsNode) {
         node.choice_confidence_interval(node.params.samples_n)
     );
 
+    // eprintln!("Overall n: {:4}", node.marginal_costs.len());
     for (i, sub_node) in node.sub_nodes.as_ref().unwrap().iter().enumerate() {
         eprintln!(
             "{}:      n: {:4}, marginal cost: {:5.0} and std dev: {:5.0}",
@@ -904,7 +963,9 @@ fn print_variance_report(node: &MctsNode) {
         eprintln!(
             "{}: UCB index: {}",
             i,
-            sub_node.compute_selection_index(n, ln_n).unwrap_or(99999.0)
+            sub_node
+                .compute_expected_cost_index(n, ln_n)
+                .unwrap_or(99999.0)
         );
     }
 }
@@ -945,13 +1006,16 @@ fn run_with_parameters(params: Parameters) -> RunResults {
 
     for i in 0..params.samples_n {
         let marginal_confidence = node.marginal_cost_confidence_interval(i);
-        eprintln_f!("{i}: {marginal_confidence=:.2}");
+        if params.is_single_run {
+            eprintln_f!("{i}: {marginal_confidence=:.2}");
+        }
         if params.bootstrap_confidence_z > marginal_confidence {
             bootstrap_run_trial(
                 &mut node,
                 &mut Simulator::sample(&scenario, i, &mut rng),
                 &mut rng,
                 &mut steps_taken,
+                i,
             );
             continue;
         }
