@@ -117,6 +117,61 @@ fn gaussian_update(prior_mean: f64, prior_variance: f64, mean: f64, variance: f6
     (new_mean, new_variance)
 }
 
+fn compute_selection_index(
+    params: &Parameters,
+    total_n: f64,
+    ln_total_n: f64,
+    n_trials: usize,
+    cost: f64,
+    mode: ChildSelectionMode,
+    variance: Option<f64>,
+) -> Option<f64> {
+    if n_trials == 0 {
+        return None;
+    }
+
+    let mean_cost = cost;
+    let n = n_trials as f64;
+    let ln_t_over_n = ln_total_n / n;
+    let index = match mode {
+        ChildSelectionMode::UCB => {
+            let upper_margin = params.ucb_const * ln_t_over_n.sqrt();
+            assert!(upper_margin.is_finite(), "{}", n);
+            mean_cost + upper_margin
+        }
+        ChildSelectionMode::UCBV => {
+            let variance = variance.unwrap();
+            let upper_margin = params.ucb_const
+                * (params.ucbv_const * (variance * ln_t_over_n).sqrt() + ln_t_over_n);
+            mean_cost + upper_margin
+        }
+        ChildSelectionMode::UCBd => {
+            let a = (1.0 + n) / (n * n);
+            let b = (total_n * (1.0 + n).sqrt() / params.ucbd_const).ln();
+            let upper_margin = params.ucb_const * (a * (1.0 + 2.0 * b)).sqrt();
+            if !upper_margin.is_finite() {
+                eprintln_f!("{a=} {b=} {upper_margin=} {n=} {total_n=}");
+                panic!();
+            }
+            mean_cost + upper_margin
+        }
+        ChildSelectionMode::KLUCB => {
+            let scaled_mean = (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
+            let index = -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * ln_t_over_n);
+            index
+        }
+        ChildSelectionMode::KLUCBP => {
+            let scaled_mean = (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
+            let index =
+                -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * (total_n / n).ln() / n);
+            index
+        }
+        ChildSelectionMode::Uniform => n,
+        ChildSelectionMode::Random => unimplemented!("No index for Random ChildSelectionMode"),
+    };
+    Some(index)
+}
+
 #[derive(Clone)]
 struct MctsNode<'a> {
     params: &'a Parameters,
@@ -193,12 +248,25 @@ impl<'a> MctsNode<'a> {
             .map(|a| a.marginal_costs.len())
             .sum::<usize>() as f64;
         let ln_total_n = total_n.ln();
+
+        // if self.params.is_single_run {
+        //     for (i, sub_node) in self.get_or_expand_sub_nodes().iter().enumerate() {
+        //         eprintln_f!(
+        //             "{i}: {:.2}",
+        //             sub_node
+        //                 .compute_marginal_cost_index(total_n, ln_total_n)
+        //                 .unwrap_or(99999.9)
+        //         )
+        //     }
+        // }
+
         self.sub_nodes.as_mut().and_then(|nodes| {
             nodes
                 .iter_mut()
                 .map(|a| {
                     (
-                        a.compute_marginal_cost_index(total_n, ln_total_n).unwrap(),
+                        a.compute_marginal_cost_index(total_n, ln_total_n)
+                            .unwrap_or(-f64::MAX),
                         a,
                     )
                 })
@@ -267,75 +335,33 @@ impl<'a> MctsNode<'a> {
     }
 
     fn compute_expected_cost_index(&self, total_n: f64, ln_total_n: f64) -> Option<f64> {
-        self.compute_selection_index(
+        let variance = if self.params.selection_mode == ChildSelectionMode::UCBV {
+            Some(self.variance())
+        } else {
+            None
+        };
+
+        compute_selection_index(
+            self.params,
             total_n,
             ln_total_n,
+            self.costs.len(),
             self.expected_cost.unwrap(),
             self.params.selection_mode,
+            variance,
         )
     }
 
     fn compute_marginal_cost_index(&self, total_n: f64, ln_total_n: f64) -> Option<f64> {
-        self.compute_selection_index(
+        compute_selection_index(
+            self.params,
             total_n,
             ln_total_n,
+            self.marginal_costs.len(),
             self.marginal_cost(),
             self.params.selection_mode,
+            None,
         )
-    }
-
-    fn compute_selection_index(
-        &self,
-        total_n: f64,
-        ln_total_n: f64,
-        cost: f64,
-        mode: ChildSelectionMode,
-    ) -> Option<f64> {
-        if self.n_trials == 0 {
-            return None;
-        }
-
-        let params = self.params;
-        let mean_cost = cost;
-        let n = self.n_trials as f64;
-        let ln_t_over_n = ln_total_n / n;
-        let index = match mode {
-            ChildSelectionMode::UCB => {
-                let upper_margin = params.ucb_const * ln_t_over_n.sqrt();
-                assert!(upper_margin.is_finite(), "{}", n);
-                mean_cost + upper_margin
-            }
-            ChildSelectionMode::UCBV => {
-                let variance = self.variance();
-                let upper_margin = params.ucb_const
-                    * (params.ucbv_const * (variance * ln_t_over_n).sqrt() + ln_t_over_n);
-                mean_cost + upper_margin
-            }
-            ChildSelectionMode::UCBd => {
-                let a = (1.0 + n) / (n * n);
-                let b = (total_n * (1.0 + n).sqrt() / params.ucbd_const).ln();
-                let upper_margin = params.ucb_const * (a * (1.0 + 2.0 * b)).sqrt();
-                if !upper_margin.is_finite() {
-                    eprintln_f!("{a=} {b=} {upper_margin=} {n=} {total_n=}");
-                    panic!();
-                }
-                mean_cost + upper_margin
-            }
-            ChildSelectionMode::KLUCB => {
-                let scaled_mean = (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
-                let index = -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * ln_t_over_n);
-                index
-            }
-            ChildSelectionMode::KLUCBP => {
-                let scaled_mean = (1.0 - mean_cost / params.klucb_max_cost).min(1.0).max(0.0);
-                let index =
-                    -klucb_bernoulli(scaled_mean, params.ucb_const.abs() * (total_n / n).ln() / n);
-                index
-            }
-            ChildSelectionMode::Uniform => n,
-            ChildSelectionMode::Random => unimplemented!("No index for Random ChildSelectionMode"),
-        };
-        Some(index)
     }
 
     fn confidence_interval(
