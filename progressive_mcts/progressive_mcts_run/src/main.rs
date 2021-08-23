@@ -15,7 +15,7 @@ use rand::{
 };
 use rolling_stats::Stats;
 
-const NO_CONFIDENCE_YET: f64 = 10000.0;
+const NO_CONFIDENCE_YET: f64 = 100000.0;
 
 #[derive(Clone, Copy, Debug)]
 struct RunResults {
