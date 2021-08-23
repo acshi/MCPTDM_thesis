@@ -15,8 +15,6 @@ use rand::{
 };
 use rolling_stats::Stats;
 
-const NO_CONFIDENCE_YET: f64 = 400.0;
-
 #[derive(Clone, Copy, Debug)]
 struct RunResults {
     steps_taken: usize,
@@ -226,7 +224,7 @@ impl<'a> MctsNode<'a> {
         if self.costs.is_empty() {
             0.0
         } else if self.costs.len() == 1 {
-            NO_CONFIDENCE_YET
+            self.params.gaussian_prior_std_dev
         } else {
             self.costs.std_dev() / (self.costs.len() as f64).sqrt()
         }
@@ -244,7 +242,7 @@ impl<'a> MctsNode<'a> {
         if self.intermediate_costs.is_empty() {
             0.0
         } else if self.intermediate_costs.len() == 1 {
-            NO_CONFIDENCE_YET
+            self.params.gaussian_prior_std_dev
         } else {
             self.intermediate_costs.std_dev() / (self.intermediate_costs.len() as f64).sqrt()
         }
@@ -262,7 +260,7 @@ impl<'a> MctsNode<'a> {
         if self.marginal_costs.is_empty() {
             0.0
         } else if self.marginal_costs.len() == 1 {
-            NO_CONFIDENCE_YET
+            self.params.gaussian_prior_std_dev
         } else {
             self.marginal_costs.std_dev() / (self.marginal_costs.len() as f64).sqrt()
         }
@@ -376,7 +374,7 @@ impl<'a> MctsNode<'a> {
     fn choice_confidence_interval(&self, n_completed: usize) -> f64 {
         if self.expected_cost.is_none() {
             // not expanded yet... no confidence!
-            return NO_CONFIDENCE_YET;
+            return 0.0;
         }
 
         let mut sorted_sub_nodes = self
@@ -390,7 +388,7 @@ impl<'a> MctsNode<'a> {
 
         if sorted_sub_nodes.len() < 2 {
             // not expanded enough yet for a comparison, so no confidence!
-            return NO_CONFIDENCE_YET;
+            return 0.0;
         }
 
         let best_sub_node = sorted_sub_nodes[0];
