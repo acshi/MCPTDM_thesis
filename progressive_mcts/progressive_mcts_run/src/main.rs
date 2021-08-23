@@ -15,6 +15,8 @@ use rand::{
 };
 use rolling_stats::Stats;
 
+const NO_CONFIDENCE_YET: f64 = 10000.0;
+
 #[derive(Clone, Copy, Debug)]
 struct RunResults {
     steps_taken: usize,
@@ -108,6 +110,13 @@ impl<T: Clone> CostSet<T> {
     fn iter(&self) -> impl Iterator<Item = &(f64, T)> {
         self.costs.iter()
     }
+}
+
+fn gaussian_update(prior_mean: f64, prior_variance: f64, mean: f64, variance: f64) -> (f64, f64) {
+    let k = prior_variance / (prior_variance + variance);
+    let new_mean = prior_mean + (mean - prior_mean) * k;
+    let new_variance = prior_variance * (1.0 - k);
+    (new_mean, new_variance)
 }
 
 #[derive(Clone)]
@@ -217,7 +226,7 @@ impl<'a> MctsNode<'a> {
         if self.costs.is_empty() {
             0.0
         } else if self.costs.len() == 1 {
-            1000.0
+            NO_CONFIDENCE_YET
         } else {
             self.costs.std_dev() / (self.costs.len() as f64).sqrt()
         }
@@ -235,7 +244,7 @@ impl<'a> MctsNode<'a> {
         if self.intermediate_costs.is_empty() {
             0.0
         } else if self.intermediate_costs.len() == 1 {
-            1000.0
+            NO_CONFIDENCE_YET
         } else {
             self.intermediate_costs.std_dev() / (self.intermediate_costs.len() as f64).sqrt()
         }
@@ -253,7 +262,7 @@ impl<'a> MctsNode<'a> {
         if self.marginal_costs.is_empty() {
             0.0
         } else if self.marginal_costs.len() == 1 {
-            1000.0
+            NO_CONFIDENCE_YET
         } else {
             self.marginal_costs.std_dev() / (self.marginal_costs.len() as f64).sqrt()
         }
@@ -265,6 +274,7 @@ impl<'a> MctsNode<'a> {
             ln_total_n,
             self.expected_cost.unwrap(),
             self.params.selection_mode,
+            false,
         )
     }
 
@@ -274,6 +284,7 @@ impl<'a> MctsNode<'a> {
             ln_total_n,
             self.marginal_cost(),
             self.params.selection_mode,
+            false,
         )
     }
 
@@ -283,14 +294,25 @@ impl<'a> MctsNode<'a> {
         ln_total_n: f64,
         cost: f64,
         mode: ChildSelectionMode,
+        is_final_selection: bool,
     ) -> Option<f64> {
+        if self.n_trials == 0 {
+            return None;
+        }
+
         let params = self.params;
         let mean_cost = cost;
         let n = self.n_trials as f64;
         let ln_t_over_n = ln_total_n / n;
         let index = match mode {
             ChildSelectionMode::UCB => {
-                let upper_margin = params.ucb_const * ln_t_over_n.sqrt();
+                let ucb_const = if is_final_selection {
+                    params.gaussian_prior_std_dev
+                } else {
+                    params.ucb_const
+                };
+                let upper_margin = ucb_const * ln_t_over_n.sqrt();
+                assert!(upper_margin.is_finite(), "{}", n);
                 mean_cost + upper_margin
             }
             ChildSelectionMode::UCBV => {
@@ -354,7 +376,7 @@ impl<'a> MctsNode<'a> {
     fn choice_confidence_interval(&self, n_completed: usize) -> f64 {
         if self.expected_cost.is_none() {
             // not expanded yet... no confidence!
-            return 1000.0;
+            return NO_CONFIDENCE_YET;
         }
 
         let mut sorted_sub_nodes = self
@@ -368,7 +390,7 @@ impl<'a> MctsNode<'a> {
 
         if sorted_sub_nodes.len() < 2 {
             // not expanded enough yet for a comparison, so no confidence!
-            return 1000.0;
+            return NO_CONFIDENCE_YET;
         }
 
         let best_sub_node = sorted_sub_nodes[0];
@@ -451,10 +473,40 @@ impl<'a> MctsNode<'a> {
                 std_dev = std_dev.hypot(self.marginal_cost_std_dev());
                 (expected_cost, std_dev)
             }
+            CostBoundMode::MarginalPrior => {
+                let (mut expected_cost, mut std_dev) = self
+                    .min_child_expected_cost_and_std_dev()
+                    .unwrap_or((0.0, 0.0));
+                let (mean, variance) = gaussian_update(
+                    0.0,
+                    self.params.gaussian_prior_std_dev.powi(2),
+                    self.marginal_cost(),
+                    self.marginal_cost_std_dev().powi(2),
+                );
+                expected_cost += mean;
+                std_dev = (std_dev.powi(2) + variance).sqrt();
+                (expected_cost, std_dev)
+            }
             CostBoundMode::Same => panic!("Bound mode cannot be 'Same'"),
         };
         self.expected_cost = Some(expected_cost);
         self.expected_cost_std_dev = Some(std_dev);
+    }
+
+    fn final_selection_index(&self) -> Option<f64> {
+        assert_eq!(self.params.bound_mode, CostBoundMode::Marginal);
+
+        let mut index = (self.marginal_cost() - self.marginal_cost_std_dev()).max(0.0);
+
+        if let Some(sub_nodes) = self.sub_nodes.as_ref() {
+            index += sub_nodes
+                .iter()
+                .filter_map(|a| a.final_selection_index())
+                .min_by(|a, b| a.partial_cmp(b).unwrap())
+                .unwrap_or(0.0);
+        }
+
+        Some(index)
     }
 }
 
@@ -902,6 +954,20 @@ fn set_final_choice_expected_values(params: &Parameters, node: &mut MctsNode) {
 }
 
 fn get_best_policy(node: &MctsNode) -> u32 {
+    if node.params.use_final_selection_var {
+        return node
+            .sub_nodes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .filter_map(|a| Some((a.final_selection_index()?, a)))
+            .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
+            .unwrap()
+            .1
+            .policy
+            .unwrap();
+    }
+
     let chosen_policy = node
         .sub_nodes
         .as_ref()
@@ -956,17 +1022,15 @@ fn print_variance_report(node: &MctsNode) {
         node.marginal_cost_confidence_interval(node.params.samples_n)
     );
 
-    eprintln!("UCB indices:");
-    let n = node.costs.len() as f64;
-    let ln_n = n.ln();
-    for (i, sub_node) in node.sub_nodes.as_ref().unwrap().iter().enumerate() {
-        eprintln!(
-            "{}: UCB index: {}",
-            i,
-            sub_node
-                .compute_expected_cost_index(n, ln_n)
-                .unwrap_or(99999.0)
-        );
+    if node.params.use_final_selection_var {
+        eprintln!("Final selection indices:");
+        for (i, sub_node) in node.sub_nodes.as_ref().unwrap().iter().enumerate() {
+            eprintln!(
+                "{}: {:10.2}",
+                i,
+                sub_node.final_selection_index().unwrap_or(99999.0)
+            );
+        }
     }
 }
 
@@ -1092,4 +1156,21 @@ fn run_with_parameters(params: Parameters) -> RunResults {
 
 fn main() {
     run_parallel_scenarios();
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::gaussian_update;
+
+    #[test]
+    fn gaussian_prior_update() {
+        assert_eq!(
+            gaussian_update(0.0, 1000f64.powi(2), 100.0, 10f64.powi(2)),
+            (99.9900009999, 9.999500037497706f64.powi(2))
+        );
+        assert_eq!(
+            gaussian_update(0.0, 1000f64.powi(2), 890.0, 500f64.powi(2)),
+            (712.0, 447.2135954999579f64.powi(2))
+        );
+    }
 }

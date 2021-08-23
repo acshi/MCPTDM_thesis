@@ -37,6 +37,8 @@ pub(crate) struct Parameters {
     pub repeat_at_all_levels: bool,
     pub throwout_extreme_costs_z: f64,
     pub bootstrap_confidence_z: f64,
+    pub use_final_selection_var: bool,
+    pub gaussian_prior_std_dev: f64,
     pub thread_limit: usize,
     pub scenario_name: Option<String>,
 
@@ -68,6 +70,8 @@ impl Parameters {
             repeat_at_all_levels: false,
             throwout_extreme_costs_z: 1000.0,
             bootstrap_confidence_z: 0.0,
+            use_final_selection_var: false,
+            gaussian_prior_std_dev: 1000.0,
 
             thread_limit: 1,
             scenario_name: None,
@@ -159,6 +163,12 @@ fn create_scenarios(
                     "bootstrap_confidence_z" => {
                         params.bootstrap_confidence_z = val.parse().unwrap()
                     }
+                    "use_final_selection_var" => {
+                        params.use_final_selection_var = val.parse().unwrap()
+                    }
+                    "gaussian_prior_std_dev" => {
+                        params.gaussian_prior_std_dev = val.parse().unwrap()
+                    }
                     "ucb_const" => params.ucb_const = val.parse().unwrap(),
                     "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
                     "ucbd.ucbd_const" => {
@@ -215,6 +225,8 @@ fn create_scenarios(
              ,repeat_at_all_levels={s.repeat_at_all_levels}\
              ,throwout_extreme_costs_z={s.throwout_extreme_costs_z}\
              ,bootstrap_confidence_z={s.bootstrap_confidence_z}\
+             ,use_final_selection_var={s.use_final_selection_var}\
+             ,gaussian_prior_std_dev={s.gaussian_prior_std_dev}\
              ,ucb_const={s.ucb_const}\
              {ucbv_const}\
              {ucbd_const}\
