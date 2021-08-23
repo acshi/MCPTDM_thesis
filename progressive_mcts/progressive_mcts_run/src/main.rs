@@ -224,7 +224,7 @@ impl<'a> MctsNode<'a> {
         if self.costs.is_empty() {
             0.0
         } else if self.costs.len() == 1 {
-            self.params.gaussian_prior_std_dev
+            self.params.unknown_prior_std_dev
         } else {
             self.costs.std_dev() / (self.costs.len() as f64).sqrt()
         }
@@ -242,7 +242,7 @@ impl<'a> MctsNode<'a> {
         if self.intermediate_costs.is_empty() {
             0.0
         } else if self.intermediate_costs.len() == 1 {
-            self.params.gaussian_prior_std_dev
+            self.params.unknown_prior_std_dev
         } else {
             self.intermediate_costs.std_dev() / (self.intermediate_costs.len() as f64).sqrt()
         }
@@ -260,7 +260,7 @@ impl<'a> MctsNode<'a> {
         if self.marginal_costs.is_empty() {
             0.0
         } else if self.marginal_costs.len() == 1 {
-            self.params.gaussian_prior_std_dev
+            self.params.unknown_prior_std_dev
         } else {
             self.marginal_costs.std_dev() / (self.marginal_costs.len() as f64).sqrt()
         }
@@ -272,7 +272,6 @@ impl<'a> MctsNode<'a> {
             ln_total_n,
             self.expected_cost.unwrap(),
             self.params.selection_mode,
-            false,
         )
     }
 
@@ -282,7 +281,6 @@ impl<'a> MctsNode<'a> {
             ln_total_n,
             self.marginal_cost(),
             self.params.selection_mode,
-            false,
         )
     }
 
@@ -292,7 +290,6 @@ impl<'a> MctsNode<'a> {
         ln_total_n: f64,
         cost: f64,
         mode: ChildSelectionMode,
-        is_final_selection: bool,
     ) -> Option<f64> {
         if self.n_trials == 0 {
             return None;
@@ -304,12 +301,7 @@ impl<'a> MctsNode<'a> {
         let ln_t_over_n = ln_total_n / n;
         let index = match mode {
             ChildSelectionMode::UCB => {
-                let ucb_const = if is_final_selection {
-                    params.gaussian_prior_std_dev
-                } else {
-                    params.ucb_const
-                };
-                let upper_margin = ucb_const * ln_t_over_n.sqrt();
+                let upper_margin = params.ucb_const * ln_t_over_n.sqrt();
                 assert!(upper_margin.is_finite(), "{}", n);
                 mean_cost + upper_margin
             }
@@ -477,7 +469,7 @@ impl<'a> MctsNode<'a> {
                     .unwrap_or((0.0, 0.0));
                 let (mean, variance) = gaussian_update(
                     0.0,
-                    self.params.gaussian_prior_std_dev.powi(2),
+                    self.params.zero_mean_prior_std_dev.powi(2),
                     self.marginal_cost(),
                     self.marginal_cost_std_dev().powi(2),
                 );
@@ -489,22 +481,6 @@ impl<'a> MctsNode<'a> {
         };
         self.expected_cost = Some(expected_cost);
         self.expected_cost_std_dev = Some(std_dev);
-    }
-
-    fn final_selection_index(&self) -> Option<f64> {
-        assert_eq!(self.params.bound_mode, CostBoundMode::Marginal);
-
-        let mut index = (self.marginal_cost() - self.marginal_cost_std_dev()).max(0.0);
-
-        if let Some(sub_nodes) = self.sub_nodes.as_ref() {
-            index += sub_nodes
-                .iter()
-                .filter_map(|a| a.final_selection_index())
-                .min_by(|a, b| a.partial_cmp(b).unwrap())
-                .unwrap_or(0.0);
-        }
-
-        Some(index)
     }
 }
 
@@ -952,20 +928,6 @@ fn set_final_choice_expected_values(params: &Parameters, node: &mut MctsNode) {
 }
 
 fn get_best_policy(node: &MctsNode) -> u32 {
-    if node.params.use_final_selection_var {
-        return node
-            .sub_nodes
-            .as_ref()
-            .unwrap()
-            .iter()
-            .filter_map(|a| Some((a.final_selection_index()?, a)))
-            .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
-            .unwrap()
-            .1
-            .policy
-            .unwrap();
-    }
-
     let chosen_policy = node
         .sub_nodes
         .as_ref()
@@ -1019,17 +981,6 @@ fn print_variance_report(node: &MctsNode) {
         "Marginal cost confidence (z-score): {:.1}",
         node.marginal_cost_confidence_interval(node.params.samples_n)
     );
-
-    if node.params.use_final_selection_var {
-        eprintln!("Final selection indices:");
-        for (i, sub_node) in node.sub_nodes.as_ref().unwrap().iter().enumerate() {
-            eprintln!(
-                "{}: {:10.2}",
-                i,
-                sub_node.final_selection_index().unwrap_or(99999.0)
-            );
-        }
-    }
 }
 
 fn run_with_parameters(params: Parameters) -> RunResults {
