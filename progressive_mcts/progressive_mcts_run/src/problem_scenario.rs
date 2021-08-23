@@ -68,6 +68,15 @@ impl CostDistribution {
         }
     }
 
+    pub fn new_sampled(rng: &mut StdRng) -> Self {
+        let normal_mean = rng.gen_range(0.0..100.0);
+        let normal_std_dev = rng.gen_range(0.0..100.0);
+        let bernoulli_p = rng.gen_range(0.0..=1.0);
+        let bernoulli_mag = 1000.0;
+
+        Self::new(normal_mean, normal_std_dev, bernoulli_p, bernoulli_mag)
+    }
+
     pub fn mean(&self) -> f64 {
         self.normal_d.mean() + self.bernoulli_p * self.bernoulli_mag
     }
@@ -112,17 +121,7 @@ impl ProblemScenario {
             distribution: if depth == 0 {
                 None
             } else {
-                let normal_mean = rng.gen_range(0.0..100.0);
-                let normal_std_dev = rng.gen_range(0.0..100.0);
-                let bernoulli_p = rng.gen_range(0.0..=1.0);
-                let bernoulli_mag = 1000.0;
-
-                Some(CostDistribution::new(
-                    normal_mean,
-                    normal_std_dev,
-                    bernoulli_p,
-                    bernoulli_mag,
-                ))
+                Some(CostDistribution::new_sampled(rng))
             },
             children: if depth < max_depth {
                 (0..n_actions)
@@ -188,6 +187,7 @@ mod tests {
     use approx::assert_abs_diff_eq;
     use fstrings::{eprintln_f, format_args_f};
     use rand::SeedableRng;
+    use rolling_stats::Stats;
 
     #[test]
     fn test_expected_marginal_cost() {
@@ -216,5 +216,25 @@ mod tests {
         eprintln_f!("{distribution=:.2?}");
 
         assert_abs_diff_eq!(mean_cost, true_mean_cost, epsilon = 10.0);
+    }
+
+    #[test]
+    fn expected_std_dev() {
+        let mut rng = StdRng::from_seed([0; 32]);
+
+        let mut std_dev_stats = Stats::new();
+
+        for _ in 0..1000 {
+            let dist = CostDistribution::new_sampled(&mut rng);
+            let mut stats = Stats::new();
+            for _ in 0..2000 {
+                let value = dist.sample(&mut rng);
+                stats.update(value);
+            }
+            // eprintln!("{:.2}", stats.std_dev);
+            std_dev_stats.update(stats.std_dev);
+        }
+
+        assert_eq!(std_dev_stats.mean, 0.0);
     }
 }
