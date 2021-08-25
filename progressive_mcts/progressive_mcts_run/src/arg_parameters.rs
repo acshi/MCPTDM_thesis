@@ -1,11 +1,16 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    Mutex,
+use std::{
+    collections::BTreeSet,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        mpsc::{sync_channel, RecvTimeoutError},
+        Arc, Mutex,
+    },
+    time::Duration,
 };
 
 use crate::parameters_sql::{
     create_table_sql, insert_sql, make_insert_specifiers, make_select_specifiers, parse_parameters,
-    select_where_sql, specifier_params,
+    specifier_params, specifiers_hash,
 };
 #[allow(unused)]
 use fstrings::{format_args_f, format_f, println_f};
@@ -42,6 +47,7 @@ pub struct Parameters {
 
     pub thread_limit: usize,
     pub scenario_specifiers: Option<Vec<(&'static str, String)>>,
+    pub specifiers_hash: i64,
 
     pub print_report: bool,
     pub stats_analysis: bool,
@@ -76,6 +82,7 @@ impl Parameters {
 
             thread_limit: 1,
             scenario_specifiers: None,
+            specifiers_hash: 0,
 
             print_report: false,
             stats_analysis: false,
@@ -142,7 +149,8 @@ fn create_scenarios(
     }
 
     for s in scenarios.iter_mut() {
-        s.scenario_specifiers = Some(make_select_specifiers(&s));
+        s.scenario_specifiers = Some(make_select_specifiers(s));
+        s.specifiers_hash = specifiers_hash(s);
     }
 
     scenarios
@@ -216,38 +224,55 @@ pub fn run_parallel_scenarios() {
 
     let n_scenarios_completed = AtomicUsize::new(0);
 
-    // only use the cache file to prevent recalculation when running a batch
     let cache_filename = "results.db";
     let conn = rusqlite::Connection::open(cache_filename).unwrap();
-
-    // create if doesn't exist
+    // create if doesn't exist (lazy way, ignoring an error)
     let _ = conn.execute(&create_table_sql(), []);
-    let conn = Mutex::new(conn);
+
+    let mut specifiers_hash_statement = conn
+        .prepare("SELECT specifiers_hash FROM results;")
+        .expect("prepare select specifiers_hash");
+    let specifiers_hashs = specifiers_hash_statement
+        .query_map([], |r| r.get::<_, i64>(0))
+        .unwrap();
+    let completed_result_set: BTreeSet<i64> = specifiers_hashs.filter_map(|a| a.ok()).collect();
+    let completed_result_set = Mutex::new(completed_result_set);
+    drop(specifiers_hash_statement);
 
     let many_scenarios = n_scenarios > 30000;
-
     if n_scenarios == 1 {
         let mut single_scenario = scenarios[0].clone();
         single_scenario.is_single_run = true;
         let res = run_with_parameters(single_scenario);
         println_f!("{res}");
     } else {
+        let (tx, rx) = sync_channel(2048);
+        let is_done = Arc::new(AtomicBool::new(false));
+
+        let is_done_job = is_done.clone();
+        let recv_thread = std::thread::spawn(move || {
+            let mut insert_statement = conn.prepare(&insert_sql()).expect("prepare insert");
+
+            while !is_done_job.load(Ordering::Relaxed) {
+                match rx.recv_timeout(Duration::from_millis(1000)) {
+                    Ok((scenario, res)) => {
+                        let insert_specifiers = make_insert_specifiers(&scenario, &res);
+                        insert_statement
+                            .insert(specifier_params(&insert_specifiers).as_slice())
+                            .expect("insert");
+                    }
+                    Err(RecvTimeoutError::Timeout) => continue,
+                    Err(RecvTimeoutError::Disconnected) => break,
+                }
+            }
+        });
+
         scenarios.par_iter().for_each(|scenario| {
             // let result = std::panic::catch_unwind(|| {
             {
-                {
-                    let select_specifiers = scenario.scenario_specifiers.as_ref().unwrap();
-                    let conn_guard = conn.lock().unwrap();
-                    let mut select_where_statement = conn_guard
-                        .prepare(&select_where_sql())
-                        .expect("prepare select");
-                    let mut select_res = select_where_statement
-                        .query(specifier_params(select_specifiers).as_slice())
-                        .unwrap();
-                    if select_res.next().unwrap().is_some() {
-                        n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
-                        return;
-                    }
+                if completed_result_set.lock().unwrap().contains(&scenario.specifiers_hash) {
+                    n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
+                    return;
                 }
 
                 let res = run_with_parameters(scenario.clone());
@@ -278,15 +303,16 @@ pub fn run_parallel_scenarios() {
                 }
 
                 // writeln_f!(file.lock().unwrap(), "{scenario_name} {res}").unwrap();
-                {
-                    let insert_specifiers = make_insert_specifiers(scenario, &res);
-                    let conn_guard = conn.lock().unwrap();
-                    let mut insert_statement =
-                        conn_guard.prepare(&insert_sql()).expect("prepare insert");
-                    insert_statement
-                        .insert(specifier_params(&insert_specifiers).as_slice())
-                        .expect("insert");
-                }
+                // {
+                //     let insert_specifiers = make_insert_specifiers(scenario, &res);
+                //     let conn_guard = conn.lock().unwrap();
+                //     let mut insert_statement =
+                //         conn_guard.prepare(&insert_sql()).expect("prepare insert");
+                //     insert_statement
+                //         .insert(specifier_params(&insert_specifiers).as_slice())
+                //         .expect("insert");
+                // }
+                tx.send((scenario.clone(), res)).expect("tx send");
             }
             // });
             // if result.is_err() {
@@ -297,5 +323,8 @@ pub fn run_parallel_scenarios() {
             //     panic!();
             // }
         });
+
+        is_done.store(true, Ordering::Relaxed);
+        recv_thread.join().unwrap();
     }
 }

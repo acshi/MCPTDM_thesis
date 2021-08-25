@@ -1,3 +1,5 @@
+use std::{collections::hash_map::DefaultHasher, hash::Hasher};
+
 use crate::{arg_parameters::Parameters, RunResults};
 use itertools::Itertools;
 use paste::paste;
@@ -18,6 +20,10 @@ macro_rules! define_params {
                 true
             }
 
+            fn [<hash_ $defining_type:lower _specifiers>](params: &Parameters, hasher: &mut DefaultHasher) {
+                define_params!(@hasher hasher, $defining_type, params, $($param),*);
+            }
+
             fn [<add_ $defining_type:lower _specifiers>](params: &Parameters, spec: &mut Vec<(&'static str, String)>) {
                 $(spec.push((concat!(":", stringify!($param)), params.$param.to_string()));)*
             }
@@ -25,6 +31,19 @@ macro_rules! define_params {
             const [<$defining_type _CREATE_TABLE_SQL>]: &'static str = stringify!($($param $defining_type),*);
             // const [<$defining_type _SELECT_WHERE_SQL>]: &'static str = concat!($(stringify!($param), " = :", stringify!($param), ", "),*);
         }
+    };
+    (@hasher $hasher:expr, INTEGER, $params:ident, $($param:ident),*) => {
+        // $($hasher.write_u64($param as u64);)*
+        use std::hash::Hash;
+        $($params.$param.hash($hasher);)*
+    };
+    (@hasher $hasher:expr, TEXT, $params:ident, $($param:ident),*) => {
+        // $($hasher.write_u64($param as u64);)*
+        use std::hash::Hash;
+        $($params.$param.hash($hasher);)*
+    };
+    (@hasher $hasher:expr, REAL, $params:ident, $($param:ident),*) => {
+        $($hasher.write_u64($params.$param.to_bits());)*
     };
 }
 
@@ -50,6 +69,7 @@ define_params!(
     search_depth,
     n_actions,
     samples_n,
+    repeat_particle_sign,
     repeat_at_all_levels,
     correct_future_std_dev_mean
 );
@@ -66,7 +86,6 @@ define_params!(
     consider_repeats_after_portion,
     repeat_confidence_interval,
     repeat_const,
-    repeat_particle_sign,
     throwout_extreme_costs_z,
     bootstrap_confidence_z,
     zero_mean_prior_std_dev,
@@ -99,7 +118,7 @@ define_result_values!(
 
 pub fn create_table_sql() -> String {
     format!(
-        "CREATE TABLE results (id INTEGER PRIMARY KEY, {}, {}, {}, {})",
+        "CREATE TABLE results (id INTEGER PRIMARY KEY, specifiers_hash INTEGER, {}, {}, {}, {})",
         INTEGER_CREATE_TABLE_SQL,
         TEXT_CREATE_TABLE_SQL,
         REAL_CREATE_TABLE_SQL,
@@ -107,23 +126,23 @@ pub fn create_table_sql() -> String {
     )
 }
 
-pub fn select_where_sql() -> String {
-    let mut sql = "SELECT id FROM results WHERE ".to_owned();
-    let mut added_any = false;
-    for param in INTEGER_PARAMS.iter().chain(TEXT_PARAMS).chain(REAL_PARAMS) {
-        if added_any {
-            sql.push_str(" AND ");
-        }
-        sql.push_str(param);
-        sql.push_str(" = :");
-        sql.push_str(param);
-        added_any = true;
-    }
-    sql
-}
+// pub fn select_where_sql() -> String {
+//     let mut sql = "SELECT id FROM results WHERE ".to_owned();
+//     let mut added_any = false;
+//     for param in INTEGER_PARAMS.iter().chain(TEXT_PARAMS).chain(REAL_PARAMS) {
+//         if added_any {
+//             sql.push_str(" AND ");
+//         }
+//         sql.push_str(param);
+//         sql.push_str(" = :");
+//         sql.push_str(param);
+//         added_any = true;
+//     }
+//     sql
+// }
 
 pub fn insert_sql() -> String {
-    let mut sql = "INSERT INTO results (".to_owned();
+    let mut sql = "INSERT INTO results (specifiers_hash, ".to_owned();
     let mut added_any = false;
     for param in INTEGER_PARAMS
         .iter()
@@ -138,7 +157,7 @@ pub fn insert_sql() -> String {
         added_any = true;
     }
 
-    sql.push_str(") VALUES (");
+    sql.push_str(") VALUES (:specifiers_hash, ");
 
     let mut added_any = false;
     for param in INTEGER_PARAMS
@@ -167,12 +186,21 @@ pub fn make_select_specifiers(params: &Parameters) -> Vec<(&'static str, String)
     spec
 }
 
+pub fn specifiers_hash(params: &Parameters) -> i64 {
+    let mut hasher = DefaultHasher::new();
+    hash_integer_specifiers(params, &mut hasher);
+    hash_text_specifiers(params, &mut hasher);
+    hash_real_specifiers(params, &mut hasher);
+    hasher.finish() as i64
+}
+
 pub fn make_insert_specifiers(
     params: &Parameters,
     results: &RunResults,
 ) -> Vec<(&'static str, String)> {
     let mut spec = make_select_specifiers(params);
     add_result_values(results, &mut spec);
+    spec.push((":specifiers_hash", params.specifiers_hash.to_string()));
     spec
 }
 
