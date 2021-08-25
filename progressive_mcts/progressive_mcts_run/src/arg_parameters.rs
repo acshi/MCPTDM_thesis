@@ -1,21 +1,21 @@
-use std::{
-    collections::BTreeMap,
-    fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Write},
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Mutex,
-    },
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Mutex,
 };
 
-use fstrings::{format_args_f, format_f, println_f, writeln_f};
+use crate::parameters_sql::{
+    create_table_sql, insert_sql, make_insert_specifiers, make_select_specifiers, parse_parameters,
+    select_where_sql, specifier_params,
+};
+#[allow(unused)]
+use fstrings::{format_args_f, format_f, println_f};
 use itertools::Itertools;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{run_with_parameters, ChildSelectionMode, CostBoundMode};
 
 #[derive(Clone, Debug)]
-pub(crate) struct Parameters {
+pub struct Parameters {
     pub search_depth: u32,
     pub n_actions: u32,
     pub ucb_const: f64,
@@ -39,8 +39,9 @@ pub(crate) struct Parameters {
     pub bootstrap_confidence_z: f64,
     pub zero_mean_prior_std_dev: f64,
     pub unknown_prior_std_dev: f64,
+
     pub thread_limit: usize,
-    pub scenario_name: Option<String>,
+    pub scenario_specifiers: Option<Vec<(&'static str, String)>>,
 
     pub print_report: bool,
     pub stats_analysis: bool,
@@ -74,7 +75,7 @@ impl Parameters {
             unknown_prior_std_dev: 1000.0,
 
             thread_limit: 1,
-            scenario_name: None,
+            scenario_specifiers: None,
 
             print_report: false,
             stats_analysis: false,
@@ -84,30 +85,31 @@ impl Parameters {
 }
 
 fn create_scenarios(
-    base_params: &Parameters,
+    base_p: &Parameters,
     name_value_pairs: &[(String, Vec<String>)],
 ) -> Vec<Parameters> {
     if name_value_pairs.is_empty() {
-        return vec![base_params.clone()];
+        return vec![base_p.clone()];
     }
 
     let mut scenarios = Vec::new();
     let (name, values) = &name_value_pairs[0];
 
-    if name.starts_with("normal.") && base_params.bound_mode != CostBoundMode::Normal
-        || name.starts_with("lower_bound.") && base_params.bound_mode != CostBoundMode::LowerBound
-        || name.starts_with("marginal.") && base_params.bound_mode != CostBoundMode::Marginal
+    if name.starts_with("normal.") && base_p.bound_mode != CostBoundMode::Normal
+        || name.starts_with("lower_bound.") && base_p.bound_mode != CostBoundMode::LowerBound
+        || name.starts_with("marginal.") && base_p.bound_mode != CostBoundMode::Marginal
+        || name.starts_with("marginal_prior.") && base_p.bound_mode != CostBoundMode::MarginalPrior
     {
-        return create_scenarios(&base_params, &name_value_pairs[1..]);
+        return create_scenarios(&base_p, &name_value_pairs[1..]);
     }
 
-    if name.starts_with("ucb.") && base_params.selection_mode != ChildSelectionMode::UCB
-        || name.starts_with("ucbv.") && base_params.selection_mode != ChildSelectionMode::UCBV
-        || name.starts_with("ucbd.") && base_params.selection_mode != ChildSelectionMode::UCBd
-        || name.starts_with("klucb.") && base_params.selection_mode != ChildSelectionMode::KLUCB
-        || name.starts_with("klucb+.") && base_params.selection_mode != ChildSelectionMode::KLUCBP
+    if name.starts_with("ucb.") && base_p.selection_mode != ChildSelectionMode::UCB
+        || name.starts_with("ucbv.") && base_p.selection_mode != ChildSelectionMode::UCBV
+        || name.starts_with("ucbd.") && base_p.selection_mode != ChildSelectionMode::UCBd
+        || name.starts_with("klucb.") && base_p.selection_mode != ChildSelectionMode::KLUCB
+        || name.starts_with("klucb+.") && base_p.selection_mode != ChildSelectionMode::KLUCBP
     {
-        return create_scenarios(&base_params, &name_value_pairs[1..]);
+        return create_scenarios(&base_p, &name_value_pairs[1..]);
     }
 
     for value in values.iter() {
@@ -129,58 +131,8 @@ fn create_scenarios(
         }
 
         for val in value_set {
-            let mut params = base_params.clone();
-
-            if name.ends_with(".ucb_const") {
-                params.ucb_const = val.parse().unwrap();
-            } else {
-                match name.as_str() {
-                    "search_depth" => params.search_depth = val.parse().unwrap(),
-                    "n_actions" => params.n_actions = val.parse().unwrap(),
-                    "thread_limit" => params.thread_limit = val.parse().unwrap(),
-                    "samples_n" => params.samples_n = val.parse().unwrap(),
-                    "bound_mode" => params.bound_mode = val.parse().unwrap(),
-                    "final_choice_mode" => params.final_choice_mode = val.parse().unwrap(),
-                    "selection_mode" => params.selection_mode = val.parse().unwrap(),
-                    "prioritize_worst_particles_z" => {
-                        params.prioritize_worst_particles_z = val.parse().unwrap()
-                    }
-                    "consider_repeats_after_portion" => {
-                        params.consider_repeats_after_portion = val.parse().unwrap()
-                    }
-                    "repeat_confidence_interval" => {
-                        params.repeat_confidence_interval = val.parse().unwrap()
-                    }
-                    "correct_future_std_dev_mean" => {
-                        params.correct_future_std_dev_mean = val.parse().unwrap()
-                    }
-                    "repeat_const" => params.repeat_const = val.parse().unwrap(),
-                    "repeat_particle_sign" => params.repeat_particle_sign = val.parse().unwrap(),
-                    "repeat_at_all_levels" => params.repeat_at_all_levels = val.parse().unwrap(),
-                    "throwout_extreme_costs_z" => {
-                        params.throwout_extreme_costs_z = val.parse().unwrap()
-                    }
-                    "bootstrap_confidence_z" => {
-                        params.bootstrap_confidence_z = val.parse().unwrap()
-                    }
-                    "zero_mean_prior_std_dev" => {
-                        params.zero_mean_prior_std_dev = val.parse().unwrap()
-                    }
-                    "unknown_prior_std_dev" => params.unknown_prior_std_dev = val.parse().unwrap(),
-                    "ucb_const" => params.ucb_const = val.parse().unwrap(),
-                    "ucbv.ucbv_const" => params.ucbv_const = val.parse().unwrap(),
-                    "ucbd.ucbd_const" => {
-                        params.ucbd_const = val.parse().unwrap();
-                        assert!(params.ucbd_const <= 1.0);
-                    }
-                    "klucb.klucb_max_cost" => params.klucb_max_cost = val.parse().unwrap(),
-                    "klucb+.klucb_max_cost" => params.klucb_max_cost = val.parse().unwrap(),
-                    "rng_seed" => params.rng_seed = val.parse().unwrap(),
-                    "print_report" => params.print_report = val.parse().unwrap(),
-                    "stats_analysis" => params.stats_analysis = val.parse().unwrap(),
-                    _ => panic!("{} is not a valid parameter!", name),
-                }
-            }
+            let mut params = base_p.clone();
+            parse_parameters(&mut params, name, &val);
             if name_value_pairs.len() > 1 {
                 scenarios.append(&mut create_scenarios(&params, &name_value_pairs[1..]));
             } else {
@@ -190,48 +142,7 @@ fn create_scenarios(
     }
 
     for s in scenarios.iter_mut() {
-        let ucbv_const = match s.selection_mode {
-            ChildSelectionMode::UCBV => format!(",ucbv_const={}", s.ucbv_const),
-            _ => "".to_string(),
-        };
-
-        let ucbd_const = match s.selection_mode {
-            ChildSelectionMode::UCBd => format!(",ucbd_const={}", s.ucbd_const),
-            _ => "".to_string(),
-        };
-
-        let klucb_max_cost = match s.selection_mode {
-            ChildSelectionMode::KLUCB | ChildSelectionMode::KLUCBP => {
-                format!(",klucb_max_cost={}", s.klucb_max_cost)
-            }
-            _ => "".to_string(),
-        };
-
-        s.scenario_name = Some(format_f!(
-            ",search_depth={s.search_depth}\
-             ,n_actions={s.n_actions}\
-             ,samples_n={s.samples_n}\
-             ,bound_mode={s.bound_mode}\
-             ,final_choice_mode={s.final_choice_mode}\
-             ,selection_mode={s.selection_mode}\
-             ,prioritize_worst_particles_z={s.prioritize_worst_particles_z}\
-             ,consider_repeats_after_portion={s.consider_repeats_after_portion}\
-             ,repeat_confidence_interval={s.repeat_confidence_interval}\
-             ,correct_future_std_dev_mean={s.correct_future_std_dev_mean}\
-             ,repeat_const={s.repeat_const}\
-             ,repeat_particle_sign={s.repeat_particle_sign}\
-             ,repeat_at_all_levels={s.repeat_at_all_levels}\
-             ,throwout_extreme_costs_z={s.throwout_extreme_costs_z}\
-             ,bootstrap_confidence_z={s.bootstrap_confidence_z}\
-             ,zero_mean_prior_std_dev={s.zero_mean_prior_std_dev}\
-             ,unknown_prior_std_dev={s.unknown_prior_std_dev}\
-             ,ucb_const={s.ucb_const}\
-             {ucbv_const}\
-             {ucbd_const}\
-             {klucb_max_cost}\
-             ,rng_seed={s.rng_seed}\
-             ,"
-        ));
+        s.scenario_specifiers = Some(make_select_specifiers(&s));
     }
 
     scenarios
@@ -282,7 +193,7 @@ pub fn run_parallel_scenarios() {
     // }
 
     let mut base_scenario = parameters_default;
-    base_scenario.scenario_name = Some("".to_owned());
+    base_scenario.scenario_specifiers = Some(Vec::new());
 
     let scenarios = create_scenarios(&base_scenario, &name_value_pairs);
     // for (i, scenario) in scenarios.iter().enumerate() {
@@ -304,35 +215,16 @@ pub fn run_parallel_scenarios() {
     }
 
     let n_scenarios_completed = AtomicUsize::new(0);
-    let cumulative_results = Mutex::new(BTreeMap::new());
 
     // only use the cache file to prevent recalculation when running a batch
-    let cache_filename = "results.cache";
-    if n_scenarios > 1 {
-        // read the existing cache file
-        {
-            let mut cumulative_results = cumulative_results.lock().unwrap();
-            if let Ok(file) = File::open(cache_filename) {
-                let file = BufReader::new(file);
-                for line in file.lines() {
-                    let line = line.unwrap();
-                    let parts = line.split_ascii_whitespace().collect_vec();
-                    let scenario_name = parts[0].to_owned();
-                    cumulative_results.insert(scenario_name, ());
-                }
-            }
-        }
-    }
+    let cache_filename = "results.db";
+    let conn = rusqlite::Connection::open(cache_filename).unwrap();
 
-    let file = Mutex::new(
-        OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(cache_filename)
-            .unwrap(),
-    );
+    // create if doesn't exist
+    let _ = conn.execute(&create_table_sql(), []);
+    let conn = Mutex::new(conn);
 
-    let many_scenarios = n_scenarios > 50000;
+    let many_scenarios = n_scenarios > 30000;
 
     if n_scenarios == 1 {
         let mut single_scenario = scenarios[0].clone();
@@ -341,16 +233,21 @@ pub fn run_parallel_scenarios() {
         println_f!("{res}");
     } else {
         scenarios.par_iter().for_each(|scenario| {
-            let result = std::panic::catch_unwind(|| {
-                let scenario_name = scenario.scenario_name.clone().unwrap();
-
-                if cumulative_results
-                    .lock()
-                    .unwrap()
-                    .contains_key(&scenario_name)
+            // let result = std::panic::catch_unwind(|| {
+            {
                 {
-                    n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
-                    return;
+                    let select_specifiers = scenario.scenario_specifiers.as_ref().unwrap();
+                    let conn_guard = conn.lock().unwrap();
+                    let mut select_where_statement = conn_guard
+                        .prepare(&select_where_sql())
+                        .expect("prepare select");
+                    let mut select_res = select_where_statement
+                        .query(specifier_params(select_specifiers).as_slice())
+                        .unwrap();
+                    if select_res.next().unwrap().is_some() {
+                        n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
+                        return;
+                    }
                 }
 
                 let res = run_with_parameters(scenario.clone());
@@ -372,30 +269,33 @@ pub fn run_parallel_scenarios() {
                         n_scenarios
                     );
                     if scenario.stats_analysis {
-                        println_f!("{res} {scenario.search_depth} {scenario.n_actions} {scenario.samples_n}");
+                        println_f!(
+                            "{res} {scenario.search_depth} {scenario.n_actions} {scenario.samples_n}"
+                        );
                     } else {
                         println_f!("{res}");
                     }
                 }
-                if scenario.stats_analysis {
-                    writeln_f!(
-                        file.lock().unwrap(),
-                        "{res} {scenario.search_depth} {scenario.n_actions} {scenario.samples_n}"
-                    )
-                    .unwrap();
-                } else {
-                    writeln_f!(file.lock().unwrap(), "{scenario_name} {res}").unwrap();
-                }
 
-                cumulative_results.lock().unwrap().insert(scenario_name, ());
-            });
-            if result.is_err() {
-                eprintln!(
-                    "PANIC for scenario: {:?}",
-                    scenario.scenario_name.as_ref().unwrap()
-                );
-                panic!();
+                // writeln_f!(file.lock().unwrap(), "{scenario_name} {res}").unwrap();
+                {
+                    let insert_specifiers = make_insert_specifiers(scenario, &res);
+                    let conn_guard = conn.lock().unwrap();
+                    let mut insert_statement =
+                        conn_guard.prepare(&insert_sql()).expect("prepare insert");
+                    insert_statement
+                        .insert(specifier_params(&insert_specifiers).as_slice())
+                        .expect("insert");
+                }
             }
+            // });
+            // if result.is_err() {
+            //     eprintln!(
+            //         "PANIC for scenario: {:?}",
+            //         scenario.scenario_specifiers.as_ref().unwrap()
+            //     );
+            //     panic!();
+            // }
         });
     }
 }

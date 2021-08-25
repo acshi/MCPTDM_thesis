@@ -1,4 +1,5 @@
 mod arg_parameters;
+mod parameters_sql;
 mod problem_scenario;
 
 use arg_parameters::{run_parallel_scenarios, Parameters};
@@ -16,11 +17,13 @@ use rand::{
 use rolling_stats::Stats;
 
 #[derive(Clone, Copy, Debug)]
-struct RunResults {
+pub struct RunResults {
     steps_taken: usize,
     chosen_cost: f64,
     chosen_true_cost: f64,
     true_best_cost: f64,
+    regret: f64,
+    cost_estimation_error: f64,
     sum_repeated: usize,
     max_repeated: usize,
     repeated_cost_avg: f64,
@@ -1118,11 +1121,15 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         print_variance_report(&node);
     }
 
+    let chosen_cost = node.expected_cost.unwrap_or(99999.0);
+
     RunResults {
         steps_taken,
-        chosen_cost: node.expected_cost.unwrap_or(99999.0),
+        chosen_cost,
         chosen_true_cost,
         true_best_cost,
+        regret: chosen_true_cost - true_best_cost,
+        cost_estimation_error: (chosen_cost - chosen_true_cost).abs(),
         sum_repeated,
         max_repeated,
         repeated_cost_avg,

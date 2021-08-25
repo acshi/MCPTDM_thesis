@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import pdb
 import time
+import sys
 from common_plot import FigureBuilder, parse_parameters, FigureKind, FigureMode, print_all_parameter_values_used, evaluate_conditions
 
 show_only = False
@@ -30,30 +31,39 @@ t10s["random"] = "Random"
 t10s["uniform"] = "Uniform"
 t10s["1000"] = "No particle repeating"
 t10s["-1000"] = "W/ particle repeating"
+t10s["zero_mean_prior_std_dev"] = "Optimistic zero-mean prior std dev"
+t10s["bootstrap_confidence_z"] = "Top-level bootstrapping z-score"
 
-start_time = time.time()
-results = []
-with open("results.cache", "r") as f:
-    line_num = 0
-    for line in f:
-        parts = line.split()
-        if len(parts) > 3:
-            entry = dict()
-            entry["params"] = parse_parameters(parts[0])
-            entry["chosen_cost"] = float(parts[1])
-            entry["chosen_true_cost"] = float(parts[2])
-            entry["true_best_cost"] = float(parts[3])
+figure_cmd_line_options = []
+def should_make_figure(fig_name):
+    figure_cmd_line_options.append(fig_name)
+    fig_name in sys.argv
 
-            entry["regret"] = entry["chosen_true_cost"] - entry["true_best_cost"]
-            entry["estimation_error"] = abs(entry["chosen_true_cost"] - entry["chosen_cost"])
+if len(sys.argv) > 1:
+    start_time = time.time()
+    results = []
+    with open("results.cache", "r") as f:
+        line_num = 0
+        for line in f:
+            parts = line.split()
+            if len(parts) > 3:
+                entry = dict()
+                entry["params"] = parse_parameters(parts[0])
+                entry["steps_taken"] = float(parts[1])
+                entry["chosen_cost"] = float(parts[2])
+                entry["chosen_true_cost"] = float(parts[3])
+                entry["true_best_cost"] = float(parts[4])
 
-            results.append(entry)
-        else:
-            continue
-        line_num += 1
-        # if line_num > 5000:
-        #     break
-print(f"took {time.time() - start_time:.2f} seconds to load data")
+                entry["regret"] = entry["chosen_true_cost"] - entry["true_best_cost"]
+                entry["estimation_error"] = abs(entry["chosen_true_cost"] - entry["chosen_cost"])
+
+                results.append(entry)
+            else:
+                continue
+            line_num += 1
+            # if line_num > 5000:
+            #     break
+    print(f"took {time.time() - start_time:.2f} seconds to load data")
 
 all_metrics = ["regret"]  # , "estimation_error"]
 
@@ -61,8 +71,7 @@ all_metrics = ["regret"]  # , "estimation_error"]
 #                                                               "_smoothness_0_", "_safety_100_", "_ud_5_"])], key=lambda entry: entry["safety"]))
 
 # Fig. 1.
-# cargo run --release rng_seed 0-32767 :: samples_n 256 :: portion_bernoulli 0.5 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode same :: ucb_const -680 -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
-# cargo run --release rng_seed 0-4095 :: samples_n 256 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode same :: ucb_const -680 -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
+# cargo run --release rng_seed 0-8191 :: samples_n 128 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode same :: ucb_const -680 -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
 # results.cache_ucb_const_bound_mode
 bound_mode = FigureMode("bound_mode", ["normal", "bubble_best", "lower_bound", "marginal"])
 ucb_const_vals = [-680, -1000, -1500, -2200, -3300, -4700, -
@@ -72,10 +81,10 @@ ucb_const_ticknames = [name.replace(".0", "") if name.endswith(
     ".0") else name for name in ucb_const_ticknames]
 ucb_const_kind = FigureKind(
     "ucb_const", ucb_const_ticknames, ucb_const_vals, translations=t10s)
-if False:
+if should_make_figure("1"):
     for metric in all_metrics:
         ucb_const_kind.plot(results, metric, filters=[
-                            ("samples_n", 256),
+                            ("samples_n", 128),
                             ("selection_mode", "ucb")], mode=bound_mode, title="Regret by UCB constant factor and expected-cost rule", xlabel="UCB constant factor * 10^-2")
 
 # print_all_parameter_values_used(results, [])
@@ -85,17 +94,15 @@ if False:
 # quit()
 
 # Fig. 2.
-# cargo run --release rng_seed 0-32767 :: samples_n 256 :: portion_bernoulli 0.5 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: ucb_const -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 7
-# cargo run --release rng_seed 0-32767 :: samples_n 256 :: portion_bernoulli 0.5 :: selection_mode uniform :: final_choice_mode marginal :: thread_limit 7
-# cargo run --release rng_seed 0-4095 :: samples_n 256 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: ucb_const -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 7
-# cargo run --release rng_seed 0-4095 :: samples_n 256 :: selection_mode uniform :: final_choice_mode marginal :: thread_limit 7
+# cargo run --release rng_seed 0-8191 :: samples_n 128 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: ucb_const -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
+# cargo run --release rng_seed 0-8191 :: samples_n 128 :: selection_mode uniform :: final_choice_mode marginal :: thread_limit 24
 # results.cache_bound_mode_final_choice_marginal
-if False:
+if should_make_figure("2"):
     for metric in all_metrics:
         fig = FigureBuilder(results, None, metric, translations=t10s)
 
         common_filters = [("final_choice_mode", "marginal"),
-                          ("samples_n", 256), ("max.rng_seed", 32767)]
+                          ("samples_n", 128)]
         uniform_filters = common_filters + [("selection_mode", "uniform")]
         fig.plot(FigureMode("ucb_const", ucb_const_vals[1:]),
                  common_filters + [("selection_mode", "ucb")], bound_mode)
@@ -107,7 +114,7 @@ if False:
         fig.legend()
 
         fig.show(xlabel="UCB constant factor * 10^-2",
-                 file_suffix="_samples_n_256_final_choice_mode_marginal")
+                 file_suffix="_samples_n_128_final_choice_mode_marginal")
 
 # print_all_parameter_values_used(
 #     results, [("final_choice_mode", "marginal"),
@@ -115,12 +122,10 @@ if False:
 # quit()
 
 # Fig. 3.
-# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: portion_bernoulli 0.5 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: normal.ucb_const -10000 :: bubble_best.ucb_const -6800 :: lower_bound.ucb_const -15000 :: marginal.ucb_const -6800 :: thread_limit 24
-# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: portion_bernoulli 0.5 :: selection_mode uniform :: thread_limit 24
 # cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: normal.ucb_const -4700 :: bubble_best.ucb_const -3300 :: lower_bound.ucb_const -3300 :: marginal.ucb_const -3300 :: thread_limit 24
 # cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode uniform :: thread_limit 24
 # results.cache_bound_mode_samples_n
-if False:
+if should_make_figure("3"):
     for metric in all_metrics:
         common_filters = []
         filters = [("selection_mode", "ucb"),
@@ -149,7 +154,7 @@ if False:
 # cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: portion_bernoulli 0.5 :: bound_mode marginal :: selection_mode ucb ucbv ucbd klucb klucb+ uniform :: ucb_const -6800 :: ucbv.ucb_const -4700 :: ucbv.ucbv_const 0 :: ucbd.ucb_const -22000 :: ucbd.ucbd_const 1 :: klucb.ucb_const -1.5 :: klucb.klucb_max_cost 10000 :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: thread_limit 24
 # cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: bound_mode marginal :: selection_mode ucb ucbv ucbd klucb klucb+ uniform :: ucb_const -6800 :: ucbv.ucb_const -4700 :: ucbv.ucbv_const 0 :: ucbd.ucb_const -22000 :: ucbd.ucbd_const 1 :: klucb.ucb_const -1.5 :: klucb.klucb_max_cost 10000 :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: thread_limit 24
 # results.cache_selection_mode
-if False:
+if should_make_figure("4"):
     for metric in all_metrics:
         selection_mode = FigureMode(
             "selection_mode", ["ucb", "ucbv", "ucbd", "klucb", "klucb+", "uniform"])
@@ -168,6 +173,108 @@ if False:
         fig.legend("lower left")
         fig.ticks(["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"])
         fig.show(xlabel="log2(# of samples)")
+
+# cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: consider_repeats_after_portion 0.2 :: repeat_confidence_interval 0 0.5 3 1000 :: repeat_const 1000000 :: thread_limit 24
+if False:
+    for metric in all_metrics:
+        for correct_future_std_dev_mean in ["false"]:
+            repeat_confidence_interval_mode = FigureMode(
+                "repeat_confidence_interval", [0, 0.5, 3, 1000])
+            fig = FigureBuilder(results, None, metric, translations=t10s)
+            samples_n_mode = FigureMode(
+                "samples_n", [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096])
+            filters = [("max.rng_seed", 4095), ("consider_repeats_after_portion", 0.2),
+                       ("correct_future_std_dev_mean", correct_future_std_dev_mean)]
+
+            fig.plot(samples_n_mode, filters, repeat_confidence_interval_mode)
+
+            fig.legend("lower left")
+            fig.ticks(["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"])
+            fig.show(xlabel="log2(# of samples)",
+                     file_suffix=f"_correct_future_std_dev_mean_{correct_future_std_dev_mean}")
+
+# print_all_parameter_values_used(
+#     results, [("repeat_const", 1000000), ("consider_repeats_after_portion", 0.5), ("samples_n", 128), ("max.rng_seed", 8191)])
+# quit()
+
+# cargo run --release rng_seed 0-16383 :: samples_n 128 :: consider_repeats_after_portion 0 0.05 0.1 0.2 0.3 0.4 0.5 0.7 0.9 :: repeat_confidence_interval 0 0.5 1 2 3 1000 :: repeat_const 1000000 :: thread_limit 24
+# cargo run --release rng_seed 0-32767 :: samples_n 128 :: consider_repeats_after_portion 0 0.05 0.1 0.2 0.3 0.4 0.5 0.7 0.9 :: repeat_confidence_interval 1 2 3 :: repeat_const 1000000 :: thread_limit 24
+if False:
+    for metric in all_metrics:
+        for samples_n in [128]:
+            consider_repeats_after_portion_mode = FigureMode(
+                "consider_repeats_after_portion", [0, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9])
+            repeat_confidence_interval_mode = FigureMode(
+                "repeat_confidence_interval", [0, 0.5, 1, 2, 3, 1000])
+            fig = FigureBuilder(results, "consider_repeats_after_portion",
+                                metric, translations=t10s)
+            filters = [("samples_n", samples_n), ("repeat_const", 1000000)]
+
+            fig.plot(consider_repeats_after_portion_mode, filters, repeat_confidence_interval_mode)
+            fig.legend()
+            fig.show(file_suffix=f"_samples_n_{samples_n}")
+
+# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: consider_repeats_after_portion 0 0.05 0.1 0.2 0.3 :: repeat_confidence_interval 1 :: repeat_const 1000000 :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: consider_repeats_after_portion 0 0.05 0.1 0.2 0.3 :: repeat_confidence_interval 1 :: repeat_const 1000000 :: repeat_at_all_levels false true :: thread_limit 24
+if False:
+    for metric in all_metrics:
+        for correct_future_std_dev_mean in ["false"]:
+            consider_repeats_after_portion_mode = FigureMode(
+                "consider_repeats_after_portion", [0, 0.05, 0.1, 0.2, 0.3])
+            fig = FigureBuilder(results, "steps_taken", metric, translations=t10s)
+            for repeat_at_all_levels in ["false", "true"]:
+                samples_n_mode = FigureMode(
+                    "samples_n", [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096])
+                filters = [("repeat_confidence_interval", 1), ("correct_future_std_dev_mean", correct_future_std_dev_mean), ("repeat_at_all_levels", repeat_at_all_levels)]
+
+                fig.plot(samples_n_mode, filters, consider_repeats_after_portion_mode, label="Repeats " if repeat_at_all_levels == "true" else "")
+
+            fig.xscale("log")
+            fig.legend("lower left")
+            # fig.ticks(["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"])
+            #fig.show(xlabel="log2(# of samples)", file_suffix=f"_correct_future_std_dev_mean_{correct_future_std_dev_mean}")
+            fig.show(file_suffix=f"_correct_future_std_dev_mean_{correct_future_std_dev_mean}")
+
+# cargo run --release rng_seed 0-2047 :: samples_n 8 16 32 64 128 256 512 :: bound_mode marginal_prior :: unknown_prior_std_dev 1000 :: zero_mean_prior_std_dev 220 330 470 680 1000 1500 2200 3300 4700 6800 10000 1000000000 :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 8 32 128 512 2048 :: bound_mode marginal_prior :: unknown_prior_std_dev 1000 :: zero_mean_prior_std_dev 220 330 470 680 1000 1500 2200 3300 4700 6800 10000 1000000000 :: thread_limit 24
+if False:
+    for metric in all_metrics:
+        zero_mean_prior_std_dev_vals = [220, 330, 470, 680, 1000, 1500, 2200, 3300, 4700, 6800, 10000, 1000000000]
+        zero_mean_prior_std_dev_mode = FigureMode(
+            "zero_mean_prior_std_dev", zero_mean_prior_std_dev_vals)
+        samples_n_mode = FigureMode(
+            "samples_n", [8, 32, 128, 512, 2048])
+        fig = FigureBuilder(results, None,
+                            metric, translations=t10s)
+        filters = []
+
+        fig.plot(zero_mean_prior_std_dev_mode, filters, samples_n_mode, normalize="last")
+        fig.axhline(1, color="black")
+        fig.ticks(zero_mean_prior_std_dev_vals)
+        fig.ylim([0.5, 1.3])
+        fig.legend()
+        fig.show("Relative regret by optimistic zero-mean prior std dev and # samples", ylabel="Relative regret")
+
+# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 :: bound_mode marginal_prior :: unknown_prior_std_dev 1000 :: zero_mean_prior_std_dev 330 1000 :: bootstrap_confidence_z 0 0.25 0.5 1 1.5 2 :: thread_limit 24
+if should_make_figure("bootstrap"):
+    for metric in all_metrics:
+        for zero_mean_prior_std_dev in [330, 1000]:
+            bootstrap_confidence_z_vals = [0, 0.25, 0.5, 1, 1.5, 2]
+            bootstrap_confidence_z_mode = FigureMode(
+                "bootstrap_confidence_z", bootstrap_confidence_z_vals)
+            samples_n_mode = FigureMode(
+                "samples_n", [8, 16, 32, 64, 128, 256, 512])
+            fig = FigureBuilder(results, "bootstrap_confidence_z",
+                                metric, translations=t10s)
+            filters = [("zero_mean_prior_std_dev", zero_mean_prior_std_dev)]
+
+            fig.plot(bootstrap_confidence_z_mode, filters, samples_n_mode, normalize="first")
+            fig.axhline(1, color="black")
+            # fig.ticks(bootstrap_confidence_z_vals)
+            fig.ylim([0.6, 1.3])
+            fig.legend()
+            fig.show("Relative regret by top-level bootstrapping z-score and # samples", ylabel="Relative regret", file_suffix=f"_zero_mean_prior_std_dev_{zero_mean_prior_std_dev}")
+
 
 ucb_const_kind = FigureKind(
     "ucb_const", [-10, -15, -22, -33, -47, -68, -100, -150, -220, -330, -470, -680, -1000, -1500, -2200, -3300, -4700, -6800, -10000, -15000, -22000, -33000, -47000, -68000, -100000], translations=t10s)
@@ -269,7 +376,7 @@ if False:
             results, metric, filters=filters, mode=samples_n_mode)
 
 # cargo run --release rng_seed 0-8191 :: repeat_particle_sign -1 0 1 :: n_actions 5 6 7 8 9 10 :: samples_n 512 :: repeat_const 0 64 128 256 512 1024 2048 :: thread_limit 24
-if True:
+if False:
     repeat_const_kind = FigureKind(
         "repeat_const", [0, 64, 128, 256, 512, 1024, 2048], translations=t10s, ylim=[10, 35])
     n_actions_mode = FigureMode(
@@ -295,22 +402,20 @@ if False:
         throwout_extreme_costs_z_kind.plot(
             results, metric, filters=filters, mode=samples_n_mode)
 
-# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
-# cargo run --release rng_seed 0-4095 :: samples_n 64 128 256 512 1024 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
-# cargo run --release rng_seed 0-1023 :: samples_n 2048 4096 8192 16384 32768 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: bound_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 64 128 256 512 1024 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: bound_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-1023 :: samples_n 2048 4096 8192 16384 32768 :: prioritize_worst_particles_z -1000 1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: bound_mode marginal :: thread_limit 24
 if False:
     samples_n_kind = FigureKind(
-        "samples_n", ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"], [
-            8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768],
+        "samples_n", ["3", "4", "5", "6", "7", "8", "9", "10", "11", "12"], [
+            8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096],
         translations=t10s)
     repeat_particles_mode = FigureMode(
-        "prioritize_worst_particles_z", [-1000, 1000])
+        "prioritize_worst_particles_z", [1000, -1000])
     for metric in all_metrics:
-        for portion_bernoulli in [0.5]:
-            filters = [("selection_mode", "klucb+"),
-                       ("portion_bernoulli", portion_bernoulli)]
-            samples_n_kind.plot(results, metric, filters=filters,
-                                mode=repeat_particles_mode, xlabel="log2(# of samples)")
+        filters = [("selection_mode", "klucb+")]
+        samples_n_kind.plot(results, metric, filters=filters,
+                            mode=repeat_particles_mode, xlabel="log2(# of samples)")
 
 # cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 :: repeat_at_all_levels false true :: prioritize_worst_particles_z -1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
 # cargo run --release rng_seed 0-4095 :: samples_n 64 128 256 512 1024 :: repeat_at_all_levels false true :: prioritize_worst_particles_z -1000 :: selection_mode klucb+ :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: portion_bernoulli 0.5 :: bound_mode marginal :: thread_limit 24
@@ -334,3 +439,8 @@ if False:
                        ("portion_bernoulli", portion_bernoulli)]
             samples_n_kind.plot(results, metric, filters=filters,
                                 mode=repeat_at_all_levels_mode, xlabel="log2(# of samples)")
+
+if len(sys.argv) == 1 or "help" in sys.argv:
+    print("Valid figure options:")
+    for option in figure_cmd_line_options:
+        print(option)

@@ -298,7 +298,7 @@ class FigureBuilder:
                     y_val_sets[i].append((entry[self.y_param]))
         return (x_val_sets, y_val_sets)
 
-    def plot(self, x_mode, filters=[], legend_mode=None, label=None):
+    def plot(self, x_mode, filters=[], legend_mode=None, label=None, normalize=None):
         if self.defacto_x_param is None:
             self.defacto_x_param = x_mode.param
 
@@ -333,14 +333,14 @@ class FigureBuilder:
                     print(
                         f"{label_str}{len(vals)} != {n_vals_in_set} for {x_mode.param} = {x_mode.values[i]} {legend_str}")
 
-            means = [np.mean(vals) for vals in y_val_sets]
-            stdev_mean = [np.std(vals) / np.sqrt(len(vals))
-                          for vals in y_val_sets]
+            means = np.array([np.mean(vals) for vals in y_val_sets])
+            stdev_mean = np.array([np.std(vals) / np.sqrt(len(vals))
+                          for vals in y_val_sets])
 
             if self.x_param is None:
-                x_means = [i for i in range(len(x_val_sets))]
+                x_means = np.array([i for i in range(len(x_val_sets))])
             else:
-                x_means = [np.mean(vals) for vals in x_val_sets]
+                x_means = np.array([np.mean(vals) for vals in x_val_sets])
             self.x_locs = x_means
 
             full_label = label
@@ -350,11 +350,20 @@ class FigureBuilder:
                 else:
                     full_label = f"{self.translate(legend_mode_val)}"
 
+            if normalize == "last":
+                factor = means[-1]
+                means /= factor
+                stdev_mean /= factor
+            elif normalize == "first":
+                factor = means[0]
+                means /= factor
+                stdev_mean /= factor
+
             self.ax.errorbar(x_means, means,
-                             yerr=np.array(stdev_mean), label=full_label)
+                             yerr=stdev_mean, label=full_label)
 
             if self.axins:
-                self.axins.errorbar(x_means, means, yerr=np.array(stdev_mean))
+                self.axins.errorbar(x_means, means, yerr=stdev_mean)
 
             x_mean_min = np.min(x_means)
             if self.min_x is None:
@@ -368,7 +377,7 @@ class FigureBuilder:
             else:
                 self.max_x = max(self.max_x, x_mean_max)
 
-    def line(self, filters, label):
+    def line_from(self, filters, label):
         vals = [entry[self.y_param] for entry in filter_extra(self.results, filters)]
         mean = np.mean(vals)
         stdev_mean = np.std(vals) / np.sqrt(len(vals))
@@ -377,6 +386,9 @@ class FigureBuilder:
         if self.axins:
             self.axins.errorbar([self.min_x, self.max_x], [mean, mean],
                                 yerr=[stdev_mean, stdev_mean])
+
+    def axhline(self, y, **kwargs):
+        self.ax.axhline(y, **kwargs)
 
     def _set_show_save(self, title, xlabel, ylabel, file_suffix):
         self.ax.set_title(title)
@@ -429,6 +441,9 @@ class FigureBuilder:
         self.ax.set_yscale(yscale)
 
     def ticks(self, labels, locs=None):
+        if any(isinstance(val, numbers.Number) and abs(val) >= 1e5 for val in labels):
+            labels = [short_num_string(val) for val in labels]
+
         if locs is None:
             locs = self.x_locs
 
