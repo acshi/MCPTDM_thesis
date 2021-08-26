@@ -9,8 +9,8 @@ use std::{
 };
 
 use crate::parameters_sql::{
-    create_table_sql, insert_sql, make_insert_specifiers, make_select_specifiers, parse_parameters,
-    specifier_params, specifiers_hash,
+    create_table_sql, insert_sql, make_insert_specifiers, parse_parameters, specifier_params,
+    specifiers_hash,
 };
 #[allow(unused)]
 use fstrings::{format_args_f, format_f, println_f};
@@ -46,8 +46,7 @@ pub struct Parameters {
     pub unknown_prior_std_dev: f64,
 
     pub thread_limit: usize,
-    pub scenario_specifiers: Option<Vec<(&'static str, String)>>,
-    pub specifiers_hash: i64,
+    pub specifiers_hash: Option<i64>,
 
     pub print_report: bool,
     pub stats_analysis: bool,
@@ -81,8 +80,7 @@ impl Parameters {
             unknown_prior_std_dev: 1000.0,
 
             thread_limit: 1,
-            scenario_specifiers: None,
-            specifiers_hash: 0,
+            specifiers_hash: None,
 
             print_report: false,
             stats_analysis: false,
@@ -148,11 +146,6 @@ fn create_scenarios(
         }
     }
 
-    for s in scenarios.iter_mut() {
-        s.scenario_specifiers = Some(make_select_specifiers(s));
-        s.specifiers_hash = specifiers_hash(s);
-    }
-
     scenarios
 }
 
@@ -200,9 +193,7 @@ pub fn run_parallel_scenarios() {
     //     eprintln!("{}: {:?}", name, vals);
     // }
 
-    let mut base_scenario = parameters_default;
-    base_scenario.scenario_specifiers = Some(Vec::new());
-
+    let base_scenario = parameters_default;
     let scenarios = create_scenarios(&base_scenario, &name_value_pairs);
     // for (i, scenario) in scenarios.iter().enumerate() {
     //     eprintln!("{}: {:?}", i, scenario.file_name);
@@ -225,7 +216,7 @@ pub fn run_parallel_scenarios() {
     let n_scenarios_completed = AtomicUsize::new(0);
 
     let cache_filename = "results.db";
-    let conn = rusqlite::Connection::open(cache_filename).unwrap();
+    let mut conn = rusqlite::Connection::open(cache_filename).unwrap();
     // create if doesn't exist (lazy way, ignoring an error)
     let _ = conn.execute(&create_table_sql(), []);
 
@@ -250,27 +241,41 @@ pub fn run_parallel_scenarios() {
         let is_done = Arc::new(AtomicBool::new(false));
 
         let is_done_job = is_done.clone();
-        let recv_thread = std::thread::spawn(move || {
-            let mut insert_statement = conn.prepare(&insert_sql()).expect("prepare insert");
+        let recv_thread = std::thread::spawn(move || loop {
+            let transaction = conn.transaction().expect("transaction");
+            let mut insert_statement = transaction.prepare(&insert_sql()).expect("prepare insert");
 
-            while !is_done_job.load(Ordering::Relaxed) {
-                match rx.recv_timeout(Duration::from_millis(1000)) {
+            let mut received_any = false;
+
+            loop {
+                match rx.recv_timeout(Duration::from_millis(1)) {
                     Ok((scenario, res)) => {
+                        received_any = true;
                         let insert_specifiers = make_insert_specifiers(&scenario, &res);
                         insert_statement
                             .insert(specifier_params(&insert_specifiers).as_slice())
                             .expect("insert");
                     }
-                    Err(RecvTimeoutError::Timeout) => continue,
-                    Err(RecvTimeoutError::Disconnected) => break,
+                    Err(RecvTimeoutError::Timeout) => break,
+                    Err(RecvTimeoutError::Disconnected) => return,
                 }
+            }
+
+            drop(insert_statement);
+            transaction.commit().expect("commit");
+
+            if !received_any && is_done_job.load(Ordering::Relaxed) {
+                break;
             }
         });
 
         scenarios.par_iter().for_each(|scenario| {
             // let result = std::panic::catch_unwind(|| {
             {
-                if completed_result_set.lock().unwrap().contains(&scenario.specifiers_hash) {
+                let mut scenario = scenario.clone();
+                scenario.specifiers_hash = Some(specifiers_hash(&scenario));
+
+                if completed_result_set.lock().unwrap().contains(&scenario.specifiers_hash.unwrap()) {
                     n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
                     return;
                 }
@@ -312,7 +317,7 @@ pub fn run_parallel_scenarios() {
                 //         .insert(specifier_params(&insert_specifiers).as_slice())
                 //         .expect("insert");
                 // }
-                tx.send((scenario.clone(), res)).expect("tx send");
+                tx.send((scenario, res)).expect("tx send");
             }
             // });
             // if result.is_err() {

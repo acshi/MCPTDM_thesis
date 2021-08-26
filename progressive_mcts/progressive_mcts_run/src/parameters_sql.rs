@@ -200,7 +200,10 @@ pub fn make_insert_specifiers(
 ) -> Vec<(&'static str, String)> {
     let mut spec = make_select_specifiers(params);
     add_result_values(results, &mut spec);
-    spec.push((":specifiers_hash", params.specifiers_hash.to_string()));
+    spec.push((
+        ":specifiers_hash",
+        params.specifiers_hash.unwrap().to_string(),
+    ));
     spec
 }
 
