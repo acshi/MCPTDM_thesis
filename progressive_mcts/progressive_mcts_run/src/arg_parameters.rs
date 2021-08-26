@@ -34,6 +34,7 @@ pub struct Parameters {
     pub final_choice_mode: CostBoundMode,
     pub selection_mode: ChildSelectionMode,
     pub prioritize_worst_particles_z: f64,
+    pub worst_particles_z_abs: bool,
     pub consider_repeats_after_portion: f64,
     pub repeat_confidence_interval: f64,
     pub correct_future_std_dev_mean: bool,
@@ -69,6 +70,7 @@ impl Parameters {
             final_choice_mode: CostBoundMode::Same,
             selection_mode: ChildSelectionMode::KLUCB,
             prioritize_worst_particles_z: 1000.0,
+            worst_particles_z_abs: false,
             consider_repeats_after_portion: 0.0,
             repeat_confidence_interval: 1000.0,
             correct_future_std_dev_mean: false,
@@ -79,7 +81,7 @@ impl Parameters {
             bootstrap_confidence_z: 0.0,
             zero_mean_prior_std_dev: 2200.0,
             unknown_prior_std_dev: 1000.0,
-            unknown_prior_std_dev_scalar: 2.0,
+            unknown_prior_std_dev_scalar: 2.0, // overrides unknown_prior_std_dev if not zero
 
             thread_limit: 1,
             specifiers_hash: None,

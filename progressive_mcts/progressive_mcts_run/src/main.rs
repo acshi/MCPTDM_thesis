@@ -589,13 +589,13 @@ fn should_replay_particle_at<'a>(
 
     let sub_node = &node.sub_nodes.as_ref().unwrap()[sub_node_i];
 
-    let mut z = node.params.prioritize_worst_particles_z;
-    if z >= 1000.0 && node.params.repeat_const >= 0.0 {
-        // using repeat const and NOT z, so to disable z, we set to -1000
-        z = -1000.0;
+    let mut z = Some(node.params.prioritize_worst_particles_z);
+    if z.unwrap() >= 1000.0 && node.params.repeat_const >= 0.0 {
+        // using repeat const and NOT z, so we disable z
+        z = None;
     }
 
-    if z >= 1000.0 {
+    if z.map_or(false, |z| z >= 1000.0) {
         // take this high z value to mean don't prioritize like this!
         return None;
     }
@@ -619,7 +619,16 @@ fn should_replay_particle_at<'a>(
     if let Some((c, sim)) = node
         .costs
         .iter()
-        .filter(|(c, sim)| !sub_node.seen_particles[sim.particle.id] && *c - mean >= std_dev * z)
+        .filter(|(c, sim)| {
+            !sub_node.seen_particles[sim.particle.id]
+                && z.map_or(true, |z| {
+                    if node.params.worst_particles_z_abs {
+                        (*c - mean).abs() >= std_dev * z
+                    } else {
+                        *c - mean >= std_dev * z
+                    }
+                })
+        })
         .max_by(|a, b| match node.params.repeat_particle_sign {
             -1 => b.0.partial_cmp(&a.0).unwrap(),
             1 => a.0.partial_cmp(&b.0).unwrap(),
