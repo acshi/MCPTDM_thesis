@@ -89,7 +89,8 @@ define_params!(
     throwout_extreme_costs_z,
     bootstrap_confidence_z,
     zero_mean_prior_std_dev,
-    unknown_prior_std_dev
+    unknown_prior_std_dev,
+    unknown_prior_std_dev_scalar
 );
 
 macro_rules! define_result_values {

@@ -2,7 +2,11 @@
 import pdb
 import time
 import sys
-from common_plot import FigureBuilder, parse_parameters, FigureKind, FigureMode, print_all_parameter_values_used, evaluate_conditions
+import sqlite3
+from common_plot import SqliteFigureBuilder, FigureBuilder, parse_parameters, FigureKind, FigureMode, print_all_parameter_values_used, evaluate_conditions
+
+conn = sqlite3.connect("results.db")
+db_cursor = conn.cursor()
 
 show_only = False
 make_pdf_also = False
@@ -37,55 +41,88 @@ t10s["bootstrap_confidence_z"] = "Top-level bootstrapping z-score"
 figure_cmd_line_options = []
 def should_make_figure(fig_name):
     figure_cmd_line_options.append(fig_name)
-    fig_name in sys.argv
+    return fig_name in sys.argv
 
-if len(sys.argv) > 1:
-    start_time = time.time()
-    results = []
-    with open("results.cache", "r") as f:
-        line_num = 0
-        for line in f:
-            parts = line.split()
-            if len(parts) > 3:
-                entry = dict()
-                entry["params"] = parse_parameters(parts[0])
-                entry["steps_taken"] = float(parts[1])
-                entry["chosen_cost"] = float(parts[2])
-                entry["chosen_true_cost"] = float(parts[3])
-                entry["true_best_cost"] = float(parts[4])
+# if len(sys.argv) > 1:
+#     start_time = time.time()
+#     results = []
+#     with open("results.cache", "r") as f:
+#         line_num = 0
+#         for line in f:
+#             parts = line.split()
+#             if len(parts) > 3:
+#                 entry = dict()
+#                 entry["params"] = parse_parameters(parts[0])
+#                 entry["steps_taken"] = float(parts[1])
+#                 entry["chosen_cost"] = float(parts[2])
+#                 entry["chosen_true_cost"] = float(parts[3])
+#                 entry["true_best_cost"] = float(parts[4])
 
-                entry["regret"] = entry["chosen_true_cost"] - entry["true_best_cost"]
-                entry["estimation_error"] = abs(entry["chosen_true_cost"] - entry["chosen_cost"])
+#                 entry["regret"] = entry["chosen_true_cost"] - entry["true_best_cost"]
+#                 entry["estimation_error"] = abs(entry["chosen_true_cost"] - entry["chosen_cost"])
 
-                results.append(entry)
-            else:
-                continue
-            line_num += 1
-            # if line_num > 5000:
-            #     break
-    print(f"took {time.time() - start_time:.2f} seconds to load data")
+#                 results.append(entry)
+#             else:
+#                 continue
+#             line_num += 1
+#             # if line_num > 5000:
+#             #     break
+#     print(f"took {time.time() - start_time:.2f} seconds to load data")
 
 all_metrics = ["regret"]  # , "estimation_error"]
 
 # print(max([r for r in results if all(f in r["name"] for f in ["_method_mcts_", "_use_cfb_true_",
 #                                                               "_smoothness_0_", "_safety_100_", "_ud_5_"])], key=lambda entry: entry["safety"]))
 
-# Fig. 1.
-# cargo run --release rng_seed 0-8191 :: samples_n 128 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode same :: ucb_const -680 -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
-# results.cache_ucb_const_bound_mode
 bound_mode = FigureMode("bound_mode", ["normal", "bubble_best", "lower_bound", "marginal"])
-ucb_const_vals = [-680, -1000, -1500, -2200, -3300, -4700, -
-                  6800, -10000, -15000, -22000, -33000, -47000, -68000]
-ucb_const_ticknames = [str(val / 100) for val in ucb_const_vals]
-ucb_const_ticknames = [name.replace(".0", "") if name.endswith(
-    ".0") else name for name in ucb_const_ticknames]
-ucb_const_kind = FigureKind(
-    "ucb_const", ucb_const_ticknames, ucb_const_vals, translations=t10s)
+ucb_const_vals = [-680, -1000, -1500, -2200, -3300, -4700,
+                  -6800, -10000, -15000, -22000, -33000, -47000, -68000, -100000]
+ucb_const_ticknames = [val / 100 for val in ucb_const_vals]
+
+# Fig. 1a.
+# cargo run --release rng_seed 0-255 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode ucb :: bound_mode marginal_prior :: final_choice_mode same :: unknown_prior_std_dev 470 680 1000 1500 2200 3300 4700 :: zero_mean_prior_std_dev 220 330 470 680 1000 1500 2200 3300 4700 6800 10000 1000000000 :: ucb_const -4700 :: thread_limit 24
+if should_make_figure("1a"):
+    for metric in all_metrics:
+        zero_mean_prior_std_dev_vals = [220, 330, 470, 680, 1000, 1500, 2200, 3300, 4700, 6800, 10000, 1000000000]
+        zero_mean_prior_std_dev_mode = FigureMode(
+            "zero_mean_prior_std_dev", zero_mean_prior_std_dev_vals)
+        unknown_prior_std_dev_mode = FigureMode(
+            "unknown_prior_std_dev", [470, 680, 1000, 1500, 2200, 3300, 4700])
+
+        fig = SqliteFigureBuilder(db_cursor, None, metric, translations=t10s)
+
+        fig.plot(zero_mean_prior_std_dev_mode, [
+                ("max.rng_seed", 255),
+                ("bound_mode", "marginal_prior"),
+                ("final_choice_mode", "same"),
+                ("ucb_const", -4700),
+                ("selection_mode", "ucb"),
+        ], unknown_prior_std_dev_mode)
+        # fig.axhline(1, color="black")
+        fig.ticks(zero_mean_prior_std_dev_vals)
+        # fig.ylim([0.5, 1.3])
+        fig.legend()
+        fig.show()
+
+# Fig. 1.
+# cargo run --release rng_seed 0-4095 :: samples_n 512 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode same :: ucb_const -680 -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
+# cargo run --release rng_seed 0-511 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode same :: ucb_const -680 -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 -100000 :: thread_limit 24
 if should_make_figure("1"):
     for metric in all_metrics:
-        ucb_const_kind.plot(results, metric, filters=[
-                            ("samples_n", 128),
-                            ("selection_mode", "ucb")], mode=bound_mode, title="Regret by UCB constant factor and expected-cost rule", xlabel="UCB constant factor * 10^-2")
+        fig = SqliteFigureBuilder(db_cursor,
+            None, metric, translations=t10s)
+        # samples_n = 512
+        fig.plot(FigureMode("ucb_const", ucb_const_vals), [
+                ("max.rng_seed", 511),
+                # ("samples_n", samples_n),
+                ("selection_mode", "ucb"),
+                ("final_choice_mode", "same")], bound_mode)
+        fig.ticks(ucb_const_ticknames)
+        fig.legend()
+        fig.show(title="Regret by UCB constant factor and expected-cost rule",
+                 xlabel="UCB constant factor * 10^-2",
+                #  file_suffix=f"_samples_n_{samples_n}_final_choice_mode_same")
+                file_suffix=f"_final_choice_mode_same")
 
 # print_all_parameter_values_used(results, [])
 # print_all_parameter_values_used(
@@ -94,27 +131,28 @@ if should_make_figure("1"):
 # quit()
 
 # Fig. 2.
-# cargo run --release rng_seed 0-8191 :: samples_n 128 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: ucb_const -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
-# cargo run --release rng_seed 0-8191 :: samples_n 128 :: selection_mode uniform :: final_choice_mode marginal :: thread_limit 24
-# results.cache_bound_mode_final_choice_marginal
+# cargo run --release rng_seed 0-4095 :: samples_n 512 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: ucb_const -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 512 :: selection_mode uniform :: final_choice_mode marginal :: thread_limit 24
+# cargo run --release rng_seed 0-511 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: ucb_const -1000 -1500 -2200 -3300 -4700 -6800 -10000 -15000 -22000 -33000 -47000 -68000 -100000 :: thread_limit 24
+# cargo run --release rng_seed 0-511 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode uniform :: final_choice_mode marginal :: thread_limit 24
 if should_make_figure("2"):
     for metric in all_metrics:
-        fig = FigureBuilder(results, None, metric, translations=t10s)
+        fig = SqliteFigureBuilder(db_cursor, None, metric, translations=t10s)
 
-        common_filters = [("final_choice_mode", "marginal"),
-                          ("samples_n", 128)]
+        # samples_n = 128
+        common_filters = [("max.rng_seed", 511), ("final_choice_mode", "marginal")]
         uniform_filters = common_filters + [("selection_mode", "uniform")]
         fig.plot(FigureMode("ucb_const", ucb_const_vals[1:]),
                  common_filters + [("selection_mode", "ucb")], bound_mode)
 
-        fig.line(uniform_filters, "Uniform")
+        fig.line_from(uniform_filters, "Uniform")
 
         # fig.ylim([75, 110])
         fig.ticks(ucb_const_ticknames[1:])
         fig.legend()
 
         fig.show(xlabel="UCB constant factor * 10^-2",
-                 file_suffix="_samples_n_128_final_choice_mode_marginal")
+                 file_suffix=f"_final_choice_mode_marginal")
 
 # print_all_parameter_values_used(
 #     results, [("final_choice_mode", "marginal"),
@@ -122,22 +160,23 @@ if should_make_figure("2"):
 # quit()
 
 # Fig. 3.
-# cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: normal.ucb_const -4700 :: bubble_best.ucb_const -3300 :: lower_bound.ucb_const -3300 :: marginal.ucb_const -3300 :: thread_limit 24
-# cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode uniform :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode ucb :: bound_mode normal bubble_best lower_bound marginal :: final_choice_mode marginal :: normal.ucb_const -4700 :: bubble_best.ucb_const -4700 :: lower_bound.ucb_const -4700 :: marginal.ucb_const -4700 :: thread_limit 24
+# cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: selection_mode uniform :: final_choice_mode marginal :: thread_limit 24
 # results.cache_bound_mode_samples_n
 if should_make_figure("3"):
     for metric in all_metrics:
-        common_filters = []
+        common_filters = [("max.rng_seed", 4095), ("final_choice_mode", "marginal")]
         filters = [("selection_mode", "ucb"),
-                   ("final_choice_mode", "marginal")] + common_filters
+                   ("ucb_const", -4700),
+                   ] + common_filters
         uniform_filters = [("selection_mode", "uniform")] + common_filters
 
-        fig = FigureBuilder(results, None, metric, translations=t10s)
+        fig = SqliteFigureBuilder(db_cursor, None, metric, translations=t10s)
         samples_n_mode = FigureMode(
             "samples_n", [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096])
 
         # (rect, connections) = fig.inset_plot([8.8, 12.2], [-1, 48], [0.4, 0.4, 0.57, 0.57])
-        (rect, connections) = fig.inset_plot([5.8, 9.2], [-1, 35], [0.4, 0.4, 0.57, 0.57])
+        (rect, connections) = fig.inset_plot([5.8, 9.2], [-1, 45], [0.4, 0.4, 0.57, 0.57])
         for connection in connections:
             connection.set_visible(False)
         rect.set_label(None)
@@ -151,9 +190,7 @@ if should_make_figure("3"):
 
 
 # Fig. 4.
-# cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: portion_bernoulli 0.5 :: bound_mode marginal :: selection_mode ucb ucbv ucbd klucb klucb+ uniform :: ucb_const -6800 :: ucbv.ucb_const -4700 :: ucbv.ucbv_const 0 :: ucbd.ucb_const -22000 :: ucbd.ucbd_const 1 :: klucb.ucb_const -1.5 :: klucb.klucb_max_cost 10000 :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: thread_limit 24
 # cargo run --release rng_seed 0-8191 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 8192 16384 32768 :: bound_mode marginal :: selection_mode ucb ucbv ucbd klucb klucb+ uniform :: ucb_const -6800 :: ucbv.ucb_const -4700 :: ucbv.ucbv_const 0 :: ucbd.ucb_const -22000 :: ucbd.ucbd_const 1 :: klucb.ucb_const -1.5 :: klucb.klucb_max_cost 10000 :: klucb+.ucb_const -2.2 :: klucb+.klucb_max_cost 10000 :: thread_limit 24
-# results.cache_selection_mode
 if should_make_figure("4"):
     for metric in all_metrics:
         selection_mode = FigureMode(

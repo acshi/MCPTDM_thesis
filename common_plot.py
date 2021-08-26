@@ -467,6 +467,236 @@ class FigureBuilder:
 
         return self.ax.indicate_inset_zoom(self.axins, edgecolor="black")
 
+def single_where_clause(param, value):
+    if param.startswith("max."):
+        param = param.split("max.")[1]
+        return f"{param} <= '{value}'"
+    return f"{param} = '{value}'"
+
+def where_clause(filters, modes):
+    return "WHERE " + " AND ".join([single_where_clause(p, v) for (p, v) in filters] + [f"{mode.param} = '{v}'" for (mode, v) in modes])
+
+def db_filtered(db_cursor, param, filters):
+    return [val for val in db_cursor.execute(f"SELECT {param} FROM results {where_clause(filters, [])}")]
+
+class SqliteFigureBuilder:
+    def __init__(self, db_cursor, x_param, y_param, translations={}):
+        self.db_cursor = db_cursor
+        self.x_param = x_param
+        self.defacto_x_param = x_param
+        self.y_param = y_param
+        self.all_modes = []
+        self.translations = translations
+        self.min_x = None
+        self.max_x = None
+        self.x_locs = []
+        self.axins = None
+
+        self.fig, self.ax = plt.subplots(dpi=100 if show_only else save_dpi)
+
+    def translate(self, name):
+        if name in self.translations:
+            return self.translations[name]
+        return name
+
+    def collect_vals(self, x_mode, filters, legend_mode, legend_mode_val):
+        modes = [(legend_mode, legend_mode_val)] if legend_mode else []
+
+        x_val_sets_raw = {}
+        y_val_sets_raw = {}
+
+        x_param = self.x_param if self.x_param else x_mode.param
+        for (x_val, y_val) in self.db_cursor.execute(f"SELECT {x_param}, {self.y_param} FROM results {where_clause(filters, modes)}"):
+            if x_val not in x_val_sets_raw:
+                x_val_sets_raw[x_val] = []
+                y_val_sets_raw[x_val] = []
+            x_val_sets_raw[x_val].append(float(x_val))
+            y_val_sets_raw[x_val].append(float(y_val))
+
+        x_val_sets = [list() for _ in range(len(x_mode.values))]
+        y_val_sets = [list() for _ in range(len(x_mode.values))]
+
+        for x_val in x_val_sets_raw:
+            is_number = isinstance(x_val, numbers.Number)
+            for (i, val_name) in enumerate(x_mode.values):
+                if is_number and float(x_val) == float(val_name) or not is_number and x_val == str(val_name):
+                    x_val_sets[i] = x_val_sets_raw[x_val]
+                    y_val_sets[i] = y_val_sets_raw[x_val]
+
+        return (x_val_sets, y_val_sets)
+
+    def plot(self, x_mode, filters=[], legend_mode=None, label=None, normalize=None):
+        if self.defacto_x_param is None:
+            self.defacto_x_param = x_mode.param
+
+        if legend_mode:
+            if not any(legend_mode.param == mode.param for mode in self.all_modes):
+                self.all_modes += [legend_mode]
+
+        for legend_mode_val in legend_mode.values if legend_mode else [None]:
+            import time
+            start_time = time.time()
+            (x_val_sets, y_val_sets) = self.collect_vals(
+                x_mode, filters, legend_mode, legend_mode_val)
+            print(f"collect_vals took {time.time() - start_time:.2} seconds")
+            if len(y_val_sets) == 0:
+                label_str = f"{label}: " if label else ""
+                print(
+                    f"{label_str}Data completely missing for {self.y_param} by {x_mode.param} with {filters}")
+                if legend_mode:
+                    print(f"And with {legend_mode.param} = {legend_mode_val}")
+                continue
+            n_vals_in_set = len(y_val_sets[0])
+            for i, vals in enumerate(y_val_sets):
+                if len(vals) == 0:
+                    label_str = f"{label}: " if label else ""
+                    legend_str = f"and with {legend_mode.param} = {legend_mode_val}" if legend_mode else ""
+                    print(
+                        f"{label_str}{x_mode.param} = {x_mode.values[i]} has 0 data points for {self.y_param} with {filters} {legend_str}")
+                    vals.append(np.nan)
+                if len(vals) != n_vals_in_set:
+                    label_str = f"{label}: " if label else ""
+                    legend_str = f"and with {legend_mode.param} = {legend_mode_val}" if legend_mode else ""
+                    print(
+                        f"{label_str}{len(vals)} != {n_vals_in_set} for {x_mode.param} = {x_mode.values[i]} {legend_str}")
+
+            means = np.array([np.mean(vals) for vals in y_val_sets])
+            stdev_mean = np.array([np.std(vals) / np.sqrt(len(vals))
+                          for vals in y_val_sets])
+
+            if self.x_param is None:
+                x_means = np.array([i for i in range(len(x_val_sets))])
+            else:
+                x_means = np.array([np.mean(vals) for vals in x_val_sets])
+            self.x_locs = x_means
+
+            full_label = label
+            if legend_mode:
+                if full_label:
+                    full_label = f"{label} {self.translate(legend_mode_val)}"
+                else:
+                    full_label = f"{self.translate(legend_mode_val)}"
+
+            if normalize == "last":
+                factor = means[-1]
+                means /= factor
+                stdev_mean /= factor
+            elif normalize == "first":
+                factor = means[0]
+                means /= factor
+                stdev_mean /= factor
+
+            self.ax.errorbar(x_means, means,
+                             yerr=stdev_mean, label=full_label)
+
+            if self.axins:
+                self.axins.errorbar(x_means, means, yerr=stdev_mean)
+
+            x_mean_min = np.min(x_means)
+            if self.min_x is None:
+                self.min_x = x_mean_min
+            else:
+                self.min_x = min(self.min_x, x_mean_min)
+
+            x_mean_max = np.max(x_means)
+            if self.max_x is None:
+                self.max_x = x_mean_max
+            else:
+                self.max_x = max(self.max_x, x_mean_max)
+
+    def line_from(self, filters, label):
+        vals = db_filtered(self.db_cursor, self.y_param, filters)
+        mean = np.mean(vals)
+        stdev_mean = np.std(vals) / np.sqrt(len(vals))
+        self.ax.errorbar([self.min_x, self.max_x], [mean, mean],
+                         yerr=[stdev_mean, stdev_mean], label=label)
+        if self.axins:
+            self.axins.errorbar([self.min_x, self.max_x], [mean, mean],
+                                yerr=[stdev_mean, stdev_mean])
+
+    def axhline(self, y, **kwargs):
+        self.ax.axhline(y, **kwargs)
+
+    def _set_show_save(self, title, xlabel, ylabel, file_suffix):
+        self.ax.set_title(title)
+        self.ax.set_xlabel(xlabel)
+        self.ax.set_ylabel(ylabel)
+        if show_only:
+            plt.show()
+        else:
+            self.fig.set_figwidth(6.4 * figure_zoom)
+            self.fig.set_figheight(4.8 * figure_zoom)
+
+            modes_description = "_".join([""] + [mode.param for mode in self.all_modes])
+            file_desc = f"{self.defacto_x_param}_{self.y_param}{modes_description}{file_suffix}"
+
+            self.fig.tight_layout()
+            if make_pdf_also:
+                self.fig.savefig(f"figures/pdf/by_{file_desc}.pdf",
+                                 bbox_inches="tight", pad_inches=0)
+            self.fig.savefig(f"figures/by_{file_desc}.png")
+
+    def show(self, title=None, xlabel=None, ylabel=None, file_suffix=""):
+        xlabel = xlabel or self.translate(self.defacto_x_param)
+        ylabel = ylabel or self.translate(self.y_param)
+
+        if title is None:
+            title = f"{self.translate(self.y_param)} by {decapitalize(self.translate(self.defacto_x_param))}"
+
+            modes_str = " and ".join([""] + [decapitalize(self.translate(mode.param))
+                                             for mode in self.all_modes])
+            title += modes_str
+
+        modes_str = " and ".join([""] + [mode.param for mode in self.all_modes])
+        print(f"{self.y_param} by {self.defacto_x_param}{modes_str}")
+
+        self._set_show_save(title, xlabel, ylabel, file_suffix)
+
+    def legend(self, loc=None):
+        self.ax.legend(loc=loc)
+
+    def xlim(self, xlim):
+        self.ax.set_xlim(xlim)
+
+    def ylim(self, ylim):
+        self.ax.set_ylim(ylim)
+
+    def xscale(self, xscale):
+        self.ax.set_xscale(xscale)
+
+    def yscale(self, yscale):
+        self.ax.set_yscale(yscale)
+
+    def ticks(self, labels, locs=None):
+        if any(isinstance(val, numbers.Number) and abs(val) >= 1e5 for val in labels):
+            labels = [short_num_string(val) for val in labels]
+
+        labels = [str(l) for l in labels]
+        labels = [l.replace(".0", "") if l.endswith(".0") else l for l in labels]
+
+        if locs is None:
+            locs = self.x_locs
+
+        self.ax.set_xticks(locs)
+        self.ax.set_xticklabels(labels)
+
+    def ax(self):
+        return self.ax
+
+    def fig(self):
+        return self.fig
+
+    # Call this before any plotting to also have things plot in the inset
+    def inset_plot(self, xlim, ylim, bounds=[0.5, 0.5, 0.47, 0.47]):
+        self.axins = self.ax.inset_axes(bounds)
+
+        self.axins.set_xlim(xlim)
+        self.axins.set_ylim(ylim)
+        self.axins.set_xticklabels('')
+        self.axins.set_yticklabels('')
+
+        return self.ax.indicate_inset_zoom(self.axins, edgecolor="black")
+
 
 def evaluate_conditions(results, metrics, filters):
     results = filter_extra(results, filters)

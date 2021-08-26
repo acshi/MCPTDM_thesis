@@ -44,6 +44,7 @@ pub struct Parameters {
     pub bootstrap_confidence_z: f64,
     pub zero_mean_prior_std_dev: f64,
     pub unknown_prior_std_dev: f64,
+    pub unknown_prior_std_dev_scalar: f64,
 
     pub thread_limit: usize,
     pub specifiers_hash: Option<i64>,
@@ -78,6 +79,7 @@ impl Parameters {
             bootstrap_confidence_z: 0.0,
             zero_mean_prior_std_dev: 1000.0,
             unknown_prior_std_dev: 1000.0,
+            unknown_prior_std_dev_scalar: 0.0,
 
             thread_limit: 1,
             specifiers_hash: None,

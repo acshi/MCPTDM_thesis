@@ -291,11 +291,19 @@ impl<'a> MctsNode<'a> {
         self.costs.mean()
     }
 
+    fn unknown_std_dev(&self) -> f64 {
+        if self.params.unknown_prior_std_dev_scalar > 0.0 {
+            self.params.zero_mean_prior_std_dev * self.params.unknown_prior_std_dev_scalar
+        } else {
+            self.params.unknown_prior_std_dev
+        }
+    }
+
     fn std_dev_of_mean(&self) -> f64 {
         if self.costs.is_empty() {
             0.0
         } else if self.costs.len() == 1 {
-            self.params.unknown_prior_std_dev
+            self.unknown_std_dev()
         } else {
             self.costs.std_dev() / (self.costs.len() as f64).sqrt()
         }
@@ -313,7 +321,7 @@ impl<'a> MctsNode<'a> {
         if self.intermediate_costs.is_empty() {
             0.0
         } else if self.intermediate_costs.len() == 1 {
-            self.params.unknown_prior_std_dev
+            self.unknown_std_dev()
         } else {
             self.intermediate_costs.std_dev() / (self.intermediate_costs.len() as f64).sqrt()
         }
@@ -331,7 +339,7 @@ impl<'a> MctsNode<'a> {
         if self.marginal_costs.is_empty() {
             0.0
         } else if self.marginal_costs.len() == 1 {
-            self.params.unknown_prior_std_dev
+            self.unknown_std_dev()
         } else {
             self.marginal_costs.std_dev() / (self.marginal_costs.len() as f64).sqrt()
         }

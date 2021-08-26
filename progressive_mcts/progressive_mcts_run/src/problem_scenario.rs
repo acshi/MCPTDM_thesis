@@ -227,13 +227,15 @@ mod tests {
         for _ in 0..1000 {
             let dist = CostDistribution::new_sampled(&mut rng);
             let mut stats = Stats::new();
-            for _ in 0..2000 {
+            for _ in 0..1000 {
                 let value = dist.sample(&mut rng);
                 stats.update(value);
             }
             // eprintln!("{:.2}", stats.std_dev);
             std_dev_stats.update(stats.std_dev);
         }
+
+        eprintln!("stats: {:.2?}", std_dev_stats);
 
         assert_eq!(std_dev_stats.mean, 0.0);
     }
