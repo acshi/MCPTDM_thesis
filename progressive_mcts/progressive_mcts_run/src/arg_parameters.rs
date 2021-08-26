@@ -67,7 +67,7 @@ impl Parameters {
             samples_n: 64,
             bound_mode: CostBoundMode::Marginal,
             final_choice_mode: CostBoundMode::Same,
-            selection_mode: ChildSelectionMode::KLUCBP,
+            selection_mode: ChildSelectionMode::KLUCB,
             prioritize_worst_particles_z: 1000.0,
             consider_repeats_after_portion: 0.0,
             repeat_confidence_interval: 1000.0,
