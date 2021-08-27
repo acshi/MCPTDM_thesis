@@ -1,11 +1,11 @@
 use rand::{prelude::StdRng, Rng};
-use rand_distr::{Bernoulli, Distribution, Normal, StandardNormal};
+use rand_distr::{Distribution, Normal, StandardNormal};
 
 #[derive(Clone, Copy)]
 pub struct SituationParticle {
     pub id: usize,
-    pub gaussian_z: f64,
-    pub bernoulli_p: f64,
+    pub gaussian_z1: f64,
+    pub gaussian_z2: f64,
 }
 
 impl Eq for SituationParticle {}
@@ -30,7 +30,7 @@ impl std::hash::Hash for SituationParticle {
 
 impl std::fmt::Debug for SituationParticle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", (self.id, self.gaussian_z, self.bernoulli_p))
+        write!(f, "{:?}", (self.id, self.gaussian_z1, self.gaussian_z2))
     }
 }
 
@@ -38,72 +38,60 @@ impl SituationParticle {
     pub fn sample(id: usize, rng: &mut StdRng) -> Self {
         Self {
             id,
-            gaussian_z: StandardNormal.sample(rng),
-            bernoulli_p: rng.gen_range(0.0..=1.0),
+            gaussian_z1: StandardNormal.sample(rng),
+            gaussian_z2: StandardNormal.sample(rng),
         }
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct CostDistribution {
-    normal_d: Normal<f64>,
-    bernoulli_d: Bernoulli,
-    bernoulli_p: f64,
-    bernoulli_mag: f64,
+    normal1: Normal<f64>,
+    normal2: Normal<f64>,
 }
 
 impl CostDistribution {
     pub fn new(
-        normal_mean: f64,
-        normal_std_dev: f64,
-        bernoulli_p: f64,
-        bernoulli_mag: f64,
+        normal_mean1: f64,
+        normal_std_dev1: f64,
+        normal_mean2: f64,
+        normal_std_dev2: f64,
     ) -> Self {
         Self {
-            normal_d: Normal::new(normal_mean, normal_std_dev)
+            normal1: Normal::new(normal_mean1, normal_std_dev1)
                 .expect("valid mean and standard deviation"),
-            bernoulli_d: Bernoulli::new(bernoulli_p).expect("probability from 0 to 1"),
-            bernoulli_p,
-            bernoulli_mag,
+            normal2: Normal::new(normal_mean2, normal_std_dev2)
+                .expect("valid mean and standard deviation"),
         }
     }
 
     pub fn new_sampled(rng: &mut StdRng) -> Self {
-        let normal_mean = rng.gen_range(0.0..100.0);
-        let normal_std_dev = rng.gen_range(0.0..100.0);
-        let bernoulli_p = rng.gen_range(0.0..=1.0);
-        let bernoulli_mag = 1000.0;
-
-        Self::new(normal_mean, normal_std_dev, bernoulli_p, bernoulli_mag)
+        Self::new(
+            rng.gen_range(0.0..100.0),
+            rng.gen_range(0.0..100.0),
+            rng.gen_range(0.0..100.0),
+            rng.gen_range(0.0..100.0),
+        )
     }
 
     pub fn mean(&self) -> f64 {
-        self.normal_d.mean() + self.bernoulli_p * self.bernoulli_mag
+        self.normal1.mean() + self.normal2.mean()
     }
 
     pub fn sample(&self, rng: &mut StdRng) -> f64 {
-        // self.normal_d
-        //     .sample(rng)
-        //     .max(0.0)
-        //     .min(2.0 * self.normal_d.mean())
-        //     + if self.bernoulli_d.sample(rng) {
-        //         self.bernoulli_mag
-        //     } else {
-        //         0.0
-        //     }
-        self.from_correlated(StandardNormal.sample(rng), rng.gen_range(0.0..=1.0))
+        self.from_correlated(StandardNormal.sample(rng), StandardNormal.sample(rng))
     }
 
-    pub fn from_correlated(&self, gaussian_z: f64, bernoulli_p: f64) -> f64 {
-        self.normal_d
-            .from_zscore(gaussian_z)
+    pub fn from_correlated(&self, gaussian_z1: f64, gaussian_z2: f64) -> f64 {
+        self.normal1
+            .from_zscore(gaussian_z1)
             .max(0.0)
-            .min(2.0 * self.normal_d.mean())
-            + if bernoulli_p <= self.bernoulli_p {
-                self.bernoulli_mag
-            } else {
-                0.0
-            }
+            .min(2.0 * self.normal1.mean())
+            + self
+                .normal2
+                .from_zscore(gaussian_z2)
+                .max(0.0)
+                .min(2.0 * self.normal2.mean())
     }
 }
 
@@ -174,7 +162,7 @@ impl<'a> Simulator<'a> {
         // .expect("only take search_depth steps");
         let dist = child.distribution.as_ref().expect("not root-level node");
         self.cost += dist.sample(rng)
-            + dist.from_correlated(self.particle.gaussian_z, self.particle.bernoulli_p);
+            + dist.from_correlated(self.particle.gaussian_z1, self.particle.gaussian_z2);
 
         self.scenario = child;
         self.depth += 1;

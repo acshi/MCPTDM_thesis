@@ -7,8 +7,11 @@ import numbers
 plt.rcParams.update({'font.size': 12})
 plt.rcParams['pdf.fonttype'] = 42
 
-plt.rcParams["axes.prop_cycle"] = plt.cycler(
-    color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf", "#a65628", "#984ea3", "#999999"]) + plt.cycler(marker=["+", "o", "x", "^", "v", "s", "*"])
+plt.rcParams["axes.prop_cycle"] = (
+    plt.cycler(
+        color=["#377eb8", "#ff7f00", "#4daf4a", "#f781bf", "#a65628", "#984ea3", "#999999", "#666666"] * 2) +
+    plt.cycler(
+        marker=["+", "o", "x", "^", "v", "s", "*", "D"] * 2) + plt.cycler(linestyle=["-"] * 6 + ["--"] * 6 + ["---"] * 4))
 
 
 show_only = False
