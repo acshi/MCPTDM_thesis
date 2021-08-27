@@ -79,9 +79,9 @@ impl Parameters {
             repeat_at_all_levels: false,
             throwout_extreme_costs_z: 1000.0,
             bootstrap_confidence_z: 0.0,
-            zero_mean_prior_std_dev: 2200.0,
+            zero_mean_prior_std_dev: 220.0,
             unknown_prior_std_dev: 1000.0,
-            unknown_prior_std_dev_scalar: 2.0, // overrides unknown_prior_std_dev if not zero
+            unknown_prior_std_dev_scalar: 1.4, // overrides unknown_prior_std_dev if not zero
 
             thread_limit: 1,
             specifiers_hash: None,
