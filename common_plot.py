@@ -476,8 +476,10 @@ class SqliteFigureBuilder:
 
         self._set_show_save(title, xlabel, ylabel, file_suffix)
 
-    def legend(self, loc=None):
-        self.ax.legend(loc=loc)
+    def legend(self, loc=None, title=None):
+        if title is None and len(self.all_modes) > 0:
+            title = self.translate(self.all_modes[0].param)
+        self.ax.legend(loc=loc, title=title)
 
     def xlim(self, xlim):
         self.ax.set_xlim(xlim)

@@ -91,7 +91,8 @@ define_params!(
     bootstrap_confidence_z,
     zero_mean_prior_std_dev,
     unknown_prior_std_dev,
-    unknown_prior_std_dev_scalar
+    unknown_prior_std_dev_scalar,
+    single_trial_discount_factor
 );
 
 macro_rules! define_result_values {

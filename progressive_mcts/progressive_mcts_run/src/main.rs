@@ -504,12 +504,24 @@ impl<'a> MctsNode<'a> {
                 let (mut expected_cost, mut std_dev) = self
                     .min_child_expected_cost_and_std_dev()
                     .unwrap_or((0.0, 0.0));
-                let (mean, variance) = gaussian_update(
-                    0.0,
-                    self.params.zero_mean_prior_std_dev.powi(2),
-                    self.marginal_cost(),
-                    self.marginal_cost_std_dev().powi(2),
-                );
+                let single_trial_factor = self.params.single_trial_discount_factor;
+                let (mean, variance) = if single_trial_factor >= 0.0 {
+                    if self.marginal_costs.len() == 1 {
+                        (
+                            self.marginal_cost() * single_trial_factor,
+                            self.marginal_cost_std_dev() * single_trial_factor.sqrt(),
+                        )
+                    } else {
+                        (self.marginal_cost(), self.marginal_cost_std_dev())
+                    }
+                } else {
+                    gaussian_update(
+                        0.0,
+                        self.params.zero_mean_prior_std_dev.powi(2),
+                        self.marginal_cost(),
+                        self.marginal_cost_std_dev().powi(2),
+                    )
+                };
                 expected_cost += mean;
                 std_dev = (std_dev.powi(2) + variance).sqrt();
                 (expected_cost, std_dev)

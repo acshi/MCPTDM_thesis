@@ -215,7 +215,7 @@ mod tests {
         for _ in 0..1000 {
             let dist = CostDistribution::new_sampled(&mut rng);
             let mut stats = Stats::new();
-            for _ in 0..1000 {
+            for _ in 0..2000 {
                 let value = dist.sample(&mut rng);
                 stats.update(value);
             }
