@@ -694,10 +694,7 @@ fn should_replay_particle<'a>(
     }
 
     if node.params.repeat_const >= 0.0 {
-        let repeat_n = (node.params.repeat_const
-            * node.params.n_actions.pow(node.params.search_depth - 1) as f64
-            / (node.params.samples_n as f64)) as usize;
-
+        let repeat_n = (node.params.repeat_const / (node.params.samples_n as f64)) as usize;
         if node.n_particles_repeated >= repeat_n {
             return None;
         }
