@@ -72,7 +72,8 @@ define_params!(
     repeat_particle_sign,
     repeat_at_all_levels,
     correct_future_std_dev_mean,
-    worst_particles_z_abs
+    worst_particles_z_abs,
+    preload_zeros
 );
 
 define_params!(TEXT, bound_mode, final_choice_mode, selection_mode);

@@ -47,6 +47,7 @@ pub struct Parameters {
     pub unknown_prior_std_dev: f64,
     pub unknown_prior_std_dev_scalar: f64,
     pub single_trial_discount_factor: f64,
+    pub preload_zeros: usize,
 
     pub thread_limit: usize,
     pub specifiers_hash: Option<i64>,
@@ -84,6 +85,7 @@ impl Parameters {
             unknown_prior_std_dev: 1000.0,
             unknown_prior_std_dev_scalar: 1.4, // overrides unknown_prior_std_dev if not zero
             single_trial_discount_factor: -1.0,
+            preload_zeros: 0,
 
             thread_limit: 1,
             specifiers_hash: None,

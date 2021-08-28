@@ -57,14 +57,20 @@ impl std::fmt::Debug for CostSet {
     }
 }
 
-impl<T: Clone> CostSet<T> {
-    fn new(throwout_extreme_z: f64) -> Self {
-        Self {
+impl<T: Clone + Default> CostSet<T> {
+    fn new(throwout_extreme_z: f64, preload_zeros: usize) -> Self {
+        let mut costs = Self {
             throwout_extreme_z,
             costs: Vec::new(),
             raw_stats: Stats::new(),
             stats: Stats::new(),
+        };
+
+        for _ in 0..preload_zeros {
+            costs.push((0.0, T::default()));
         }
+
+        costs
     }
 
     fn push(&mut self, cost: (f64, T)) {
@@ -193,7 +199,7 @@ struct MctsNode<'a> {
     repeated_particle_costs: Vec<f64>,
 
     sub_nodes: Option<Vec<MctsNode<'a>>>,
-    costs: CostSet<Simulator<'a>>,
+    costs: CostSet<Option<Simulator<'a>>>,
     sub_node_repeated_particles: Vec<(f64, Simulator<'a>)>,
 }
 
@@ -215,13 +221,16 @@ impl<'a> MctsNode<'a> {
                         n_trials: 0,
                         expected_cost: None,
                         expected_cost_std_dev: None,
-                        intermediate_costs: CostSet::new(params.throwout_extreme_costs_z),
-                        marginal_costs: CostSet::new(params.throwout_extreme_costs_z),
+                        intermediate_costs: CostSet::new(params.throwout_extreme_costs_z, 0),
+                        marginal_costs: CostSet::new(
+                            params.throwout_extreme_costs_z,
+                            params.preload_zeros,
+                        ),
                         seen_particles: vec![false; params.samples_n],
                         n_particles_repeated: 0,
                         repeated_particle_costs: Vec::new(),
                         sub_nodes: None,
-                        costs: CostSet::new(params.throwout_extreme_costs_z),
+                        costs: CostSet::new(params.throwout_extreme_costs_z, 0),
                         sub_node_repeated_particles: Vec::new(),
                     })
                     .collect(),
@@ -632,6 +641,7 @@ fn should_replay_particle_at<'a>(
         .costs
         .iter()
         .filter(|(c, sim)| {
+            let sim = sim.as_ref().unwrap();
             !sub_node.seen_particles[sim.particle.id]
                 && z.map_or(true, |z| {
                     if node.params.worst_particles_z_abs {
@@ -654,6 +664,7 @@ fn should_replay_particle_at<'a>(
             _ => panic!("repeat_particle_sign must be -1, 1, or 0"),
         })
     {
+        let sim = sim.as_ref().unwrap();
         let z_score = (*c - mean) / std_dev;
         assert_eq!(sim.depth, node.depth);
         assert!(node.depth < 4);
@@ -838,7 +849,7 @@ fn run_trial<'a>(
 
     if !skip_over {
         assert_eq!(node.depth, orig_sim.depth);
-        node.costs.push((trial_final_cost, orig_sim));
+        node.costs.push((trial_final_cost, Some(orig_sim)));
         node.seen_particles[sim.particle.id] = true;
         node.n_trials = node.costs.len();
     }
@@ -1053,14 +1064,14 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         n_trials: 0,
         expected_cost: None,
         expected_cost_std_dev: None,
-        intermediate_costs: CostSet::new(params.throwout_extreme_costs_z),
-        marginal_costs: CostSet::new(params.throwout_extreme_costs_z),
+        intermediate_costs: CostSet::new(params.throwout_extreme_costs_z, 0),
+        marginal_costs: CostSet::new(params.throwout_extreme_costs_z, params.preload_zeros),
         seen_particles: vec![false; params.samples_n],
         n_particles_repeated: 0,
         repeated_particle_costs: Vec::new(),
 
         sub_nodes: None,
-        costs: CostSet::new(params.throwout_extreme_costs_z),
+        costs: CostSet::new(params.throwout_extreme_costs_z, 0),
         sub_node_repeated_particles: Vec::new(),
     };
 
