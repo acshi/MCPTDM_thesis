@@ -58,7 +58,7 @@ impl std::fmt::Debug for CostSet {
 }
 
 impl<T: Clone + Default> CostSet<T> {
-    fn new(throwout_extreme_z: f64, preload_zeros: usize) -> Self {
+    fn new(throwout_extreme_z: f64, preload_zeros: i32) -> Self {
         let mut costs = Self {
             throwout_extreme_z,
             costs: Vec::new(),
@@ -523,6 +523,8 @@ impl<'a> MctsNode<'a> {
                     } else {
                         (self.marginal_cost(), self.marginal_cost_std_dev())
                     }
+                } else if self.params.preload_zeros >= 0 {
+                    (self.marginal_cost(), self.marginal_cost_std_dev())
                 } else {
                     gaussian_update(
                         0.0,
