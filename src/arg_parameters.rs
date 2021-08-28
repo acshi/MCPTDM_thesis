@@ -213,6 +213,21 @@ fn create_scenarios(
                 }
             }
         }
+        // or a numeric range with a specified step size?
+        let step_range_parts = value.split(":").collect_vec();
+        if step_range_parts.len() == 3 {
+            let low: Option<usize> = step_range_parts[0].parse().ok();
+            let step: Option<usize> = step_range_parts[1].parse().ok();
+            let high: Option<usize> = step_range_parts[2].parse().ok();
+            if let (Some(low), Some(step), Some(high)) = (low, step, high) {
+                if low < high {
+                    value_set.clear();
+                    for v in (low..=high).step_by(step) {
+                        value_set.push(v.to_string());
+                    }
+                }
+            }
+        }
 
         for val in value_set {
             let mut params = base_params.clone();
