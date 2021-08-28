@@ -367,6 +367,13 @@ fn create_scenarios(
             _ => "".to_string(),
         };
 
+        let single_trial_discount_factor = match s.method.as_str() {
+            "mcts" => {
+                format_f!(",single_trial_discount_factor={s.mcts.single_trial_discount_factor}")
+            }
+            _ => "".to_string(),
+        };
+
         let allow_different_root_policy = match s.method.as_str() {
             "eudm" => {
                 format_f!(",allow_different_root_policy={s.eudm.allow_different_root_policy}")
@@ -385,7 +392,7 @@ fn create_scenarios(
              ,use_cfb={s.use_cfb}\
              ,extra_ego_accdec_policies={extra_ego_accdec}\
              {samples_n}{search_depth}{forward_t}\
-             {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}{repeat_const}\
+             {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}{repeat_const}{single_trial_discount_factor}\
              {allow_different_root_policy}\
              ,max_steps={s.max_steps}\
              ,n_cars={s.n_cars}\
