@@ -73,7 +73,8 @@ define_params!(
     repeat_at_all_levels,
     correct_future_std_dev_mean,
     worst_particles_z_abs,
-    preload_zeros
+    preload_zeros,
+    bootstrap_n
 );
 
 define_params!(TEXT, bound_mode, final_choice_mode, selection_mode);

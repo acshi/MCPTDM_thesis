@@ -43,6 +43,7 @@ pub struct Parameters {
     pub repeat_at_all_levels: bool,
     pub throwout_extreme_costs_z: f64,
     pub bootstrap_confidence_z: f64,
+    pub bootstrap_n: i32,
     pub zero_mean_prior_std_dev: f64,
     pub unknown_prior_std_dev: f64,
     pub unknown_prior_std_dev_scalar: f64,
@@ -81,6 +82,7 @@ impl Parameters {
             repeat_at_all_levels: false,
             throwout_extreme_costs_z: 1000.0,
             bootstrap_confidence_z: 0.0,
+            bootstrap_n: -1,
             zero_mean_prior_std_dev: 220.0,
             unknown_prior_std_dev: 1000.0,
             unknown_prior_std_dev_scalar: 1.4, // overrides unknown_prior_std_dev if not zero

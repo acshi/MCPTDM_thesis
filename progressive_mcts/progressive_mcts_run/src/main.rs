@@ -1088,12 +1088,26 @@ fn run_with_parameters(params: Parameters) -> RunResults {
     // Expand first level so marginal_cost_confidence_interval has enough to go on
     node.get_or_expand_sub_nodes();
 
-    for i in 0..params.samples_n {
+    let mut start_i = 0;
+
+    for i in 0..params.bootstrap_n {
+        let i = i as usize;
+        bootstrap_run_trial(
+            &mut node,
+            &mut Simulator::sample(&scenario, i, &mut rng),
+            &mut rng,
+            &mut steps_taken,
+            i,
+        );
+        start_i += 1;
+    }
+
+    for i in start_i..params.samples_n {
         let marginal_confidence = node.marginal_cost_confidence_interval(i);
         if params.is_single_run {
             eprintln_f!("{i}: {marginal_confidence=:.2}");
         }
-        if params.bootstrap_confidence_z > marginal_confidence {
+        if params.bootstrap_confidence_z > marginal_confidence && params.bootstrap_n < 0 {
             bootstrap_run_trial(
                 &mut node,
                 &mut Simulator::sample(&scenario, i, &mut rng),

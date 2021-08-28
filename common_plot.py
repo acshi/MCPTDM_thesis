@@ -55,7 +55,9 @@ def short_num_string(val):
         "+", "").replace("e0", "e").replace("e-0", "e-")
     normal = str(val)
     # same-length means scientific is shorter in most fonts because of "." being short
-    return scientific if len(scientific) <= len(normal) else normal
+    if len(scientific) == len(normal) and "." in scientific:
+        return scientific
+    return scientific if len(scientific) < len(normal) else normal
 
 
 def decapitalize_word(word):
