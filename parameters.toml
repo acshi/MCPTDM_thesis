@@ -1,4 +1,4 @@
-max_steps = 6000
+max_steps = 3000
 n_cars = 13
 method = "mcts"
 use_cfb = true
@@ -109,4 +109,6 @@ bound_mode = "marginal"
 selection_mode = "klucb"
 klucb_max_cost = 330
 prioritize_worst_particles_z = -1000.0
+repeat_const = -1
+single_trial_discount_factor = 1
 tree_exploration_report = false

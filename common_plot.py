@@ -317,6 +317,7 @@ class SqliteFigureBuilder:
         self.x_locs = []
         self.axins = None
         self.figure_zoom = 1
+        self.figure_height_scale = 1
 
         self.fig, self.ax = plt.subplots(dpi=100 if show_only else save_dpi)
 
@@ -451,7 +452,7 @@ class SqliteFigureBuilder:
             plt.show()
         else:
             self.fig.set_figwidth(6.4 * figure_zoom * self.figure_zoom)
-            self.fig.set_figheight(4.8 * figure_zoom * self.figure_zoom)
+            self.fig.set_figheight(4.8 * figure_zoom * self.figure_zoom * self.figure_height_scale)
 
             modes_description = "_".join([""] + [mode.param for mode in self.all_modes])
             file_desc = f"{self.defacto_x_param}_{self.y_param}{modes_description}{file_suffix}"
@@ -497,6 +498,9 @@ class SqliteFigureBuilder:
 
     def zoom(self, zoom):
         self.figure_zoom = 1.0 / zoom
+
+    def height_scale(self, scale):
+        self.figure_height_scale = scale
 
     def ticks(self, labels, locs=None):
         if any(isinstance(val, numbers.Number) and abs(val) >= 1e5 for val in labels):

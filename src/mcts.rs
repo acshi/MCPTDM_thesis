@@ -31,6 +31,8 @@ struct MctsNode<'a> {
     intermediate_costs: Vec<Cost>,
     marginal_costs: Vec<Cost>,
 
+    n_particles_repeated: usize,
+
     sub_nodes: Option<Vec<MctsNode<'a>>>,
 }
 
@@ -94,12 +96,21 @@ impl<'a> MctsNode<'a> {
     }
 }
 
-fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &MctsNode, road: &mut Road) {
+fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &mut MctsNode, road: &mut Road) {
     if node.depth > 1 {
         return;
     }
 
-    let z = node.params.mcts.prioritize_worst_particles_z;
+    let mctsp = &node.params.mcts;
+
+    if mctsp.repeat_const >= 0.0 {
+        let repeat_n = (mctsp.repeat_const / (mctsp.samples_n as f64)) as usize;
+        if node.n_particles_repeated >= repeat_n {
+            return;
+        }
+    }
+
+    let z = mctsp.prioritize_worst_particles_z;
     if z >= 1000.0 {
         // take this high value to mean don't prioritize like this!
         return;
@@ -119,7 +130,7 @@ fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &MctsNode, roa
     costs.sort_by(|a, b| b.partial_cmp(a).unwrap());
 
     // up to samples_n possible particles
-    let mut node_seen_particles = vec![false; node.params.mcts.samples_n];
+    let mut node_seen_particles = vec![false; mctsp.samples_n];
     for (_, particle) in node.costs.iter() {
         node_seen_particles[particle.id] = true;
     }
@@ -134,6 +145,7 @@ fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &MctsNode, roa
             }
             road.sample_id = Some(particle.id);
             road.save_particle();
+            node.n_particles_repeated += 1;
             // eprintln!(
             //     "{}: Replaying particle {} w/ c {:.2}, mean {:.2}, std_dev {:.2}: {:?}",
             //     node.depth,
@@ -193,6 +205,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
                         costs: Vec::new(),
                         intermediate_costs: Vec::new(),
                         marginal_costs: Vec::new(),
+                        n_particles_repeated: 0,
                         sub_nodes: None,
                     })
                     .collect(),
@@ -207,7 +220,11 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
             if let Some(ref policy) = node.policy {
                 let policy_id = policy.policy_id();
                 if sub_nodes[policy_id as usize].n_trials == 0 {
-                    possibly_modify_particle(&mut node.costs, &sub_nodes[policy_id as usize], road);
+                    possibly_modify_particle(
+                        &mut node.costs,
+                        &mut sub_nodes[policy_id as usize],
+                        road,
+                    );
                     trial_final_cost = Some(find_and_run_trial(
                         &mut sub_nodes[policy_id as usize],
                         road,
@@ -229,7 +246,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
                     .collect_vec();
                 if unexplored.len() > 0 {
                     let sub_node_i = *unexplored.choose(rng).unwrap();
-                    possibly_modify_particle(&mut node.costs, &sub_nodes[sub_node_i], road);
+                    possibly_modify_particle(&mut node.costs, &mut sub_nodes[sub_node_i], road);
                     trial_final_cost =
                         Some(find_and_run_trial(&mut sub_nodes[sub_node_i], road, rng));
                     has_run_trial = true;
@@ -279,7 +296,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
                 .unwrap();
 
-            possibly_modify_particle(&mut node.costs, &sub_nodes[chosen_i], road);
+            possibly_modify_particle(&mut node.costs, &mut sub_nodes[chosen_i], road);
             trial_final_cost = Some(find_and_run_trial(&mut sub_nodes[chosen_i], road, rng));
         }
     }
@@ -300,8 +317,14 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
             .unwrap_or(Cost::ZERO)
             .max(&node.intermediate_cost()),
         CostBoundMode::Marginal => {
-            node.min_child_expected_cost().unwrap_or(Cost::ZERO) + node.marginal_cost()
+            let mut marginal_cost = node.marginal_cost();
+            if node.marginal_costs.len() == 1 {
+                marginal_cost = marginal_cost * mcts.single_trial_discount_factor;
+            }
+
+            node.min_child_expected_cost().unwrap_or(Cost::ZERO) + marginal_cost
         }
+        CostBoundMode::MarginalPrior => unimplemented!(),
         CostBoundMode::Same => unimplemented!(),
     };
 
@@ -399,6 +422,7 @@ pub fn mcts_choose_policy(
         costs: Vec::new(),
         intermediate_costs: Vec::new(),
         marginal_costs: Vec::new(),
+        n_particles_repeated: 0,
         sub_nodes: None,
     };
 
