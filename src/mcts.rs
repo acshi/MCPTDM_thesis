@@ -428,10 +428,10 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
     let params = node.params;
     let mcts = &params.mcts;
 
-    let sub_depth = node.depth + 1;
+    run_step(node, road);
 
     let mut trial_final_cost = None;
-    if sub_depth > mcts.search_depth {
+    if node.depth + 1 > mcts.search_depth {
         trial_final_cost = Some(road.cost);
     } else {
         node.get_or_expand_sub_nodes();
@@ -625,7 +625,7 @@ pub fn mcts_choose_policy(
 
     for i in 0..params.mcts.samples_n {
         let marginal_confidence = node.marginal_cost_confidence_interval();
-        // eprintln_f!("{marginal_confidence=:.2}");
+        eprintln_f!("{i}: {marginal_confidence=:.2}");
         if params.mcts.bootstrap_confidence_z > marginal_confidence {
             bootstrap_run_trial(&mut node, &true_road, rng, i);
             continue;
