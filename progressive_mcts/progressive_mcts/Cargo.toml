@@ -11,4 +11,6 @@ itertools = "0.10.1"
 rand = "0.8.3"
 rand_distr = "0.4.0"
 rayon = "1.5.1"
-serde = { version="1.0.126", features=["derive"] }
+serde = { version = "1.0.126", features = ["derive"] }
+rolling-stats = "0.4"
+num-traits = "0.2.14"

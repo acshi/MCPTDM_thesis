@@ -50,6 +50,9 @@ pub struct MctsParameters {
     pub prioritize_worst_particles_z: f64,
     pub repeat_const: f64,
     pub single_trial_discount_factor: f64,
+    pub preload_zeros: i32,
+    pub zero_mean_prior_std_dev: f64,
+    pub unknown_prior_std_dev_scalar: f64,
     pub tree_exploration_report: bool,
 }
 
@@ -276,6 +279,12 @@ fn create_scenarios(
                 "mcts.single_trial_discount_factor" => {
                     params.mcts.single_trial_discount_factor = val.parse().unwrap()
                 }
+                "mcts.zero_mean_prior_std_dev" => {
+                    params.mcts.zero_mean_prior_std_dev = val.parse().unwrap()
+                }
+                "mcts.unknown_prior_std_dev_scalar" => {
+                    params.mcts.unknown_prior_std_dev_scalar = val.parse().unwrap()
+                }
                 "eudm.allow_different_root_policy" => {
                     params.eudm.allow_different_root_policy = val.parse().unwrap()
                 }
@@ -374,6 +383,20 @@ fn create_scenarios(
             _ => "".to_string(),
         };
 
+        let zero_mean_prior_std_dev = match s.method.as_str() {
+            "mcts" => {
+                format_f!(",zero_mean_prior_std_dev={s.mcts.zero_mean_prior_std_dev}")
+            }
+            _ => "".to_string(),
+        };
+
+        let unknown_prior_std_dev_scalar = match s.method.as_str() {
+            "mcts" => {
+                format_f!(",unknown_prior_std_dev_scalar={s.mcts.unknown_prior_std_dev_scalar}")
+            }
+            _ => "".to_string(),
+        };
+
         let allow_different_root_policy = match s.method.as_str() {
             "eudm" => {
                 format_f!(",allow_different_root_policy={s.eudm.allow_different_root_policy}")
@@ -392,7 +415,8 @@ fn create_scenarios(
              ,use_cfb={s.use_cfb}\
              ,extra_ego_accdec_policies={extra_ego_accdec}\
              {samples_n}{search_depth}{forward_t}\
-             {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}{repeat_const}{single_trial_discount_factor}\
+             {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}\
+             {repeat_const}{single_trial_discount_factor}{zero_mean_prior_std_dev}{unknown_prior_std_dev_scalar}\
              {allow_different_root_policy}\
              ,max_steps={s.max_steps}\
              ,n_cars={s.n_cars}\

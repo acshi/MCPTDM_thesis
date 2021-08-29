@@ -4,7 +4,9 @@ use std::{
 };
 
 use itertools::Itertools;
-use progressive_mcts::{klucb::klucb_bernoulli, ChildSelectionMode, CostBoundMode};
+use progressive_mcts::{
+    cost_set::CostSet, klucb::klucb_bernoulli, ChildSelectionMode, CostBoundMode,
+};
 use rand::prelude::{SliceRandom, StdRng};
 
 use crate::{
@@ -29,7 +31,7 @@ struct MctsNode<'a> {
 
     costs: Vec<(Cost, Particle)>,
     intermediate_costs: Vec<Cost>,
-    marginal_costs: Vec<Cost>,
+    marginal_costs: CostSet<f64, Cost>,
 
     n_particles_repeated: usize,
 
@@ -91,9 +93,34 @@ impl<'a> MctsNode<'a> {
         if self.marginal_costs.is_empty() {
             Cost::ZERO
         } else {
-            self.marginal_costs.iter().copied().sum::<Cost>() / self.marginal_costs.len() as f64
+            self.marginal_costs.iter().map(|(_, c)| *c).sum::<Cost>()
+                / self.marginal_costs.len() as f64
         }
     }
+
+    fn marginal_cost_std_dev(&self) -> f64 {
+        if self.marginal_costs.is_empty() {
+            0.0
+        } else if self.marginal_costs.len() == 1 {
+            self.params.mcts.zero_mean_prior_std_dev * self.params.mcts.unknown_prior_std_dev_scalar
+        } else {
+            self.marginal_costs.std_dev() / (self.marginal_costs.len() as f64).sqrt()
+        }
+    }
+}
+
+fn gaussian_update<
+    F: std::ops::Add<Output = F> + std::ops::Sub<Output = F> + std::ops::Mul<f64, Output = F> + Clone,
+>(
+    prior_mean: F,
+    prior_variance: f64,
+    mean: F,
+    variance: f64,
+) -> (F, f64) {
+    let k = prior_variance / (prior_variance + variance);
+    let new_mean = prior_mean.clone() + (mean - prior_mean) * k;
+    let new_variance = prior_variance * (1.0 - k);
+    (new_mean, new_variance)
 }
 
 fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &mut MctsNode, road: &mut Road) {
@@ -176,7 +203,9 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
         let prev_cost = road.cost;
         road.take_update_steps(mcts.layer_t, mcts.dt);
         node.intermediate_costs.push(road.cost);
-        node.marginal_costs.push(road.cost - prev_cost);
+        let marginal_cost = road.cost - prev_cost;
+        node.marginal_costs
+            .push((marginal_cost.total(), marginal_cost));
         node.traces
             .append(&mut road.make_traces(node.depth - 1, false));
     }
@@ -204,7 +233,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
                         expected_cost: None,
                         costs: Vec::new(),
                         intermediate_costs: Vec::new(),
-                        marginal_costs: Vec::new(),
+                        marginal_costs: CostSet::new(0.0, mcts.preload_zeros),
                         n_particles_repeated: 0,
                         sub_nodes: None,
                     })
@@ -324,7 +353,16 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
 
             node.min_child_expected_cost().unwrap_or(Cost::ZERO) + marginal_cost
         }
-        CostBoundMode::MarginalPrior => unimplemented!(),
+        CostBoundMode::MarginalPrior => {
+            let (mean, _std_dev) = gaussian_update(
+                Cost::ZERO,
+                node.params.mcts.zero_mean_prior_std_dev.powi(2),
+                node.marginal_cost(),
+                node.marginal_cost_std_dev().powi(2),
+            );
+
+            node.min_child_expected_cost().unwrap_or(Cost::ZERO) + mean
+        }
         CostBoundMode::Same => unimplemented!(),
     };
 
@@ -421,7 +459,7 @@ pub fn mcts_choose_policy(
         expected_cost: None,
         costs: Vec::new(),
         intermediate_costs: Vec::new(),
-        marginal_costs: Vec::new(),
+        marginal_costs: CostSet::new(1000.0, params.mcts.preload_zeros),
         n_particles_repeated: 0,
         sub_nodes: None,
     };

@@ -1,3 +1,4 @@
+pub mod cost_set;
 pub mod klucb;
 use serde::Deserialize;
 

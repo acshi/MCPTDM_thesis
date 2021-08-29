@@ -348,9 +348,11 @@ dependencies = [
  "approx",
  "fstrings",
  "itertools",
+ "num-traits",
  "rand",
  "rand_distr",
  "rayon",
+ "rolling-stats",
  "serde",
 ]
 

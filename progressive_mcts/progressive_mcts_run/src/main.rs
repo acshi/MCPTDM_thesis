@@ -7,6 +7,7 @@ use arg_parameters::{run_parallel_scenarios, Parameters};
 use fstrings::{eprintln_f, format_args_f, println_f, write_f};
 use itertools::Itertools;
 use problem_scenario::{ProblemScenario, Simulator};
+use progressive_mcts::cost_set::CostSet;
 use progressive_mcts::klucb::klucb_bernoulli;
 use progressive_mcts::{ChildSelectionMode, CostBoundMode};
 use rand::Rng;
@@ -14,7 +15,6 @@ use rand::{
     prelude::{SliceRandom, StdRng},
     SeedableRng,
 };
-use rolling_stats::Stats;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RunResults {
@@ -36,86 +36,6 @@ impl std::fmt::Display for RunResults {
             f,
             "{s.steps_taken:6} {s.chosen_cost:7.2} {s.chosen_true_cost:7.2} {s.true_best_cost:7.2} {s.sum_repeated} {s.max_repeated} {s.repeated_cost_avg:7.3}"
         )
-    }
-}
-
-#[derive(Clone)]
-struct CostSet<T = ()> {
-    throwout_extreme_z: f64,
-    costs: Vec<(f64, T)>,
-    raw_stats: Stats<f64>,
-    stats: Stats<f64>,
-}
-
-impl std::fmt::Debug for CostSet {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CostSet")
-            .field("costs", &self.costs)
-            .field("mean", &self.stats.mean)
-            .field("std_dev", &self.stats.std_dev)
-            .finish()
-    }
-}
-
-impl<T: Clone + Default> CostSet<T> {
-    fn new(throwout_extreme_z: f64, preload_zeros: i32) -> Self {
-        let mut costs = Self {
-            throwout_extreme_z,
-            costs: Vec::new(),
-            raw_stats: Stats::new(),
-            stats: Stats::new(),
-        };
-
-        for _ in 0..preload_zeros {
-            costs.push((0.0, T::default()));
-        }
-
-        costs
-    }
-
-    fn push(&mut self, cost: (f64, T)) {
-        let cost_val = cost.0;
-
-        self.costs.push(cost);
-
-        self.raw_stats.update(cost_val);
-        if self.throwout_extreme_z >= 1000.0 {
-            self.stats = self.raw_stats.clone();
-            return;
-        }
-
-        if self.costs.len() == 1 {
-            self.stats.update(cost_val);
-        } else {
-            let z = (cost_val - self.raw_stats.mean) / self.raw_stats.std_dev;
-            if z.abs() < self.throwout_extreme_z {
-                self.stats.update(cost_val);
-            }
-        }
-    }
-
-    fn mean(&self) -> f64 {
-        self.stats.mean
-    }
-
-    fn std_dev(&self) -> f64 {
-        if self.stats.std_dev.is_finite() {
-            self.stats.std_dev
-        } else {
-            1e12
-        }
-    }
-
-    fn len(&self) -> usize {
-        self.costs.len()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.costs.is_empty()
-    }
-
-    fn iter(&self) -> impl Iterator<Item = &(f64, T)> {
-        self.costs.iter()
     }
 }
 
@@ -199,7 +119,7 @@ struct MctsNode<'a> {
     repeated_particle_costs: Vec<f64>,
 
     sub_nodes: Option<Vec<MctsNode<'a>>>,
-    costs: CostSet<Option<Simulator<'a>>>,
+    costs: CostSet<f64, Option<Simulator<'a>>>,
     sub_node_repeated_particles: Vec<(f64, Simulator<'a>)>,
 }
 
@@ -923,7 +843,7 @@ fn print_report(
              true = {additional_true_cost:6.1} ({true_intermediate_cost:6.1}), \
              marginal_costs = {:.2?}, \
              ",
-            &node.marginal_costs.costs.iter().map(|a| a.0).collect_vec()
+            &node.marginal_costs.iter().map(|a| a.0).collect_vec()
             //  {_costs_only=:.2?}, \
             //  {node.costs=:.2?}" //,
         );
