@@ -721,7 +721,7 @@ fn run_step<'a>(
     rng: &mut StdRng,
     steps_taken: &mut usize,
 ) -> Option<f64> {
-    if let Some(policy) = node.policy.as_ref() {
+    if let Some(ref policy) = node.policy {
         let prev_cost = sim.cost;
         sim.take_step(*policy, rng);
         node.intermediate_costs.push((sim.cost, ()));

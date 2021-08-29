@@ -53,6 +53,7 @@ pub struct MctsParameters {
     pub preload_zeros: i32,
     pub zero_mean_prior_std_dev: f64,
     pub unknown_prior_std_dev_scalar: f64,
+    pub bootstrap_confidence_z: f64,
     pub tree_exploration_report: bool,
 }
 
@@ -285,6 +286,9 @@ fn create_scenarios(
                 "mcts.unknown_prior_std_dev_scalar" => {
                     params.mcts.unknown_prior_std_dev_scalar = val.parse().unwrap()
                 }
+                "mcts.bootstrap_confidence_z" => {
+                    params.mcts.bootstrap_confidence_z = val.parse().unwrap()
+                }
                 "eudm.allow_different_root_policy" => {
                     params.eudm.allow_different_root_policy = val.parse().unwrap()
                 }
@@ -397,6 +401,13 @@ fn create_scenarios(
             _ => "".to_string(),
         };
 
+        let bootstrap_confidence_z = match s.method.as_str() {
+            "mcts" => {
+                format_f!(",bootstrap_confidence_z={s.mcts.bootstrap_confidence_z}")
+            }
+            _ => "".to_string(),
+        };
+
         let allow_different_root_policy = match s.method.as_str() {
             "eudm" => {
                 format_f!(",allow_different_root_policy={s.eudm.allow_different_root_policy}")
@@ -416,7 +427,7 @@ fn create_scenarios(
              ,extra_ego_accdec_policies={extra_ego_accdec}\
              {samples_n}{search_depth}{forward_t}\
              {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}\
-             {repeat_const}{single_trial_discount_factor}{zero_mean_prior_std_dev}{unknown_prior_std_dev_scalar}\
+             {repeat_const}{single_trial_discount_factor}{zero_mean_prior_std_dev}{unknown_prior_std_dev_scalar}{bootstrap_confidence_z}\
              {allow_different_root_policy}\
              ,max_steps={s.max_steps}\
              ,n_cars={s.n_cars}\

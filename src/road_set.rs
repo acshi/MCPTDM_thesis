@@ -101,6 +101,7 @@ impl RoadSet {
         &self.roads
     }
 
+    #[allow(unused)]
     pub fn into_iter(self) -> impl Iterator<Item = Road> + Clone {
         self.roads.into_iter()
     }
