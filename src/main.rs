@@ -176,9 +176,12 @@ impl State {
         self.road.respawn_obstacle_cars(&mut self.respawn_rng);
 
         // final reporting reward (separate from cost function, though similar)
-        self.reward.avg_vel += self.road.cars[0].vel * dt;
+        self.reward.dist_travelled += self.road.cars[0].vel * dt;
         if !self.road.ego_is_safe {
             self.reward.safety += dt;
+        }
+        if self.road.cars[0].crashed {
+            self.reward.crashed = true;
         }
         let accel = (self.road.cars[0].vel - last_ego_vel) / dt;
         if accel <= -self.params.reward.uncomfortable_dec {
@@ -296,9 +299,10 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
         std::thread::sleep(Duration::from_millis(1000));
     }
 
-    let km_travelled = state.reward.avg_vel / 1000.0;
+    let km_travelled = state.reward.dist_travelled / 1000.0;
 
-    state.reward.avg_vel /= state.road.t;
+    state.reward.end_t = state.road.t;
+    state.reward.avg_vel = state.reward.dist_travelled / state.road.t;
     state.reward.safety /= state.road.t;
     state.reward.uncomfortable_dec /= km_travelled;
     state.reward.curvature_change /= km_travelled;

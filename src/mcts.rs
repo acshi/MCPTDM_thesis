@@ -625,7 +625,7 @@ pub fn mcts_choose_policy(
 
     for i in 0..params.mcts.samples_n {
         let marginal_confidence = node.marginal_cost_confidence_interval();
-        eprintln_f!("{i}: {marginal_confidence=:.2}");
+        // eprintln_f!("{i}: {marginal_confidence=:.2}");
         if params.mcts.bootstrap_confidence_z > marginal_confidence {
             bootstrap_run_trial(&mut node, &true_road, rng, i);
             continue;
