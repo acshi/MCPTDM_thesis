@@ -233,7 +233,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
                         expected_cost: None,
                         costs: Vec::new(),
                         intermediate_costs: Vec::new(),
-                        marginal_costs: CostSet::new(0.0, mcts.preload_zeros),
+                        marginal_costs: CostSet::new(1000.0, mcts.preload_zeros),
                         n_particles_repeated: 0,
                         sub_nodes: None,
                     })
@@ -354,12 +354,17 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
             node.min_child_expected_cost().unwrap_or(Cost::ZERO) + marginal_cost
         }
         CostBoundMode::MarginalPrior => {
+            let current_mean = node.marginal_cost();
+            let current_std_dev = node.marginal_cost_std_dev();
             let (mean, _std_dev) = gaussian_update(
                 Cost::ZERO,
                 node.params.mcts.zero_mean_prior_std_dev.powi(2),
-                node.marginal_cost(),
-                node.marginal_cost_std_dev().powi(2),
+                current_mean,
+                current_std_dev.powi(2),
             );
+
+            // eprintln_f!("n: {}, {node.params.mcts.zero_mean_prior_std_dev=:.2}, {current_std_dev=:.2}, original: {:.2}, corrected: {:.2}",
+            //             node.marginal_costs.len(), current_mean.total(), mean.total());
 
             node.min_child_expected_cost().unwrap_or(Cost::ZERO) + mean
         }

@@ -1225,9 +1225,11 @@ dependencies = [
  "approx",
  "fstrings",
  "itertools 0.10.1",
+ "num-traits 0.2.14",
  "rand",
  "rand_distr",
  "rayon",
+ "rolling-stats",
  "serde 1.0.126",
 ]
 
