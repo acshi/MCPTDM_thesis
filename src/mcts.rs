@@ -621,16 +621,18 @@ pub fn mcts_choose_policy(
         && true_road.timesteps + params.debug_steps_before >= params.max_steps as usize;
 
     let mut node = MctsNode::new(params, &policy_choices, None, 0);
+    node.get_or_expand_sub_nodes();
 
     for i in 0..params.mcts.samples_n {
         let marginal_confidence = node.marginal_cost_confidence_interval();
-        eprintln_f!("{marginal_confidence=:.2}");
+        // eprintln_f!("{marginal_confidence=:.2}");
         if params.mcts.bootstrap_confidence_z > marginal_confidence {
             bootstrap_run_trial(&mut node, &true_road, rng, i);
             continue;
         }
 
         let mut road = true_road.sample_belief(rng);
+        road.sample_id = Some(i);
         road.save_particle();
         find_and_run_trial(&mut node, &mut road, rng);
     }
