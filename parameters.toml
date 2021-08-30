@@ -1,7 +1,7 @@
 max_steps = 3000
 n_cars = 13
 method = "mcts"
-use_cfb = true
+use_cfb = false
 policies_wait_for_clear = false
 extra_ego_accdec_policies = []
 
