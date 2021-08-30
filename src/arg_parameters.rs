@@ -55,6 +55,7 @@ pub struct MctsParameters {
     pub unknown_prior_std_dev_scalar: f64,
     pub bootstrap_confidence_z: f64,
     pub tree_exploration_report: bool,
+    pub all_mac_report: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -140,6 +141,7 @@ pub struct Parameters {
     pub thread_limit: usize,
     pub rng_seed: u64,
     pub run_fast: bool,
+    pub is_single_run: bool,
     pub graphics_speedup: f64,
     pub debug_car_i: Option<usize>,
     pub debug_steps_before: usize,
@@ -272,6 +274,7 @@ fn create_scenarios(
                 "plan_change" => params.cost.plan_change_weight = val.parse().unwrap(),
                 "mcts.bound_mode" => params.mcts.bound_mode = val.parse().unwrap(),
                 "mcts.selection_mode" => params.mcts.selection_mode = val.parse().unwrap(),
+                "mcts.ucb_const" => params.mcts.ucb_const = val.parse().unwrap(),
                 "mcts.klucb_max_cost" => params.mcts.klucb_max_cost = val.parse().unwrap(),
                 "mcts.prioritize_worst_particles_z" => {
                     params.mcts.prioritize_worst_particles_z = val.parse().unwrap()
@@ -359,6 +362,13 @@ fn create_scenarios(
             _ => "".to_string(),
         };
 
+        let ucb_const = match s.method.as_str() {
+            "mcts" => {
+                format_f!(",ucb_const={s.mcts.ucb_const}")
+            }
+            _ => "".to_string(),
+        };
+
         let kluct_max_cost = match (s.method.as_str(), s.mcts.selection_mode) {
             ("mcts", ChildSelectionMode::KLUCB) => {
                 format_f!(",klucb_max_cost={s.mcts.klucb_max_cost}")
@@ -426,7 +436,7 @@ fn create_scenarios(
              ,use_cfb={s.use_cfb}\
              ,extra_ego_accdec_policies={extra_ego_accdec}\
              {samples_n}{search_depth}{forward_t}\
-             {selection_mode}{bound_mode}{kluct_max_cost}{prioritize_worst_particles_z}\
+             {selection_mode}{bound_mode}{ucb_const}{kluct_max_cost}{prioritize_worst_particles_z}\
              {repeat_const}{single_trial_discount_factor}{zero_mean_prior_std_dev}{unknown_prior_std_dev_scalar}{bootstrap_confidence_z}\
              {allow_different_root_policy}\
              ,max_steps={s.max_steps}\
@@ -540,8 +550,11 @@ pub fn run_parallel_scenarios() {
     );
 
     if n_scenarios == 1 {
-        let (cost, reward) = run_with_parameters(scenarios[0].clone());
-        let scenario_name = scenarios[0].scenario_name.clone().unwrap();
+        let mut scenario = scenarios[0].clone();
+        scenario.is_single_run = true;
+
+        let scenario_name = scenario.scenario_name.clone().unwrap();
+        let (cost, reward) = run_with_parameters(scenario);
         println_f!("{scenario_name}");
         println_f!("{cost:?}, {reward:?}");
     } else {

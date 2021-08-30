@@ -577,6 +577,18 @@ fn tree_exploration_report(f: &mut BufWriter<File>, node: &MctsNode) -> Result<(
     Ok(())
 }
 
+fn all_mac_report(f: &mut BufWriter<File>, node: &MctsNode) -> Result<(), std::io::Error> {
+    for mac in node.marginal_costs.iter() {
+        writeln!(f, "{}", mac.0)?;
+    }
+    if let Some(ref sub_nodes) = node.sub_nodes {
+        for child in sub_nodes.iter() {
+            all_mac_report(f, child)?;
+        }
+    }
+    Ok(())
+}
+
 fn bootstrap_run_trial<'a>(
     node: &mut MctsNode<'a>,
     true_road: &Road,
@@ -659,6 +671,11 @@ pub fn mcts_choose_policy(
         let mut f = BufWriter::new(File::create("tree_exploration_report").unwrap());
         tree_exploration_report_best_path(&mut f, &node).unwrap();
         tree_exploration_report(&mut f, &node).unwrap();
+    }
+
+    if params.is_single_run && params.mcts.all_mac_report {
+        let mut f = BufWriter::new(File::create("all_mac_report").unwrap());
+        all_mac_report(&mut f, &node).unwrap();
     }
 
     (best_policy, traces)
