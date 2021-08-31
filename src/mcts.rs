@@ -398,6 +398,9 @@ fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &mut MctsNode,
     // up to samples_n possible particles
     let mut node_seen_particles = vec![false; mctsp.samples_n];
     for (_, particle) in node.costs.iter() {
+        if particle.id >= node_seen_particles.len() {
+            node_seen_particles.resize(particle.id + 1, false);
+        }
         node_seen_particles[particle.id] = true;
     }
 
@@ -405,7 +408,7 @@ fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &mut MctsNode,
         .iter()
         .take_while(|(c, _)| c.total() - mean >= std_dev * z)
     {
-        if !node_seen_particles[particle.id] {
+        if particle.id >= node_seen_particles.len() || !node_seen_particles[particle.id] {
             for (car, policy) in road.cars.iter_mut().zip(&particle.policies).skip(1) {
                 car.side_policy = Some(policy.clone());
             }
