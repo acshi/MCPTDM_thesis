@@ -1071,13 +1071,14 @@ fn run_with_parameters(params: Parameters) -> RunResults {
 
         i += 1;
         if i >= params.samples_n {
-            if params.most_visited_best_cost_consistency {
+            if params.most_visited_best_cost_consistency && i <= params.samples_n * 12 / 10 {
                 // if we have this best policy inconsistency, do more trials to try to resolve it!
                 let best_visits = get_best_policy_by_visits(&node);
                 let best_cost = get_best_policy_by_cost(&node);
                 if best_visits != best_cost {
                     if params.is_single_run {
                         eprintln_f!("{best_visits} != {best_cost}");
+                        // print_variance_report(&node);
                     }
                     continue;
                 }

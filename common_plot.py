@@ -344,7 +344,7 @@ class SqliteFigureBuilder:
 
         if self.x_param:
             select_sql = f"SELECT {self.x_param}, {x_mode.param}, {self.y_param} FROM results {where_clause(filters, modes)}"
-            print(select_sql)
+            # print(select_sql)
             for (x_val, x_mode_val, y_val) in self.db_cursor.execute(select_sql):
                 if x_mode_val not in x_val_sets_raw:
                     x_val_sets_raw[x_mode_val] = []
@@ -353,7 +353,7 @@ class SqliteFigureBuilder:
                 y_val_sets_raw[x_mode_val].append(float(y_val))
         else:
             select_sql = f"SELECT {x_mode.param}, {self.y_param} FROM results {where_clause(filters, modes)}"
-            print(select_sql)
+            # print(select_sql)
             for (x_mode_val, y_val) in self.db_cursor.execute(select_sql):
                 if x_mode_val not in x_val_sets_raw:
                     x_val_sets_raw[x_mode_val] = []
