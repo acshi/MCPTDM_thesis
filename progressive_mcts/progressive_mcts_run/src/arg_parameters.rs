@@ -49,6 +49,7 @@ pub struct Parameters {
     pub unknown_prior_std_dev_scalar: f64,
     pub single_trial_discount_factor: f64,
     pub preload_zeros: i32,
+    pub most_visited_best_cost_consistency: bool,
 
     pub thread_limit: usize,
     pub specifiers_hash: Option<i64>,
@@ -88,6 +89,7 @@ impl Parameters {
             unknown_prior_std_dev_scalar: 1.4, // overrides unknown_prior_std_dev if not zero
             single_trial_discount_factor: -1.0,
             preload_zeros: -1,
+            most_visited_best_cost_consistency: true,
 
             thread_limit: 1,
             specifiers_hash: None,
@@ -280,7 +282,7 @@ pub fn run_parallel_scenarios() {
         });
 
         scenarios.par_iter().for_each(|scenario| {
-            // let result = std::panic::catch_unwind(|| {
+            let result = std::panic::catch_unwind(|| {
             {
                 let mut scenario = scenario.clone();
                 scenario.specifiers_hash = Some(specifiers_hash(&scenario));
@@ -329,14 +331,15 @@ pub fn run_parallel_scenarios() {
                 // }
                 tx.send((scenario, res)).expect("tx send");
             }
-            // });
-            // if result.is_err() {
-            //     eprintln!(
-            //         "PANIC for scenario: {:?}",
-            //         scenario.scenario_specifiers.as_ref().unwrap()
-            //     );
-            //     panic!();
-            // }
+            });
+            if result.is_err() {
+                // eprintln!(
+                //     "PANIC for scenario: {:?}",
+                //     scenario.sc.as_ref().unwrap()
+                // );
+                // panic!();
+                std::process::abort();
+            }
         });
 
         is_done.store(true, Ordering::Relaxed);

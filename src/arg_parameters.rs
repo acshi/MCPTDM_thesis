@@ -292,6 +292,7 @@ fn create_scenarios(
                 "mcts.bootstrap_confidence_z" => {
                     params.mcts.bootstrap_confidence_z = val.parse().unwrap()
                 }
+                "mcts.all_mac_report" => params.mcts.all_mac_report = val.parse().unwrap(),
                 "eudm.allow_different_root_policy" => {
                     params.eudm.allow_different_root_policy = val.parse().unwrap()
                 }

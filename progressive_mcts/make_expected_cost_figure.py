@@ -31,6 +31,7 @@ class Node:
         self.intermediate_costs = self.marginal_costs
         self.intermediate_cost = self.marginal_cost
         self.expected_cost = None
+        self.chosen_child_i = None
         self.children = children
 
         self.calculate_all()
@@ -71,7 +72,9 @@ class Node:
         if len(self.children) == 0:
             return None
         else:
-            return np.min([c.expected_cost for c in self.children])
+            best_child_i = np.argmin([c.expected_cost for c in self.children])
+            expected_cost = self.children[best_child_i].expected_cost
+            return (best_child_i, expected_cost)
 
 
 tree = Node(0.0, [0.0] * 8, children=[
@@ -86,11 +89,11 @@ tree = Node(0.0, [0.0] * 8, children=[
 ])
 
 
-def draw_level(node, depth, start_x, start_y):
+def draw_level(node, depth, start_x, start_y, in_best_path):
     plt.gca().add_artist(plt.Circle((start_x, start_y), circle_r, fill=True,
                                     zorder=100, edgecolor="black", facecolor="white", clip_on=False))
     display_str = str(node.display).replace(".0", "")
-    fontsize = 16.0 if len(display_str) > 3 else 20.0
+    fontsize = 16.0 if len(display_str) > 4 else 20.0
     plt.text(start_x, start_y, display_str, fontsize=fontsize,
              zorder=101, horizontalalignment='center', verticalalignment='center')
 
@@ -98,9 +101,14 @@ def draw_level(node, depth, start_x, start_y):
     for (child_i, child) in enumerate(node.children):
         end_x = start_x + dx / (branching_factor - 1) * child_i - 0.5 * dx
         end_y = start_y + dy
-        plt.plot([start_x, end_x], [start_y, end_y], '-', color="black")
 
-        draw_level(child, depth + 1, end_x, end_y)
+        is_best_child = child_i == node.chosen_child_i
+        child_best_path = in_best_path and is_best_child
+        linewidth = 8 if child_best_path else 1
+
+        plt.plot([start_x, end_x], [start_y, end_y], '-', color="black", linewidth=linewidth)
+
+        draw_level(child, depth + 1, end_x, end_y, child_best_path)
 
 
 def calculate_expected_costs_and_display(name, node):
@@ -108,15 +116,22 @@ def calculate_expected_costs_and_display(name, node):
         calculate_expected_costs_and_display(name, child)
     if name == "Normal expected-cost":
         node.expected_cost = node.mean_cost()
+        if len(node.children) > 0:
+            node.chosen_child_i = node.min_child_expected_cost()[0]
         node.display = node.expected_cost
     elif name == "Bubble-best expected-cost":
-        node.expected_cost = node.min_child_expected_cost() or node.mean_cost()
+        (node.chosen_child_i, node.expected_cost) = node.min_child_expected_cost() or (None, node.mean_cost())
         node.display = node.expected_cost
     elif name == "Lower-bound expected-cost":
-        node.expected_cost = max(node.min_child_expected_cost() or 0, node.intermediate_cost)
+        (chosen_child_i, expected_cost) = node.min_child_expected_cost() or (None, 0)
+        if node.intermediate_cost > expected_cost:
+            (node.chosen_child_i, node.expected_cost) = (None, node.intermediate_cost)
+        else:
+            (node.chosen_child_i, node.expected_cost) = (chosen_child_i, expected_cost)
         node.display = node.expected_cost
     elif name == "Marginal expected-cost":
-        node.expected_cost = (node.min_child_expected_cost() or 0) + node.marginal_cost
+        (node.chosen_child_i, node.expected_cost) = node.min_child_expected_cost() or (None, 0)
+        node.expected_cost += node.marginal_cost
         node.display = node.expected_cost
     elif name == "True marginal and intermediate costs":
         node.display = f"M = {node.true_marginal_cost}\nI = {node.true_intermediate_cost}"
@@ -146,7 +161,7 @@ def draw_example(name, start_x, start_y, letter):
     plt.text(start_x, start_y + 10, name, fontsize=20.0,
              zorder=101, horizontalalignment='center', verticalalignment='center')
     calculate_expected_costs_and_display(name, tree)
-    draw_level(tree, 0, start_x, start_y)
+    draw_level(tree, 0, start_x, start_y, True)
 
 
 set_dy = dy * 2 - 30

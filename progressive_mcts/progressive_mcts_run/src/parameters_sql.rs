@@ -74,7 +74,8 @@ define_params!(
     correct_future_std_dev_mean,
     worst_particles_z_abs,
     preload_zeros,
-    bootstrap_n
+    bootstrap_n,
+    most_visited_best_cost_consistency
 );
 
 define_params!(TEXT, bound_mode, final_choice_mode, selection_mode);

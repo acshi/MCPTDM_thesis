@@ -332,13 +332,34 @@ class SqliteFigureBuilder:
         x_val_sets_raw = {}
         y_val_sets_raw = {}
 
-        x_param = self.x_param if self.x_param else x_mode.param
-        for (x_val, y_val) in self.db_cursor.execute(f"SELECT {x_param}, {self.y_param} FROM results {where_clause(filters, modes)}"):
-            if x_val not in x_val_sets_raw:
-                x_val_sets_raw[x_val] = []
-                y_val_sets_raw[x_val] = []
-            x_val_sets_raw[x_val].append(float(x_val))
-            y_val_sets_raw[x_val].append(float(y_val))
+        # x_param = self.x_param if self.x_param else x_mode.param
+        # select_sql = f"SELECT {x_param}, {self.y_param} FROM results {where_clause(filters, modes)}"
+        # print(select_sql)
+        # for (x_val, y_val) in self.db_cursor.execute(select_sql):
+        #     if x_val not in x_val_sets_raw:
+        #         x_val_sets_raw[x_val] = []
+        #         y_val_sets_raw[x_val] = []
+        #     x_val_sets_raw[x_val].append(float(x_val))
+        #     y_val_sets_raw[x_val].append(float(y_val))
+
+        if self.x_param:
+            select_sql = f"SELECT {self.x_param}, {x_mode.param}, {self.y_param} FROM results {where_clause(filters, modes)}"
+            print(select_sql)
+            for (x_val, x_mode_val, y_val) in self.db_cursor.execute(select_sql):
+                if x_mode_val not in x_val_sets_raw:
+                    x_val_sets_raw[x_mode_val] = []
+                    y_val_sets_raw[x_mode_val] = []
+                x_val_sets_raw[x_mode_val].append(float(x_val))
+                y_val_sets_raw[x_mode_val].append(float(y_val))
+        else:
+            select_sql = f"SELECT {x_mode.param}, {self.y_param} FROM results {where_clause(filters, modes)}"
+            print(select_sql)
+            for (x_mode_val, y_val) in self.db_cursor.execute(select_sql):
+                if x_mode_val not in x_val_sets_raw:
+                    x_val_sets_raw[x_mode_val] = []
+                    y_val_sets_raw[x_mode_val] = []
+                x_val_sets_raw[x_mode_val].append(float(x_mode_val))
+                y_val_sets_raw[x_mode_val].append(float(y_val))
 
         x_val_sets = [list() for _ in range(len(x_mode.values))]
         y_val_sets = [list() for _ in range(len(x_mode.values))]

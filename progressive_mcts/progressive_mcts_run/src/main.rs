@@ -124,6 +124,20 @@ struct MctsNode<'a> {
 }
 
 impl<'a> MctsNode<'a> {
+    fn has_seen_particle(&self, i: usize) -> bool {
+        if self.seen_particles.len() <= i {
+            return false;
+        }
+        self.seen_particles[i]
+    }
+
+    fn seen_particle(&mut self, i: usize, seen: bool) {
+        if self.seen_particles.len() <= i {
+            self.seen_particles.resize(i + 1, false);
+        }
+        self.seen_particles[i] = seen;
+    }
+
     // expand node?
     fn get_or_expand_sub_nodes_mut(&mut self) -> &mut Vec<MctsNode<'a>> {
         let params = self.params;
@@ -550,7 +564,7 @@ fn should_replay_particle_at<'a>(
     if let Some((c, sim)) = node
         .sub_node_repeated_particles
         .iter()
-        .filter(|(_c, sim)| !sub_node.seen_particles[sim.particle.id])
+        .filter(|(_c, sim)| !sub_node.has_seen_particle(sim.particle.id))
         .nth(0)
     {
         let z_score = (*c - mean) / std_dev;
@@ -564,7 +578,7 @@ fn should_replay_particle_at<'a>(
         .iter()
         .filter(|(c, sim)| {
             let sim = sim.as_ref().unwrap();
-            !sub_node.seen_particles[sim.particle.id]
+            !sub_node.has_seen_particle(sim.particle.id)
                 && z.map_or(true, |z| {
                     if node.params.worst_particles_z_abs {
                         (*c - mean).abs() >= std_dev * z
@@ -769,7 +783,7 @@ fn run_trial<'a>(
     if !skip_over {
         assert_eq!(node.depth, orig_sim.depth);
         node.costs.push((trial_final_cost, Some(orig_sim)));
-        node.seen_particles[sim.particle.id] = true;
+        node.seen_particle(sim.particle.id, true);
         node.n_trials = node.costs.len();
     }
 
@@ -915,7 +929,7 @@ fn set_final_choice_expected_values(params: &Parameters, node: &mut MctsNode) {
     node.update_expected_cost(final_choice_mode);
 }
 
-fn get_best_policy(node: &MctsNode) -> u32 {
+fn get_best_policy_by_cost(node: &MctsNode) -> u32 {
     let chosen_policy = node
         .sub_nodes
         .as_ref()
@@ -926,6 +940,19 @@ fn get_best_policy(node: &MctsNode) -> u32 {
             let cost_b = b.expected_cost.unwrap_or(f64::MAX);
             cost_a.partial_cmp(&cost_b).unwrap()
         })
+        .unwrap()
+        .policy
+        .unwrap();
+    chosen_policy
+}
+
+fn get_best_policy_by_visits(node: &MctsNode) -> u32 {
+    let chosen_policy = node
+        .sub_nodes
+        .as_ref()
+        .unwrap()
+        .iter()
+        .max_by(|a, b| a.costs.len().cmp(&b.costs.len()))
         .unwrap()
         .policy
         .unwrap();
@@ -1005,10 +1032,8 @@ fn run_with_parameters(params: Parameters) -> RunResults {
     // Expand first level so marginal_cost_confidence_interval has enough to go on
     node.get_or_expand_sub_nodes();
 
-    let mut start_i = 0;
-
-    for i in 0..params.bootstrap_n {
-        let i = i as usize;
+    let mut i = 0;
+    while (i as i32) < params.bootstrap_n {
         bootstrap_run_trial(
             &mut node,
             &mut Simulator::sample(&scenario, i, &mut rng),
@@ -1016,10 +1041,10 @@ fn run_with_parameters(params: Parameters) -> RunResults {
             &mut steps_taken,
             i,
         );
-        start_i += 1;
+        i += 1;
     }
 
-    for i in start_i..params.samples_n {
+    loop {
         let marginal_confidence = node.marginal_cost_confidence_interval(i);
         if params.is_single_run {
             eprintln_f!("{i}: {marginal_confidence=:.2}");
@@ -1048,6 +1073,22 @@ fn run_with_parameters(params: Parameters) -> RunResults {
             i,
             choice_confidence_interval,
         );
+
+        i += 1;
+        if i >= params.samples_n {
+            if params.most_visited_best_cost_consistency {
+                // if we have this best policy inconsistency, do more trials to try to resolve it!
+                let best_visits = get_best_policy_by_visits(&node);
+                let best_cost = get_best_policy_by_cost(&node);
+                if best_visits != best_cost {
+                    if params.is_single_run {
+                        eprintln_f!("{best_visits} != {best_cost}");
+                    }
+                    continue;
+                }
+            }
+            break;
+        }
     }
 
     if params.print_report {
@@ -1055,7 +1096,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
     }
 
     set_final_choice_expected_values(&params, &mut node);
-    let chosen_policy = get_best_policy(&node);
+    let chosen_policy = get_best_policy_by_cost(&node);
 
     // if params.print_report {
     //     print_report(&scenario, &node, 0.0);
@@ -1083,7 +1124,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         repeated_cost_avg += sub_node.repeated_particle_costs.iter().sum::<f64>();
         n_repeated_cost_avg += sub_node.repeated_particle_costs.len();
     }
-    if sum_repeated > 0 {
+    if n_repeated_cost_avg > 0 {
         repeated_cost_avg /= n_repeated_cost_avg as f64;
     }
     if params.is_single_run {

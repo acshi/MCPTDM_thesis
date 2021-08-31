@@ -1,5 +1,5 @@
 use std::{
-    fs::File,
+    fs::{File, OpenOptions},
     io::{BufWriter, Write},
 };
 
@@ -674,7 +674,17 @@ pub fn mcts_choose_policy(
     }
 
     if params.is_single_run && params.mcts.all_mac_report {
-        let mut f = BufWriter::new(File::create("all_mac_report").unwrap());
+        if true_road.timesteps == 0 {
+            let _ = std::fs::remove_file("all_mac_report");
+        }
+
+        let mut f = BufWriter::new(
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open("all_mac_report")
+                .unwrap(),
+        );
         all_mac_report(&mut f, &node).unwrap();
     }
 
