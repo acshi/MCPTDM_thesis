@@ -276,8 +276,8 @@ class FigureBuilder:
 
         self.axins.set_xlim(xlim)
         self.axins.set_ylim(ylim)
-        self.axins.set_xticklabels('')
-        self.axins.set_yticklabels('')
+        self.axins.set_xticklabels("")
+        self.axins.set_yticklabels("")
 
         return self.ax.indicate_inset_zoom(self.axins, edgecolor="black")
 
@@ -305,13 +305,15 @@ def db_filtered(db_cursor, param, filters):
     return [val for val in db_cursor.execute(f"SELECT {param} FROM results {where_clause(filters, [])}")]
 
 class SqliteFigureBuilder:
-    def __init__(self, db_cursor, x_param, y_param, translations={}):
+    def __init__(self, db_cursor, x_param, y_param, translations={}, x_param_scalar=1, x_param_log=False):
         self.db_cursor = db_cursor
         self.x_param = x_param
         self.defacto_x_param = x_param
         self.y_param = y_param
         self.all_modes = []
         self.translations = translations
+        self.x_param_log = x_param_log
+        self.x_param_scalar = x_param_scalar
         self.min_x = None
         self.max_x = None
         self.x_locs = []
@@ -349,16 +351,21 @@ class SqliteFigureBuilder:
                 if x_mode_val not in x_val_sets_raw:
                     x_val_sets_raw[x_mode_val] = []
                     y_val_sets_raw[x_mode_val] = []
+                x_val = float(x_val) * self.x_param_scalar
+                x_val = np.log2(x_val) if self.x_param_log else x_val
                 x_val_sets_raw[x_mode_val].append(float(x_val))
                 y_val_sets_raw[x_mode_val].append(float(y_val))
         else:
             select_sql = f"SELECT {x_mode.param}, {self.y_param} FROM results {where_clause(filters, modes)}"
             # print(select_sql)
             for (x_mode_val, y_val) in self.db_cursor.execute(select_sql):
+                x_val = x_mode_val
                 if x_mode_val not in x_val_sets_raw:
                     x_val_sets_raw[x_mode_val] = []
                     y_val_sets_raw[x_mode_val] = []
-                x_val_sets_raw[x_mode_val].append(float(x_mode_val))
+                x_val = float(x_val) * self.x_param_scalar
+                x_val = np.log2(x_val) if self.x_param_log else x_val
+                x_val_sets_raw[x_mode_val].append(float(x_val))
                 y_val_sets_raw[x_mode_val].append(float(y_val))
 
         x_val_sets = [list() for _ in range(len(x_mode.values))]
@@ -513,9 +520,13 @@ class SqliteFigureBuilder:
 
     def xscale(self, xscale):
         self.ax.set_xscale(xscale)
+        if self.axins:
+            self.axins.set_xscale(xscale)
 
     def yscale(self, yscale):
         self.ax.set_yscale(yscale)
+        if self.axins:
+            self.axins.set_yscale(yscale)
 
     def zoom(self, zoom):
         self.figure_zoom = 1.0 / zoom
@@ -548,8 +559,8 @@ class SqliteFigureBuilder:
 
         self.axins.set_xlim(xlim)
         self.axins.set_ylim(ylim)
-        self.axins.set_xticklabels('')
-        self.axins.set_yticklabels('')
+        self.axins.set_xticklabels("")
+        self.axins.set_yticklabels("")
 
         (rect, connections) = self.ax.indicate_inset_zoom(self.axins, edgecolor="black")
 

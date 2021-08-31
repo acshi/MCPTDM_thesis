@@ -64,10 +64,10 @@ impl Parameters {
         Self {
             search_depth: 4,
             n_actions: 5,
-            ucb_const: -0.15, // for klucb, -1500 for UCB
+            ucb_const: -0.022, // for klucb, -1500 for UCB
             ucbv_const: 0.001,
             ucbd_const: 1.0,
-            klucb_max_cost: 15000.0,
+            klucb_max_cost: 2200.0,
             rng_seed: 0,
             samples_n: 64,
             bound_mode: CostBoundMode::MarginalPrior,
