@@ -471,6 +471,36 @@ impl<'a> MctsNode<'a> {
         self.expected_cost = Some(expected_cost);
         self.expected_cost_std_dev = Some(std_dev);
     }
+
+    fn get_best_policy_by_cost(&self) -> u32 {
+        let chosen_policy = self
+            .sub_nodes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .min_by(|a, b| {
+                let cost_a = a.expected_cost.unwrap_or(f64::MAX);
+                let cost_b = b.expected_cost.unwrap_or(f64::MAX);
+                cost_a.partial_cmp(&cost_b).unwrap()
+            })
+            .unwrap()
+            .policy
+            .unwrap();
+        chosen_policy
+    }
+
+    fn get_best_policy_by_visits(&self) -> u32 {
+        let chosen_policy = self
+            .sub_nodes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .max_by(|a, b| a.costs.len().cmp(&b.costs.len()))
+            .unwrap()
+            .policy
+            .unwrap();
+        chosen_policy
+    }
 }
 
 fn find_trial_path(node: &mut MctsNode, rng: &mut StdRng, mut path: Vec<usize>) -> Vec<usize> {
@@ -924,36 +954,6 @@ fn set_final_choice_expected_values(params: &Parameters, node: &mut MctsNode) {
     node.update_expected_cost(final_choice_mode);
 }
 
-fn get_best_policy_by_cost(node: &MctsNode) -> u32 {
-    let chosen_policy = node
-        .sub_nodes
-        .as_ref()
-        .unwrap()
-        .iter()
-        .min_by(|a, b| {
-            let cost_a = a.expected_cost.unwrap_or(f64::MAX);
-            let cost_b = b.expected_cost.unwrap_or(f64::MAX);
-            cost_a.partial_cmp(&cost_b).unwrap()
-        })
-        .unwrap()
-        .policy
-        .unwrap();
-    chosen_policy
-}
-
-fn get_best_policy_by_visits(node: &MctsNode) -> u32 {
-    let chosen_policy = node
-        .sub_nodes
-        .as_ref()
-        .unwrap()
-        .iter()
-        .max_by(|a, b| a.costs.len().cmp(&b.costs.len()))
-        .unwrap()
-        .policy
-        .unwrap();
-    chosen_policy
-}
-
 fn print_variance_report(node: &MctsNode) {
     eprintln!(
         "Overall n: {:4}, expected cost: {:5.0} and std dev: {:5.0}",
@@ -1073,8 +1073,8 @@ fn run_with_parameters(params: Parameters) -> RunResults {
         if i >= params.samples_n {
             if params.most_visited_best_cost_consistency && i <= params.samples_n * 12 / 10 {
                 // if we have this best policy inconsistency, do more trials to try to resolve it!
-                let best_visits = get_best_policy_by_visits(&node);
-                let best_cost = get_best_policy_by_cost(&node);
+                let best_visits = node.get_best_policy_by_visits();
+                let best_cost = node.get_best_policy_by_cost();
                 if best_visits != best_cost {
                     if params.is_single_run {
                         eprintln_f!("{best_visits} != {best_cost}");
@@ -1092,7 +1092,7 @@ fn run_with_parameters(params: Parameters) -> RunResults {
     }
 
     set_final_choice_expected_values(&params, &mut node);
-    let chosen_policy = get_best_policy_by_cost(&node);
+    let chosen_policy = node.get_best_policy_by_cost();
 
     // if params.print_report {
     //     print_report(&scenario, &node, 0.0);

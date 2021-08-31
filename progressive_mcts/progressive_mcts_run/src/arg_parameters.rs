@@ -84,9 +84,9 @@ impl Parameters {
             throwout_extreme_costs_z: 1000.0,
             bootstrap_confidence_z: 0.0,
             bootstrap_n: -1,
-            zero_mean_prior_std_dev: 220.0,
+            zero_mean_prior_std_dev: 330.0,
             unknown_prior_std_dev: 1000.0,
-            unknown_prior_std_dev_scalar: 1.4, // overrides unknown_prior_std_dev if not zero
+            unknown_prior_std_dev_scalar: 1.8, // overrides unknown_prior_std_dev if not zero
             single_trial_discount_factor: -1.0,
             preload_zeros: -1,
             most_visited_best_cost_consistency: true,
