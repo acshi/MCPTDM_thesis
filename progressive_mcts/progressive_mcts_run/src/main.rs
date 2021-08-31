@@ -179,12 +179,7 @@ impl<'a> MctsNode<'a> {
     }
 
     fn variance(&self) -> f64 {
-        let mean = self.mean_cost();
-        self.costs
-            .iter()
-            .map(|(c, _)| (*c - mean).powi(2))
-            .sum::<f64>()
-            / self.costs.len() as f64
+        self.costs.std_dev().powi(2)
     }
 
     fn min_child_marginal_index_mut(&mut self) -> Option<&mut MctsNode<'a>> {
