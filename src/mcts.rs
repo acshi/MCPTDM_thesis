@@ -318,6 +318,34 @@ impl<'a> MctsNode<'a> {
                 .map(|a| a.1)
         })
     }
+
+    fn get_best_policy_by_cost(&self) -> Option<&SidePolicy> {
+        let chosen_policy = self
+            .sub_nodes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .min_by(|a, b| {
+                let cost_a = a.expected_cost.map_or(f64::MAX, |c| c.total());
+                let cost_b = b.expected_cost.map_or(f64::MAX, |c| c.total());
+                cost_a.partial_cmp(&cost_b).unwrap()
+            })?
+            .policy
+            .as_ref();
+        chosen_policy
+    }
+
+    fn get_best_policy_by_visits(&self) -> Option<&SidePolicy> {
+        let chosen_policy = self
+            .sub_nodes
+            .as_ref()
+            .unwrap()
+            .iter()
+            .max_by(|a, b| a.costs.len().cmp(&b.costs.len()))?
+            .policy
+            .as_ref();
+        chosen_policy
+    }
 }
 
 fn gaussian_update<
@@ -635,7 +663,8 @@ pub fn mcts_choose_policy(
     let mut node = MctsNode::new(params, &policy_choices, None, 0);
     node.get_or_expand_sub_nodes();
 
-    for i in 0..params.mcts.samples_n {
+    let mut i = 0;
+    loop {
         let marginal_confidence = node.marginal_cost_confidence_interval();
         // eprintln_f!("{i}: {marginal_confidence=:.2}");
         if params.mcts.bootstrap_confidence_z > marginal_confidence {
@@ -647,18 +676,29 @@ pub fn mcts_choose_policy(
         road.sample_id = Some(i);
         road.save_particle();
         find_and_run_trial(&mut node, &mut road, rng);
-    }
 
-    let mut best_score = Cost::max_value();
-    let mut best_policy = None;
-    for sub_node in node.sub_nodes.as_ref().unwrap().iter() {
-        if let Some(score) = sub_node.expected_cost {
-            if score < best_score {
-                best_score = score;
-                best_policy = sub_node.policy.clone();
+        //
+        i += 1;
+        if i >= params.mcts.samples_n {
+            if params.mcts.most_visited_best_cost_consistency
+                && i <= params.mcts.samples_n * 12 / 10
+            {
+                // if we have this best policy inconsistency, do more trials to try to resolve it!
+                let best_visits = node.get_best_policy_by_visits().map(|p| p.policy_id());
+                let best_cost = node.get_best_policy_by_cost().map(|p| p.policy_id());
+                if best_visits != best_cost {
+                    if params.is_single_run {
+                        eprintln_f!("{best_visits:?} != {best_cost:?}");
+                        // print_variance_report(&node);
+                    }
+                    continue;
+                }
             }
+            break;
         }
     }
+
+    let best_policy = node.get_best_policy_by_cost().cloned();
 
     let mut traces = Vec::new();
     collect_traces(&mut node, &mut traces);

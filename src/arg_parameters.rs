@@ -54,6 +54,7 @@ pub struct MctsParameters {
     pub zero_mean_prior_std_dev: f64,
     pub unknown_prior_std_dev_scalar: f64,
     pub bootstrap_confidence_z: f64,
+    pub most_visited_best_cost_consistency: bool,
     pub tree_exploration_report: bool,
     pub all_mac_report: bool,
 }
@@ -292,6 +293,9 @@ fn create_scenarios(
                 "mcts.bootstrap_confidence_z" => {
                     params.mcts.bootstrap_confidence_z = val.parse().unwrap()
                 }
+                "mcts.most_visited_best_cost_consistency" => {
+                    params.mcts.most_visited_best_cost_consistency = val.parse().unwrap()
+                }
                 "mcts.all_mac_report" => params.mcts.all_mac_report = val.parse().unwrap(),
                 "eudm.allow_different_root_policy" => {
                     params.eudm.allow_different_root_policy = val.parse().unwrap()
@@ -419,6 +423,13 @@ fn create_scenarios(
             _ => "".to_string(),
         };
 
+        let most_visited_best_cost_consistency = match s.method.as_str() {
+            "mcts" => {
+                format_f!(",most_visited_best_cost_consistency={s.mcts.most_visited_best_cost_consistency}")
+            }
+            _ => "".to_string(),
+        };
+
         let allow_different_root_policy = match s.method.as_str() {
             "eudm" => {
                 format_f!(",allow_different_root_policy={s.eudm.allow_different_root_policy}")
@@ -438,7 +449,8 @@ fn create_scenarios(
              ,extra_ego_accdec_policies={extra_ego_accdec}\
              {samples_n}{search_depth}{forward_t}\
              {selection_mode}{bound_mode}{ucb_const}{kluct_max_cost}{prioritize_worst_particles_z}\
-             {repeat_const}{single_trial_discount_factor}{zero_mean_prior_std_dev}{unknown_prior_std_dev_scalar}{bootstrap_confidence_z}\
+             {repeat_const}{single_trial_discount_factor}{zero_mean_prior_std_dev}\
+             {unknown_prior_std_dev_scalar}{bootstrap_confidence_z}{most_visited_best_cost_consistency}\
              {allow_different_root_policy}\
              ,max_steps={s.max_steps}\
              ,n_cars={s.n_cars}\
