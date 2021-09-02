@@ -103,7 +103,11 @@ impl State {
             self.road.draw(r);
             r.draw_all(self.traces.iter().cloned());
 
-            r.set_global_rot(-PI / 2.0);
+            if self.params.graphics_for_paper {
+                r.set_global_rot(0.0);
+            } else {
+                r.set_global_rot(-PI / 2.0);
+            }
             r.commit_changes();
         }
     }

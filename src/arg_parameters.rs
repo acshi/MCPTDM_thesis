@@ -144,6 +144,7 @@ pub struct Parameters {
     pub run_fast: bool,
     pub is_single_run: bool,
     pub graphics_speedup: f64,
+    pub graphics_for_paper: bool,
     pub debug_car_i: Option<usize>,
     pub debug_steps_before: usize,
     pub super_debug: bool,

@@ -39,6 +39,9 @@ def filter_match(params, filter):
         if param_split[0] == "max":
             name_value = float(params[param_split[1]])
             return name_value <= param_value
+        elif param_split[0] == "min":
+            name_value = float(params[param_split[1]])
+            return name_value >= param_value
         elif params["method"] != param_split[0]:
             return True
         param = param_split[1]

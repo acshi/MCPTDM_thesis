@@ -256,12 +256,14 @@ impl Car {
                 .color(color),
         );
 
-        r.draw(
-            Rvx::text(&format!("{:.1}", self.car_i,), "Arial", 60.0)
-                .rot(-PI / 2.0)
-                .translate(&[self.x - self.length / 2.0, self.y + self.width / 2.0])
-                .color(RvxColor::BLACK),
-        );
+        if !params.graphics_for_paper {
+            r.draw(
+                Rvx::text(&format!("{:.1}", self.car_i,), "Arial", 60.0)
+                    .rot(-PI / 2.0)
+                    .translate(&[self.x - self.length / 2.0, self.y + self.width / 2.0])
+                    .color(RvxColor::BLACK),
+            );
+        }
 
         if false {
             r.draw(
@@ -283,7 +285,7 @@ impl Car {
             .rot(-PI / 2.0)
             .translate(&[self.x, self.y]),
         );
-        } else {
+        } else if !params.graphics_for_paper {
             r.draw(
                 Rvx::text(
                     &format!(
@@ -316,7 +318,7 @@ impl Car {
             );
         }
 
-        if self.is_ego() {
+        if self.is_ego() && !params.graphics_for_paper {
             self.side_control.iter().for_each(|a| a.draw(r));
         }
     }

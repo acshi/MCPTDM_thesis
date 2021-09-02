@@ -14,6 +14,8 @@ use crate::{
     cost::Cost,
     mpdm::make_policy_choices,
     road::{Particle, Road},
+    road_set::RoadSet,
+    road_set_for_scenario,
     side_policies::{SidePolicy, SidePolicyTrait},
 };
 
@@ -620,19 +622,14 @@ fn all_mac_report(f: &mut BufWriter<File>, node: &MctsNode) -> Result<(), std::i
     Ok(())
 }
 
-fn bootstrap_run_trial<'a>(
-    node: &mut MctsNode<'a>,
-    true_road: &Road,
-    rng: &mut StdRng,
-    n_completed: usize,
-) {
+fn bootstrap_run_trial<'a>(node: &mut MctsNode<'a>, roads: &mut RoadSet, n_completed: usize) {
     let is_single_run = !node.params.run_fast;
 
     // do search_depth single step trials so the total cost of a bootstrap run is the same
     // as a normal one
     for _ in 0..node.params.mcts.search_depth {
         let sub_node = node.min_child_marginal_index_mut().unwrap();
-        let score = run_step(sub_node, &mut true_road.sample_belief(rng)).unwrap();
+        let score = run_step(sub_node, &mut roads.pop()).unwrap();
         if is_single_run {
             eprintln!(
                 "{}: Bootstrap trial: {:?} got {:.2}",
@@ -659,6 +656,13 @@ pub fn mcts_choose_policy(
     }
     let params = &params;
 
+    let mut roads = road_set_for_scenario(
+        params,
+        true_road,
+        rng,
+        (params.mcts.samples_n as f64 * 1.2).ceil() as usize,
+    );
+
     let policy_choices = make_policy_choices(params);
     let debug = true_road.debug
         && true_road.timesteps + params.debug_steps_before >= params.max_steps as usize;
@@ -671,11 +675,11 @@ pub fn mcts_choose_policy(
         let marginal_confidence = node.marginal_cost_confidence_interval();
         // eprintln_f!("{i}: {marginal_confidence=:.2}");
         if params.mcts.bootstrap_confidence_z > marginal_confidence {
-            bootstrap_run_trial(&mut node, &true_road, rng, i);
+            bootstrap_run_trial(&mut node, &mut roads, i);
             continue;
         }
 
-        let mut road = true_road.sample_belief(rng);
+        let mut road = roads.pop();
         road.sample_id = Some(i);
         road.save_particle();
         find_and_run_trial(&mut node, &mut road, rng);

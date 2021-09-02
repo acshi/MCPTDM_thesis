@@ -734,12 +734,14 @@ impl Road {
                 .color(RvxColor::WHITE),
         );
 
-        r.draw(
-            Rvx::text(&format!("{}", self.timesteps), "Arial", 150.0)
-                .rot(-PI / 2.0)
-                .translate(&[0.0, 5.0 * LANE_WIDTH])
-                .color(RvxColor::WHITE),
-        );
+        if !self.params.graphics_for_paper {
+            r.draw(
+                Rvx::text(&format!("{}", self.timesteps), "Arial", 150.0)
+                    .rot(-PI / 2.0)
+                    .translate(&[0.0, 5.0 * LANE_WIDTH])
+                    .color(RvxColor::WHITE),
+            );
+        }
 
         // adjust for ego car
         r.set_translate_modifier(-self.cars[0].x(), 0.0);

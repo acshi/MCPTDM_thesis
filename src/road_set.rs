@@ -115,4 +115,8 @@ impl RoadSet {
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Road> {
         self.roads.iter_mut()
     }
+
+    pub fn pop(&mut self) -> Road {
+        self.roads.remove(0)
+    }
 }
