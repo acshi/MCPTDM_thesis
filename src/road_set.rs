@@ -119,4 +119,8 @@ impl RoadSet {
     pub fn pop(&mut self) -> Road {
         self.roads.remove(0)
     }
+
+    pub fn len(&self) -> usize {
+        self.roads.len()
+    }
 }

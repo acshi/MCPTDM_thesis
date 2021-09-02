@@ -77,7 +77,7 @@ max_n_for_cartesian_product = 4
 dt = 0.2
 horizon_t = 8.0
 set_cost_weights = true
-sample_from_base_set = true
+sample_from_base_set = false
 sample_unimportant_vehicle_policies = true
 
 [tree]

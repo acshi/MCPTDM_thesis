@@ -684,7 +684,6 @@ pub fn mcts_choose_policy(
         road.save_particle();
         find_and_run_trial(&mut node, &mut road, rng);
 
-        //
         i += 1;
         if i >= params.mcts.samples_n {
             if params.mcts.most_visited_best_cost_consistency

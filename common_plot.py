@@ -27,7 +27,10 @@ class FigureMode:
         self.values = values
 
     def matches(self, params, value):
-        return self.param in params and params[self.param] == str(value)
+        str_value = str(value)
+        if str_value.endswith(".0"):
+            str_value = str_value.replace(".0", "")
+        return self.param in params and params[self.param] == str_value
 
 
 def filter_match(params, filter):
@@ -108,7 +111,8 @@ class FigureBuilder:
             if not self.filter_entry(entry, filters, modes):
                 continue
             for (i, val_name) in enumerate(x_mode.values):
-                if entry["params"][x_mode.param] == str(val_name):
+                # if entry["params"][x_mode.param] == str(val_name):
+                if x_mode.matches(entry["params"], val_name):
                     if self.x_param is not None:
                         x_val_sets[i].append((entry[self.x_param])
                                              if self.x_param in entry else float(entry["params"][self.x_param]))
