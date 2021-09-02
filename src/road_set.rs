@@ -120,6 +120,7 @@ impl RoadSet {
         self.roads.remove(0)
     }
 
+    #[allow(unused)]
     pub fn len(&self) -> usize {
         self.roads.len()
     }

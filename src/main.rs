@@ -359,7 +359,6 @@ fn road_set_for_scenario(
 ) -> RoadSet {
     if params.use_cfb {
         let (base_set, selected_ids) = conditional_focused_branching(params, true_road, n);
-        assert_eq!(base_set.len(), n);
         if params.cfb.sample_from_base_set {
             let mut roads = sample_from_road_set(base_set, rng, n);
             if params.cfb.sample_unimportant_vehicle_policies {
