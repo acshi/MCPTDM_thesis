@@ -142,6 +142,7 @@ pub struct Parameters {
     pub thread_limit: usize,
     pub rng_seed: u64,
     pub run_fast: bool,
+    pub load_and_record_results: bool,
     pub is_single_run: bool,
     pub graphics_speedup: f64,
     pub graphics_for_paper: bool,
@@ -255,6 +256,7 @@ fn create_scenarios(
                 "replan_dt" => params.replan_dt = val.parse().unwrap(),
                 "rng_seed" => params.rng_seed = val.parse().unwrap(),
                 "run_fast" => params.run_fast = val.parse().unwrap(),
+                "load_and_record_results" => params.load_and_record_results = val.parse().unwrap(),
                 "thread_limit" => params.thread_limit = val.parse().unwrap(),
                 "tree.samples_n" => params.tree.samples_n = val.parse().unwrap(),
                 "mpdm.samples_n" => params.mpdm.samples_n = val.parse().unwrap(),
@@ -537,12 +539,14 @@ pub fn run_parallel_scenarios() {
             .unwrap();
     }
 
+    let load_and_record_results = scenarios[0].load_and_record_results;
+
     let n_scenarios_completed = AtomicUsize::new(0);
     let cumulative_results = Mutex::new(BTreeMap::new());
 
     let cache_filename = "results.cache";
     // read the existing cache file
-    {
+    if load_and_record_results {
         let mut cumulative_results = cumulative_results.lock().unwrap();
         if let Ok(file) = File::open(cache_filename) {
             let file = BufReader::new(file);
@@ -555,13 +559,17 @@ pub fn run_parallel_scenarios() {
         }
     }
 
-    let file = Mutex::new(
-        OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open(cache_filename)
-            .unwrap(),
-    );
+    let file = if load_and_record_results {
+        Some(Mutex::new(
+            OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(cache_filename)
+                .unwrap(),
+        ))
+    } else {
+        None
+    };
 
     if n_scenarios == 1 {
         let mut scenario = scenarios[0].clone();
@@ -596,11 +604,13 @@ pub fn run_parallel_scenarios() {
                     n_scenarios
                 );
                 println_f!("{cost} {reward} {seconds:6.2}");
-                writeln_f!(
-                    file.lock().unwrap(),
-                    "{scenario_name} {cost} {reward} {seconds:6.2}"
-                )
-                .unwrap();
+                if let Some(ref file) = file {
+                    writeln_f!(
+                        file.lock().unwrap(),
+                        "{scenario_name} {cost} {reward} {seconds:6.2}"
+                    )
+                    .unwrap();
+                }
 
                 cumulative_results.lock().unwrap().insert(scenario_name, ());
             });
