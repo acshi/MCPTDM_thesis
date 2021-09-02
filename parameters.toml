@@ -14,6 +14,7 @@ lane_change_time = 2.0
 thread_limit = 0
 rng_seed = 0
 run_fast = false
+load_and_record_results = true
 is_single_run = false
 graphics_speedup = 8
 graphics_for_paper = true
@@ -54,7 +55,7 @@ skips_waiting_prob = 0.1
 [cost]
 efficiency_speed_cost = 1.0
 efficiency_weight = 1.0
-safety_weight = 150.0       # was 100
+safety_weight = 300.0       # was 150
 safety_margin_low = 0.0     # bounded by lane width 3.7 - prius width 1.76 = 1.94; previous was 0.44
 safety_margin_high = 2.4
 logistic_map_low = 5.0
