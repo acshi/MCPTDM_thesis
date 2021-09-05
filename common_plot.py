@@ -620,7 +620,7 @@ def print_all_parameter_values_used(results, filters):
               ", ".join(f"({param_value}: {param_set[param_value]})" for param_value in param_set))
 
 
-def parse_parameters(parameters_string):
+def parse_parameters(parameters_string, skip=[]):
     parsed_params = {}
     for param in parameters_string.split(","):
         if len(param) == 0:
@@ -628,5 +628,6 @@ def parse_parameters(parameters_string):
         param_split = param.split("=")
         param_name = param_split[0]
         param_value = param_split[1]
-        parsed_params[param_name] = param_value
+        if param_name not in skip:
+            parsed_params[param_name] = param_value
     return parsed_params
