@@ -825,15 +825,18 @@ impl Road {
             if car_i == 0 && self.params.ego_traces_debug {
                 // eprintln!("Points in trace: {}", trace.len());
 
-                let base_line_color = if self.cars[0].crashed {
+                let crashed = self.cars[0].crashed;
+                let not_safe = self.cost.safety > self.last_reset_cost.safety + 20.0;
+
+                let base_line_color = if crashed {
                     RvxColor::RED.scale_rgb(0.5)
-                } else if self.cost.safety > self.last_reset_cost.safety + 20.0 {
+                } else if not_safe {
                     RvxColor::PINK
                 } else {
                     RvxColor::GREEN
                 };
 
-                let line_color = match depth_level {
+                let mut line_color = match depth_level {
                     0 => base_line_color.set_a(0.6),
                     1 => base_line_color.scale_rgb(0.6).set_a(0.6),
                     2 => base_line_color.scale_rgb(0.5).set_a(0.6),
@@ -846,7 +849,11 @@ impl Road {
                     2 => 3.0,
                     3 | _ => 1.5,
                 };
-                if self.cars[0].crashed || self.cost.safety > 0.0 {
+                if self.params.graphics_for_paper {
+                    line_color = base_line_color.scale_rgb(0.6).set_a(0.6);
+                    line_width = 4.0;
+                }
+                if crashed || not_safe {
                     line_width += 4.0;
                 }
 

@@ -25,7 +25,7 @@ use rate_timer::RateTimer;
 use reward::Reward;
 use road::Road;
 use road_set::RoadSet;
-use rvx::Rvx;
+use rvx::{Rvx, RvxColor};
 #[allow(unused)]
 use side_policies::SidePolicyTrait;
 
@@ -72,6 +72,7 @@ struct State {
     r: Option<Rvx>,
     timesteps: u32,
     reward: Reward,
+    paper_graphics_sets: Vec<Vec<rvx::Shape>>,
 }
 
 fn check_for_duplicate_shapes(shapes: &[rvx::Shape]) {
@@ -103,11 +104,12 @@ impl State {
             self.road.draw(r);
             r.draw_all(self.traces.iter().cloned());
 
-            if self.params.graphics_for_paper {
-                r.set_global_rot(0.0);
-            } else {
-                r.set_global_rot(-PI / 2.0);
+            if self.params.graphics_for_paper && self.timesteps >= 1100 && self.timesteps % 50 == 25
+            {
+                self.paper_graphics_sets.push(r.shapes().to_vec());
             }
+
+            r.set_global_rot(-PI / 2.0);
             r.commit_changes();
         }
     }
@@ -266,6 +268,7 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
         params,
         traces: Vec::new(),
         reward: Default::default(),
+        paper_graphics_sets: Vec::new(),
     };
 
     let use_graphics = !state.params.run_fast;
@@ -297,6 +300,23 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
         //         );
         //     }
         // }
+    }
+
+    if state.params.graphics_for_paper {
+        if let Some(r) = state.r.as_mut() {
+            r.clear();
+            r.draw(Rvx::square().scale(1000.0).color(RvxColor::LIGHT_GRAY));
+
+            let x = 0.0;
+            let mut y = 0.0;
+
+            for shape_set in state.paper_graphics_sets.iter() {
+                r.draw_all(shape_set.iter().cloned());
+                r.set_translate_modifier(x, y);
+                y -= 9.0;
+            }
+            r.commit_changes();
+        }
     }
 
     if use_graphics {

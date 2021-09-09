@@ -8,7 +8,7 @@ initial_dx = 30  # to the left and the right
 example_dx = initial_dx * 2
 branching_factor = 2
 max_depth = 4
-circle_r = 6.5
+circle_r = 6.4
 
 zero_prior_std_dev = 10.0
 nominal_std_dev = 10.0
@@ -111,7 +111,7 @@ def draw_level(node, depth, start_x, start_y, in_best_path):
     plt.gca().add_artist(plt.Circle((start_x, start_y), circle_r, fill=True,
                                     zorder=100, edgecolor="black", facecolor="white", clip_on=False))
     display_str = str(node.display)
-    fontsize = 12.0 if len(display_str) > 4 else 20.0
+    fontsize = 13.5 if len(display_str) > 4 else 20.0
     plt.text(start_x, start_y, display_str, fontsize=fontsize,
              zorder=101, horizontalalignment='center', verticalalignment='center')
 
@@ -194,15 +194,15 @@ def calculate_expected_costs_and_display(name, node):
 
 
 def draw_example(name, start_x, start_y, letter):
-    plt.text(start_x - initial_dx * 0.8, start_y, letter, fontsize=30.0,
+    plt.text(start_x - initial_dx * 0.8, start_y, letter, fontsize=24.0,
              zorder=101, horizontalalignment='center', verticalalignment='center')
-    plt.text(start_x, start_y + 10, name, fontsize=20.0,
+    plt.text(start_x, start_y + 8, name, fontsize=18.0,
              zorder=101, horizontalalignment='center', verticalalignment='center')
     calculate_expected_costs_and_display(name, tree)
     push_down_expected_costs_and_display(name, tree, 0)
     draw_level(tree, 0, start_x, start_y, True)
 
-set_dy = dy * 2 - 30
+set_dy = dy * 2 - 20
 
 start_x = 0
 start_y = 0

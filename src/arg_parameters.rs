@@ -599,9 +599,10 @@ pub fn run_parallel_scenarios() {
 
                 n_scenarios_completed.fetch_add(1, Ordering::Relaxed);
                 print!(
-                    "{}/{}: ",
+                    "{}/{} ({}): ",
                     n_scenarios_completed.load(Ordering::Relaxed),
-                    n_scenarios
+                    n_scenarios,
+                    scenario.rng_seed,
                 );
                 println_f!("{cost} {reward} {seconds:6.2}");
                 if let Some(ref file) = file {

@@ -693,10 +693,9 @@ pub fn mcts_choose_policy(
                 let best_visits = node.get_best_policy_by_visits().map(|p| p.policy_id());
                 let best_cost = node.get_best_policy_by_cost().map(|p| p.policy_id());
                 if best_visits != best_cost {
-                    if params.is_single_run {
-                        eprintln_f!("{best_visits:?} != {best_cost:?}");
-                        // print_variance_report(&node);
-                    }
+                    // if params.is_single_run {
+                    //     eprintln_f!("{best_visits:?} != {best_cost:?}");
+                    // }
                     continue;
                 }
             }
