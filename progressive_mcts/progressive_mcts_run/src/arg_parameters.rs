@@ -70,7 +70,7 @@ impl Parameters {
             klucb_max_cost: 4700.0,
             rng_seed: 0,
             samples_n: 64,
-            bound_mode: CostBoundMode::MarginalPrior,
+            bound_mode: CostBoundMode::Marginal,
             final_choice_mode: CostBoundMode::Same,
             selection_mode: ChildSelectionMode::KLUCB,
             prioritize_worst_particles_z: 1000.0,
