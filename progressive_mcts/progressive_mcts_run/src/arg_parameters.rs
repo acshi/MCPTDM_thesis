@@ -91,7 +91,7 @@ impl Parameters {
             preload_zeros: -1,
             most_visited_best_cost_consistency: true,
 
-            thread_limit: 1,
+            thread_limit: 0,
             specifiers_hash: None,
 
             print_report: false,
