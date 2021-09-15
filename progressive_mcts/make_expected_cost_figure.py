@@ -114,12 +114,12 @@ def draw_level(node, depth, start_x, start_y, in_best_path):
 def calculate_expected_costs_and_display(name, node):
     for child in node.children:
         calculate_expected_costs_and_display(name, child)
-    if name == "Normal expected-cost":
+    if name == "Classic expected-cost":
         node.expected_cost = node.mean_cost()
         if len(node.children) > 0:
             node.chosen_child_i = node.min_child_expected_cost()[0]
         node.display = node.expected_cost
-    elif name == "Bubble-best expected-cost":
+    elif name == "Expectimax expected-cost":
         (node.chosen_child_i, node.expected_cost) = node.min_child_expected_cost() or (None, node.mean_cost())
         node.display = node.expected_cost
     elif name == "Lower-bound expected-cost":
@@ -181,14 +181,14 @@ letter = chr(ord(letter) + 1)
 draw_example("Sampled intermediate costs", start_x, start_y, letter)
 start_x += example_dx
 letter = chr(ord(letter) + 1)
-draw_example("Normal expected-cost", start_x, start_y, letter)
+draw_example("Classic expected-cost", start_x, start_y, letter)
 start_x += example_dx
 letter = chr(ord(letter) + 1)
 
 
 start_x = 0
 start_y += set_dy
-draw_example("Bubble-best expected-cost", start_x, start_y, letter)
+draw_example("Expectimax expected-cost", start_x, start_y, letter)
 start_x += example_dx
 letter = chr(ord(letter) + 1)
 

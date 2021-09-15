@@ -410,12 +410,12 @@ if False:
 
 # cargo run --release rng_seed 0:2:16383 :: method mpdm :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64
 # cargo run --release rng_seed 0:2:16383 :: method eudm :: use_cfb false true :: eudm.samples_n 1 2 4 8 16 32
-# cargo run --release rng_seed 0:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal marginal_prior :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 32768
-# cargo run --release rng_seed 0:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal marginal_prior :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0
+# cargo run --release rng_seed 0:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode normal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0
+# cargo run --release rng_seed 0:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0 32768
 # cargo run --release rng_seed 1:2:16383 :: method mpdm :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64
 # cargo run --release rng_seed 1:2:16383 :: method eudm :: use_cfb false true :: eudm.samples_n 1 2 4 8 16 32
-# cargo run --release rng_seed 1:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal marginal_prior :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 32768
-# cargo run --release rng_seed 1:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal marginal_prior :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0
+# cargo run --release rng_seed 1:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode normal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0
+# cargo run --release rng_seed 1:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0 32768
 if should_make_figure("final"):
     for do_ablation in [False, True]:
         for metric in ["cost.efficiency", "cost.safety", "cost", "safety", "efficiency"]:
@@ -438,9 +438,9 @@ if should_make_figure("final"):
                                 ("selection_mode", "klucb"),
                                 ("klucb_max_cost", 4.7),
                                 ("ucb_const", 1.5),
-                                ("bound_mode", "marginal")] + common_filters
+                                ("bound_mode", "normal")] + common_filters
                 seconds_fig.plot(FigureMode(
-                    "samples_n", [8, 16, 32, 64, 128, 256]), mcts_filters, label="MCPTDM (-repeat, -prior)")
+                    "samples_n", [8, 16, 32, 64, 128, 256]), mcts_filters, label="MCPTDM (-repeat, -MAC)")
 
                 mcts_filters = [("method", "mcts"),
                                 ("use_cfb", "false"),
@@ -448,9 +448,7 @@ if should_make_figure("final"):
                                 ("selection_mode", "klucb"),
                                 ("klucb_max_cost", 4.7),
                                 ("ucb_const", 1.5),
-                                ("unknown_prior_std_dev_scalar", 1),
-                                ("zero_mean_prior_std_dev", 470),
-                                ("bound_mode", "marginal_prior")] + common_filters
+                                ("bound_mode", "marginal")] + common_filters
                 seconds_fig.plot(FigureMode(
                     "samples_n", [8, 16, 32, 64, 128, 256]), mcts_filters, label="MCPTDM (-repeat)")
 
@@ -460,21 +458,7 @@ if should_make_figure("final"):
                             ("selection_mode", "klucb"),
                             ("klucb_max_cost", 4.7),
                             ("ucb_const", 1.5),
-                            ("unknown_prior_std_dev_scalar", 1),
-                            ("zero_mean_prior_std_dev", 470),
                             ("bound_mode", "marginal")] + common_filters
-            seconds_fig.plot(FigureMode(
-                "samples_n", [8, 16, 32, 64, 128, 256]), mcts_filters, label="MCPTDM (-prior) (proposed)")
-
-            mcts_filters = [("method", "mcts"),
-                            ("use_cfb", "false"),
-                            ("repeat_const", 32768),
-                            ("selection_mode", "klucb"),
-                            ("klucb_max_cost", 4.7),
-                            ("ucb_const", 1.5),
-                            ("unknown_prior_std_dev_scalar", 1),
-                            ("zero_mean_prior_std_dev", 470),
-                            ("bound_mode", "marginal_prior")] + common_filters
             seconds_fig.plot(FigureMode(
                 "samples_n", [8, 16, 32, 64, 128, 256]), mcts_filters, label="MCPTDM (proposed)")
 

@@ -12,12 +12,12 @@
 
 time cargo run --release rng_seed 0:2:16383 :: method mpdm :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64
 time cargo run --release rng_seed 0:2:16383 :: method eudm :: use_cfb false true :: eudm.samples_n 1 2 4 8 16 32
-time cargo run --release rng_seed 0:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal marginal_prior :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 32768
-time cargo run --release rng_seed 0:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal marginal_prior :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0
+time cargo run --release rng_seed 0:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode normal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0
+time cargo run --release rng_seed 0:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0 32768
 
 time cargo run --release rng_seed 1:2:16383 :: method mpdm :: use_cfb false :: mpdm.samples_n 2 4 8 16 32 64
 time cargo run --release rng_seed 1:2:16383 :: method eudm :: use_cfb false true :: eudm.samples_n 1 2 4 8 16 32
-time cargo run --release rng_seed 1:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal marginal_prior :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 32768
-time cargo run --release rng_seed 1:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal marginal_prior :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0
+time cargo run --release rng_seed 1:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode normal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0
+time cargo run --release rng_seed 1:2:16383 :: method mcts :: use_cfb false :: mcts.bound_mode marginal :: mcts.samples_n 8 16 32 64 128 256 :: mcts.repeat_const 0 32768
 
 ./plot.py final
