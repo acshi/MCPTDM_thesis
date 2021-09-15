@@ -75,7 +75,7 @@ impl Road {
     pub fn new(params: Rc<Parameters>) -> Self {
         let ego_car = Car::new(&params, 0, 0);
 
-        let road = Self {
+        Self {
             t: 0.0,
             timesteps: 0,
             last_ego: ego_car.clone(),
@@ -93,14 +93,7 @@ impl Road {
             is_truth: true,
             sample_id: None,
             particle: None,
-        };
-
-        // road.cars[0].preferred_vel = SPEED_DEFAULT;
-        // road.cars[0].set_theta(PI / 16.0);
-        // road.cars[0].set_y(Road::get_lane_y(0));
-        // road.set_ego_policy(make_policy_choices()[4].clone());
-
-        road
+        }
     }
 
     // fn double_borrow_mut(&mut self, i1: usize, i2: usize) -> (&mut Car, &mut Car) {
@@ -149,7 +142,7 @@ impl Road {
     pub fn update_belief(&mut self) {
         let mut belief_rc = self.belief.take().unwrap();
         let belief = Rc::get_mut(&mut belief_rc).expect("update_belief should only be called when it has exclusive access to the top-level road");
-        belief.update(&self);
+        belief.update(self);
 
         if self.super_debug() && self.params.obstacle_car_debug {
             if let Some(debug_car_i) = self.params.debug_car_i {
@@ -172,10 +165,10 @@ impl Road {
             belief: self.belief.clone(),
             last_ego: self.last_ego.clone(),
             switched_ego_policy: false,
-            cost: self.cost.clone(),
+            cost: self.cost,
             ego_is_safe: self.ego_is_safe,
             car_traces: None,
-            last_reset_cost: self.last_reset_cost.clone(),
+            last_reset_cost: self.last_reset_cost,
             trajectory_buffer: Vec::new(),
             debug: self.debug,
             is_truth: false,
@@ -484,7 +477,7 @@ impl Road {
     }
 
     fn update_inner(&mut self, dt: f64) {
-        let mut trajectory = std::mem::replace(&mut self.trajectory_buffer, Vec::new());
+        let mut trajectory = std::mem::take(&mut self.trajectory_buffer);
 
         for car_i in 0..self.cars.len() {
             if self.cars[car_i].crashed {
@@ -558,10 +551,8 @@ impl Road {
                     if (i1 != 0 || self.cars[i1].crashed) && (i2 != 0 || self.cars[i2].crashed) {
                         continue;
                     }
-                } else {
-                    if self.cars[i1].crashed && self.cars[i2].crashed {
-                        continue;
-                    }
+                } else if self.cars[i1].crashed && self.cars[i2].crashed {
+                    continue;
                 }
                 if self.collides_between(i1, i2) {
                     if self.super_debug() {
@@ -626,7 +617,7 @@ impl Road {
     fn update_cars_spatial(&mut self) {
         self.cars_spatial.clear();
         self.cars_spatial
-            .extend(self.cars.iter().map(|c| SpatialCar::from(c)));
+            .extend(self.cars.iter().map(SpatialCar::from));
         self.cars_spatial.sort_unstable_by(|a, b| a.x.cmp(&b.x));
     }
 
@@ -688,15 +679,13 @@ impl Road {
                 );
                 eprintln!("New policy: {:?}", self.ego_policy().operating_policy());
             }
-        } else if self.debug && self.params.ego_policy_change_debug {
-            if self.switched_ego_policy {
-                let policy_id = car.full_policy_id();
-                let last_policy_id = self.last_ego.full_policy_id();
-                eprintln_f!(
-                    "{}: full policy has changed from {last_policy_id} to {policy_id}",
-                    self.timesteps
-                );
-            }
+        } else if self.debug && self.params.ego_policy_change_debug && self.switched_ego_policy {
+            let policy_id = car.full_policy_id();
+            let last_policy_id = self.last_ego.full_policy_id();
+            eprintln_f!(
+                "{}: full policy has changed from {last_policy_id} to {policy_id}",
+                self.timesteps
+            );
         }
 
         if self.switched_ego_policy {

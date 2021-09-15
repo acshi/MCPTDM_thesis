@@ -42,14 +42,11 @@ fn compute_selection_index(
         }
         ChildSelectionMode::KLUCB => {
             let scaled_mean = (1.0 - mean_cost / mctsp.klucb_max_cost).min(1.0).max(0.0);
-            let index = -klucb_bernoulli(scaled_mean, mctsp.ucb_const.abs() * ln_t_over_n);
-            index
+            -klucb_bernoulli(scaled_mean, mctsp.ucb_const.abs() * ln_t_over_n)
         }
         ChildSelectionMode::KLUCBP => {
             let scaled_mean = (1.0 - mean_cost / mctsp.klucb_max_cost).min(1.0).max(0.0);
-            let index =
-                -klucb_bernoulli(scaled_mean, mctsp.ucb_const.abs() * (total_n / n).ln() / n);
-            index
+            -klucb_bernoulli(scaled_mean, mctsp.ucb_const.abs() * (total_n / n).ln() / n)
         }
         ChildSelectionMode::Uniform => n,
         ChildSelectionMode::Random => unimplemented!("No index for Random ChildSelectionMode"),
@@ -500,7 +497,7 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
                     .filter(|(_, n)| n.n_trials == 0)
                     .map(|(i, _)| i)
                     .collect_vec();
-                if unexplored.len() > 0 {
+                if !unexplored.is_empty() {
                     let sub_node_i = *unexplored.choose(rng).unwrap();
                     possibly_modify_particle(&mut node.costs, &mut sub_nodes[sub_node_i], road);
                     trial_final_cost =
@@ -584,13 +581,9 @@ fn tree_exploration_report_best_path(
     node: &MctsNode,
 ) -> Result<(), std::io::Error> {
     let mut n = node;
-    loop {
-        if let Some(min_child) = n.min_child() {
-            write!(f, "{} ", min_child.policy.as_ref().unwrap().policy_id())?;
-            n = min_child;
-        } else {
-            break;
-        }
+    while let Some(min_child) = n.min_child() {
+        write!(f, "{} ", min_child.policy.as_ref().unwrap().policy_id())?;
+        n = min_child;
     }
     writeln!(f)?;
     Ok(())

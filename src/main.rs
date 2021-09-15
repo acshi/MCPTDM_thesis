@@ -31,7 +31,6 @@ use side_policies::SidePolicyTrait;
 
 use crate::{eudm::dcp_tree_choose_policy, mcts::mcts_choose_policy, tree::tree_choose_policy};
 
-#[allow(unused)]
 #[macro_use]
 extern crate fstrings;
 
@@ -122,17 +121,13 @@ impl State {
         if self.timesteps % replan_interval == 0 && !self.road.cars[0].crashed {
             let replan_real_time_start = Instant::now();
 
-            let (policy, traces) = if false && self.road.super_debug() {
-                mpdm_choose_policy(&self.params, &self.road, policy_rng)
-            } else {
-                match self.params.method.as_str() {
-                    "fixed" => (None, Vec::new()),
-                    "mpdm" => mpdm_choose_policy(&self.params, &self.road, policy_rng),
-                    "eudm" => dcp_tree_choose_policy(&self.params, &self.road, policy_rng),
-                    "tree" => tree_choose_policy(&self.params, &self.road, policy_rng),
-                    "mcts" => mcts_choose_policy(&self.params, &self.road, policy_rng),
-                    _ => panic!("invalid method '{}'", self.params.method),
-                }
+            let (policy, traces) = match self.params.method.as_str() {
+                "fixed" => (None, Vec::new()),
+                "mpdm" => mpdm_choose_policy(&self.params, &self.road, policy_rng),
+                "eudm" => dcp_tree_choose_policy(&self.params, &self.road, policy_rng),
+                "tree" => tree_choose_policy(&self.params, &self.road, policy_rng),
+                "mcts" => mcts_choose_policy(&self.params, &self.road, policy_rng),
+                _ => panic!("invalid method '{}'", self.params.method),
             };
 
             self.reward

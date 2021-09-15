@@ -202,14 +202,14 @@ fn create_scenarios(
         || name.starts_with("eudm.") && base_params.method != "eudm"
         || name.starts_with("mcts.") && base_params.method != "mcts"
     {
-        return create_scenarios(&base_params, &name_value_pairs[1..]);
+        return create_scenarios(base_params, &name_value_pairs[1..]);
     }
 
     for value in values.iter() {
         let mut value_set = vec![value.to_owned()];
 
         // Do we have a numeric range? special-case handle that!
-        let range_parts = value.split("-").collect_vec();
+        let range_parts = value.split('-').collect_vec();
         if range_parts.len() == 2 {
             let low: Option<usize> = range_parts[0].parse().ok();
             let high: Option<usize> = range_parts[1].parse().ok();
@@ -223,7 +223,7 @@ fn create_scenarios(
             }
         }
         // or a numeric range with a specified step size?
-        let step_range_parts = value.split(":").collect_vec();
+        let step_range_parts = value.split(':').collect_vec();
         if step_range_parts.len() == 3 {
             let low: Option<usize> = step_range_parts[0].parse().ok();
             let step: Option<usize> = step_range_parts[1].parse().ok();
@@ -245,7 +245,7 @@ fn create_scenarios(
                 "use_cfb" => params.use_cfb = val.parse().unwrap(),
                 "extra_ego_accdec_policies" => {
                     params.extra_ego_accdec_policies = val
-                        .split(",")
+                        .split(',')
                         .filter(|v| !v.is_empty())
                         .map(|v| v.parse::<f64>().unwrap())
                         .collect_vec()

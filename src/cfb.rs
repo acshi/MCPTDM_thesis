@@ -58,13 +58,13 @@ fn most_probable_cartesian_product_scenarios(
             top_n_scenarios.push((std::cmp::Reverse(probability), current_scenario.clone()));
         }
 
-        // count through `current_scenario`
-        for i in 0..car_is.len() {
-            current_scenario[i].1 += 1;
-            if current_scenario[i].1 < n_policies {
+        // increment the `current_scenario` to the next situation
+        for scenario in current_scenario.iter_mut() {
+            scenario.1 += 1;
+            if scenario.1 < n_policies {
                 continue 'outer;
             }
-            current_scenario[i].1 = 0;
+            scenario.1 = 0;
         }
         break;
     }

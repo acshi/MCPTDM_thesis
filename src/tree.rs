@@ -76,7 +76,7 @@ fn classic_tree_search(node: ClassicTreeNode) -> (ClassicTreeNode, SidePolicy) {
             if _depth <= 1 {
                 traces.append(&mut node.traces);
             } else {
-                node_traces = std::mem::replace(&mut node.traces, Vec::new());
+                node_traces = std::mem::take(&mut node.traces);
             }
         };
 
