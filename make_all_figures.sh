@@ -1,7 +1,9 @@
 #!/bin/bash
 mkdir -p figures/pdf
 
-./progressive_mcts/make_all_figures.sh
+cd progressive_mcts
+./make_all_figures.sh
+cd ../
 
 # Each separate invocation may be performed on a different machine
 # and each of the results.cache files cat'ed together to improve the total execution time
