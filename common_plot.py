@@ -294,7 +294,7 @@ def single_where_clause(param, value):
     elif "." in param:
         parts = param.split(".")
         (filter_mode_val, param_name) = (parts[0], parts[1])
-        if filter_mode_val in ["normal", "bubble_best", "lower_bound", "marginal", "marginal_prior"]:
+        if filter_mode_val in ["classic", "expectimax", "lower_bound", "marginal", "marginal_prior"]:
             filter_mode = "bound_mode"
         elif filter_mode_val in ["ucb", "ucbv", "ucbd", "klucb", "klucb+", "uniform"]:
             filter_mode = "selection_mode"
