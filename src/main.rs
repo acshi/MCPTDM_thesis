@@ -6,30 +6,18 @@ use std::{
 
 use arg_parameters::Parameters;
 
-use belief::Belief;
-use car::{Car, MPH_TO_MPS};
 use cfb::conditional_focused_branching;
-use itertools::Itertools;
-use mpdm::{
-    make_obstacle_vehicle_policy_belief_states, make_obstacle_vehicle_policy_choices,
-    make_policy_choices, mpdm_choose_policy,
-};
+use mpdm::{make_obstacle_vehicle_policy_choices, mpdm_choose_policy};
 
 use cost::Cost;
-use rand::{
-    distributions::WeightedIndex,
-    prelude::{Distribution, StdRng},
-    Rng, SeedableRng,
-};
+use rand::{prelude::StdRng, Rng, SeedableRng};
 use rate_timer::RateTimer;
 use reward::Reward;
 use road::Road;
 use road_set::RoadSet;
 use rvx::{Rvx, RvxColor};
-#[allow(unused)]
-use side_policies::SidePolicyTrait;
 
-use crate::{eudm::dcp_tree_choose_policy, mcts::mcts_choose_policy, tree::tree_choose_policy};
+use crate::{eudm::dcp_tree_choose_policy, mcts::mcts_choose_policy};
 
 #[macro_use]
 extern crate fstrings;
@@ -54,7 +42,6 @@ mod road;
 mod road_set;
 mod side_control;
 mod side_policies;
-mod tree;
 
 #[macro_use]
 extern crate enum_dispatch;
@@ -125,7 +112,6 @@ impl State {
                 "fixed" => (None, Vec::new()),
                 "mpdm" => mpdm_choose_policy(&self.params, &self.road, policy_rng),
                 "eudm" => dcp_tree_choose_policy(&self.params, &self.road, policy_rng),
-                "tree" => tree_choose_policy(&self.params, &self.road, policy_rng),
                 "mcts" => mcts_choose_policy(&self.params, &self.road, policy_rng),
                 _ => panic!("invalid method '{}'", self.params.method),
             };
@@ -168,9 +154,6 @@ impl State {
             }
         }
 
-        let last_ego_theta = self.road.cars[0].theta();
-        let last_ego_vel = self.road.cars[0].vel;
-
         // actual simulation
         self.road.update_belief();
         self.road.update(dt);
@@ -178,62 +161,11 @@ impl State {
 
         // final reporting reward (separate from cost function, though similar)
         self.reward.dist_travelled += self.road.cars[0].vel * dt;
-        if !self.road.ego_is_safe {
-            self.reward.safety += dt;
-        }
         if self.road.cars[0].crashed {
             self.reward.crashed = true;
         }
-        let accel = (self.road.cars[0].vel - last_ego_vel) / dt;
-        if accel <= -self.params.reward.uncomfortable_dec {
-            self.reward.uncomfortable_dec += dt;
-        }
-        let curvature_change = (self.road.cars[0].theta() - last_ego_theta).abs() / dt;
-        if curvature_change >= self.params.reward.large_curvature_change {
-            self.reward.curvature_change += dt;
-        }
-        // eprintln_f!("{accel=:.2} {curvature_change=:.2}");
 
         self.timesteps += 1;
-    }
-}
-
-fn debugging_scenarios(params: &Parameters, road: &mut Road) {
-    match params.debugging_scenario {
-        Some(1) => {
-            road.cars[0].set_y(-0.5);
-            road.cars.truncate(1);
-            road.cars.push(Car::new(params, 1, 1));
-            road.cars[1].side_policy =
-                Some(make_obstacle_vehicle_policy_choices(params)[0].clone());
-        }
-        Some(2) => {
-            road.cars.truncate(1);
-            road.add_obstacle(5.0, 0);
-            road.cars.push(Car::new(params, 2, 1));
-            road.cars[2].side_policy =
-                Some(make_obstacle_vehicle_policy_choices(params)[0].clone());
-        }
-        Some(3) => {
-            road.cars.clear();
-            let mut c = Car::new(params, 0, 0);
-            c.vel = 15.0 * MPH_TO_MPS;
-            c.side_policy = Some(make_policy_choices(params)[0].clone());
-            road.last_ego = c.clone();
-            road.cars.push(c);
-
-            let mut c = Car::new(params, 1, 0);
-            c.set_x(10.0);
-            c.vel = 10.0 * MPH_TO_MPS;
-            c.side_policy = Some(make_obstacle_vehicle_policy_choices(params)[0].clone());
-            road.cars.push(c);
-            let mut c = Car::new(params, 2, 1);
-            c.set_x(10.0);
-            c.vel = 10.0 * MPH_TO_MPS;
-            c.side_policy = Some(make_obstacle_vehicle_policy_choices(params)[3].clone());
-            road.cars.push(c);
-        }
-        _ => (),
     }
 }
 
@@ -250,7 +182,6 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
     while road.cars.len() < params.n_cars + 1 {
         road.add_random_car(&mut scenario_rng);
     }
-    debugging_scenarios(&params, &mut road);
     road.init_belief();
 
     let mut state = State {
@@ -318,52 +249,11 @@ fn run_with_parameters(params: Parameters) -> (Cost, Reward) {
         std::thread::sleep(Duration::from_millis(1000));
     }
 
-    let km_travelled = state.reward.dist_travelled / 1000.0;
-
     state.reward.end_t = state.road.t;
     state.reward.avg_vel = state.reward.dist_travelled / state.road.t;
-    state.reward.safety /= state.road.t;
-    state.reward.uncomfortable_dec /= km_travelled;
-    state.reward.curvature_change /= km_travelled;
     state.reward.calculate_timestep_metrics();
 
     (state.road.cost, state.reward)
-}
-
-fn sample_from_road_set(base_set: RoadSet, rng: &mut StdRng, n: usize) -> RoadSet {
-    let weights = base_set.inner().iter().map(|r| r.cost.weight).collect_vec();
-    let weighted_distribution = WeightedIndex::new(weights).unwrap();
-
-    let samples = (0..n)
-        .map(|_| {
-            let road_i = weighted_distribution.sample(rng);
-            let mut road = base_set.inner()[road_i].clone();
-            road.cost.weight = 1.0; // sampled, so weight is already taken into account
-            road
-        })
-        .collect_vec();
-
-    RoadSet::new(samples)
-}
-
-fn randomize_unimportant_vehicle_policies(
-    params: &Parameters,
-    roads: &mut RoadSet,
-    belief: &Belief,
-    selected_ids: &[usize],
-    rng: &mut StdRng,
-) {
-    // eprintln!("Randomizing vehicles other than: {:?}", selected_ids);
-    for road in roads.iter_mut() {
-        let policies = make_obstacle_vehicle_policy_belief_states(params);
-        let sampled_belief = belief.sample(rng);
-
-        for car in road.cars[1..].iter_mut() {
-            if !selected_ids.contains(&car.car_i) {
-                car.side_policy = Some(policies[sampled_belief[car.car_i]].clone());
-            }
-        }
-    }
 }
 
 fn road_set_for_scenario(
@@ -373,22 +263,8 @@ fn road_set_for_scenario(
     n: usize,
 ) -> RoadSet {
     if params.use_cfb {
-        let (base_set, selected_ids) = conditional_focused_branching(params, true_road, n);
-        if params.cfb.sample_from_base_set {
-            let mut roads = sample_from_road_set(base_set, rng, n);
-            if params.cfb.sample_unimportant_vehicle_policies {
-                randomize_unimportant_vehicle_policies(
-                    params,
-                    &mut roads,
-                    true_road.belief.as_ref().unwrap(),
-                    &selected_ids,
-                    rng,
-                );
-            }
-            roads
-        } else {
-            base_set
-        }
+        let (base_set, _selected_ids) = conditional_focused_branching(params, true_road, n);
+        base_set
     } else {
         RoadSet::new_samples(true_road, rng, n)
     }

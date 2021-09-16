@@ -198,9 +198,7 @@ pub fn conditional_focused_branching(
                 sim_road.cars[*car_i].side_policy = Some(policies[*policy_i].clone());
             }
 
-            if params.cfb.set_cost_weights {
-                sim_road.cost.weight = prob;
-            }
+            sim_road.cost.weight = prob;
             sim_road
         })
         .collect_vec();

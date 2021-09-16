@@ -16,7 +16,6 @@ pub enum LongitudinalPolicy {
     Maintain,
     Accelerate,
     Decelerate,
-    AccDec(f64),
 }
 
 #[derive(Clone, PartialEq, PartialOrd)]
@@ -97,10 +96,6 @@ impl LaneChangePolicy {
     }
 }
 
-fn lerp(a: f64, b: f64, t: f64) -> f64 {
-    a + t * (b - a)
-}
-
 impl SidePolicyTrait for LaneChangePolicy {
     fn choose_target_lane(&mut self, road: &Road, car_i: usize) -> i32 {
         if self.wait_for_clear && !self.waiting_done {
@@ -115,13 +110,6 @@ impl SidePolicyTrait for LaneChangePolicy {
             LongitudinalPolicy::Maintain => 0.6,
             LongitudinalPolicy::Accelerate => 0.2,
             LongitudinalPolicy::Decelerate => 1.0,
-            LongitudinalPolicy::AccDec(accdec) => {
-                if accdec > 0.0 {
-                    lerp(0.6, 0.2, (accdec / 10.0).min(1.0).max(0.0))
-                } else {
-                    lerp(0.6, 1.0, (-accdec / 10.0).min(1.0).max(0.0))
-                }
-            }
         }
     }
 
@@ -134,13 +122,6 @@ impl SidePolicyTrait for LaneChangePolicy {
                 .max(PREFERRED_VEL_ESTIMATE_MIN),
             LongitudinalPolicy::Accelerate => (car.vel + 10.0).max(PREFERRED_VEL_ESTIMATE_MIN),
             LongitudinalPolicy::Decelerate => (car.vel - 10.0).max(0.0),
-            LongitudinalPolicy::AccDec(accdec) => {
-                if accdec > 0.0 {
-                    (car.vel + accdec).max(PREFERRED_VEL_ESTIMATE_MIN)
-                } else {
-                    (car.vel + accdec).max(0.0)
-                }
-            }
         };
 
         target_vel

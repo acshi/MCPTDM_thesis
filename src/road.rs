@@ -41,7 +41,6 @@ pub struct Road {
     pub last_ego: Car,
     pub switched_ego_policy: bool,
     pub cost: Cost,
-    pub ego_is_safe: bool,
     pub car_traces: Option<Vec<Vec<(Point3<f64>, u32)>>>,
     pub last_reset_cost: Cost,
     pub trajectory_buffer: Vec<Point2<f64>>,
@@ -84,7 +83,6 @@ impl Road {
             belief: None,
             switched_ego_policy: false,
             cost: Cost::new(1.0, 1.0),
-            ego_is_safe: true,
             debug: !params.run_fast,
             car_traces: Some(Vec::new()),
             last_reset_cost: Cost::new(1.0, 1.0),
@@ -122,18 +120,6 @@ impl Road {
         panic!("Could not place a car without it colliding... too many cars or bad collision detection?");
     }
 
-    pub fn add_obstacle(&mut self, x: f64, lane_i: i32) {
-        let mut car = Car::new(&self.params, self.cars.len(), lane_i);
-        car.set_x(x);
-        car.set_y(car.y() + LANE_WIDTH / 4.0);
-        car.set_theta(PI / 2.0);
-        car.vel = 0.0;
-        car.preferred_vel = 0.0;
-        car.crashed = true;
-
-        self.cars.push(car);
-    }
-
     pub fn init_belief(&mut self) {
         let n_policies = make_obstacle_vehicle_policy_belief_states(&self.params).len();
         self.belief = Some(Rc::new(Belief::uniform(self.cars.len(), n_policies)));
@@ -166,7 +152,6 @@ impl Road {
             last_ego: self.last_ego.clone(),
             switched_ego_policy: false,
             cost: self.cost,
-            ego_is_safe: self.ego_is_safe,
             car_traces: None,
             last_reset_cost: self.last_reset_cost,
             trajectory_buffer: Vec::new(),
@@ -302,24 +287,6 @@ impl Road {
             &car_b.shape(),
         )
         .unwrap()
-    }
-
-    #[allow(unused)]
-    pub fn collides_any(&self, car_i: usize) -> bool {
-        let car = &self.cars[car_i];
-        let pose = car.pose();
-        let shape = car.shape();
-        for (i, c) in self.cars.iter().enumerate() {
-            if i == car_i {
-                continue;
-            }
-
-            if parry2d_f64::query::intersection_test(&pose, &shape, &c.pose(), &c.shape()).unwrap()
-            {
-                return true;
-            }
-        }
-        false
     }
 
     pub fn collides_any_car(&self, car: &Car) -> bool {
@@ -667,7 +634,6 @@ impl Road {
                 );
             }
         }
-        self.ego_is_safe = min_dist.map_or(true, |d| d > self.params.reward.safety_margin);
 
         let policy_id = car.operating_policy_id();
         let last_policy_id = self.last_ego.operating_policy_id();
@@ -689,7 +655,6 @@ impl Road {
         }
 
         if self.switched_ego_policy {
-            self.cost.plan_change += cparams.plan_change_weight * self.cost.discount;
             self.switched_ego_policy = false;
         }
 
@@ -772,7 +737,6 @@ impl Road {
         }
     }
 
-    #[allow(unused)]
     pub fn disable_car_traces(&mut self) {
         self.car_traces = None;
     }

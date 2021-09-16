@@ -1,8 +1,3 @@
-use std::{
-    fs::{File, OpenOptions},
-    io::{BufWriter, Write},
-};
-
 use itertools::Itertools;
 use progressive_mcts::{
     cost_set::CostSet, klucb::klucb_bernoulli, ChildSelectionMode, CostBoundMode,
@@ -14,7 +9,6 @@ use crate::{
     cost::Cost,
     mpdm::make_policy_choices,
     road::{Particle, Road},
-    road_set::RoadSet,
     road_set_for_scenario,
     side_policies::{SidePolicy, SidePolicyTrait},
 };
@@ -108,7 +102,7 @@ impl<'a> MctsNode<'a> {
             expected_cost: None,
             costs: Vec::new(),
             intermediate_costs: Vec::new(),
-            marginal_costs: CostSet::new(1000.0, params.mcts.preload_zeros),
+            marginal_costs: CostSet::new(),
             n_particles_repeated: 0,
             sub_nodes: None,
         }
@@ -121,18 +115,6 @@ impl<'a> MctsNode<'a> {
                 .filter_map(|n| n.expected_cost)
                 .min_by(|a, b| a.partial_cmp(b).unwrap())
         })
-    }
-
-    fn min_child(&self) -> Option<&MctsNode<'a>> {
-        self.sub_nodes
-            .as_ref()
-            .and_then(|sub_nodes| {
-                sub_nodes
-                    .iter()
-                    .filter_map(|n| Some((n, n.expected_cost?)))
-                    .min_by(|a, b| (a.1).partial_cmp(&b.1).unwrap())
-            })
-            .map(|(n, _)| n)
     }
 
     fn mean_cost(&self) -> Cost {
@@ -157,49 +139,6 @@ impl<'a> MctsNode<'a> {
         }
     }
 
-    fn marginal_cost_std_dev(&self) -> f64 {
-        if self.marginal_costs.is_empty() {
-            0.0
-        } else if self.marginal_costs.len() == 1 {
-            self.params.mcts.zero_mean_prior_std_dev * self.params.mcts.unknown_prior_std_dev_scalar
-        } else {
-            self.marginal_costs.std_dev() / (self.marginal_costs.len() as f64).sqrt()
-        }
-    }
-
-    fn confidence_interval(mean1: f64, std_dev1: f64, mean2: f64, std_dev2: f64) -> f64 {
-        let mean_diff = (mean1 - mean2).abs();
-        let z_gap1 = mean_diff / std_dev1;
-        let z_gap2 = mean_diff / std_dev2;
-        z_gap1.min(z_gap2)
-    }
-
-    fn marginal_cost_confidence_interval(&self) -> f64 {
-        let mut sorted_sub_nodes = self
-            .sub_nodes
-            .as_ref()
-            .unwrap()
-            .iter()
-            .filter(|n| !n.marginal_costs.is_empty())
-            .collect_vec();
-        sorted_sub_nodes.sort_by(|a, b| a.marginal_cost().partial_cmp(&b.marginal_cost()).unwrap());
-
-        if sorted_sub_nodes.len() < 2 {
-            // not expanded enough yet for a comparison, so no confidence!
-            return 0.0;
-        }
-
-        let best_sub_node = sorted_sub_nodes[0];
-        let second_sub_node = sorted_sub_nodes[1];
-
-        Self::confidence_interval(
-            best_sub_node.marginal_cost().total(),
-            best_sub_node.marginal_cost_std_dev(),
-            second_sub_node.marginal_cost().total(),
-            second_sub_node.marginal_cost_std_dev(),
-        )
-    }
-
     fn update_expected_cost(&mut self) {
         let mcts = &self.params.mcts;
 
@@ -213,27 +152,7 @@ impl<'a> MctsNode<'a> {
                 .unwrap_or(Cost::ZERO)
                 .max(&self.intermediate_cost()),
             CostBoundMode::Marginal => {
-                let mut marginal_cost = self.marginal_cost();
-                if self.marginal_costs.len() == 1 {
-                    marginal_cost = marginal_cost * mcts.single_trial_discount_factor;
-                }
-
-                self.min_child_expected_cost().unwrap_or(Cost::ZERO) + marginal_cost
-            }
-            CostBoundMode::MarginalPrior => {
-                let current_mean = self.marginal_cost();
-                let current_std_dev = self.marginal_cost_std_dev();
-                let (mean, _std_dev) = gaussian_update(
-                    Cost::ZERO,
-                    mcts.zero_mean_prior_std_dev.powi(2),
-                    current_mean,
-                    current_std_dev.powi(2),
-                );
-
-                // eprintln_f!("n: {}, {self.params.mcts.zero_mean_prior_std_dev=:.2}, {current_std_dev=:.2}, original: {:.2}, corrected: {:.2}",
-                //             self.marginal_costs.len(), current_mean.total(), mean.total());
-
-                self.min_child_expected_cost().unwrap_or(Cost::ZERO) + mean
+                self.min_child_expected_cost().unwrap_or(Cost::ZERO) + self.marginal_cost()
             }
             CostBoundMode::Same => unimplemented!(),
         };
@@ -273,51 +192,6 @@ impl<'a> MctsNode<'a> {
         )
     }
 
-    fn compute_marginal_cost_index(&self, total_n: f64, ln_total_n: f64) -> Option<f64> {
-        compute_selection_index(
-            &self.params.mcts,
-            total_n,
-            ln_total_n,
-            self.marginal_costs.len(),
-            self.marginal_cost().total(),
-            self.params.mcts.selection_mode,
-        )
-    }
-
-    fn min_child_marginal_index_mut(&mut self) -> Option<&mut MctsNode<'a>> {
-        let total_n = self
-            .get_or_expand_sub_nodes()
-            .iter()
-            .map(|a| a.marginal_costs.len())
-            .sum::<usize>() as f64;
-        let ln_total_n = total_n.ln();
-
-        // if self.params.is_single_run {
-        //     for (i, sub_node) in self.get_or_expand_sub_nodes().iter().enumerate() {
-        //         eprintln_f!(
-        //             "{i}: {:.2}",
-        //             sub_node
-        //                 .compute_marginal_cost_index(total_n, ln_total_n)
-        //                 .unwrap_or(99999.9)
-        //         )
-        //     }
-        // }
-
-        self.sub_nodes.as_mut().and_then(|nodes| {
-            nodes
-                .iter_mut()
-                .map(|a| {
-                    (
-                        a.compute_marginal_cost_index(total_n, ln_total_n)
-                            .unwrap_or(-f64::MAX),
-                        a,
-                    )
-                })
-                .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())
-                .map(|a| a.1)
-        })
-    }
-
     fn get_best_policy_by_cost(&self) -> Option<&SidePolicy> {
         let chosen_policy = self
             .sub_nodes
@@ -347,20 +221,6 @@ impl<'a> MctsNode<'a> {
     }
 }
 
-fn gaussian_update<
-    F: std::ops::Add<Output = F> + std::ops::Sub<Output = F> + std::ops::Mul<f64, Output = F> + Clone,
->(
-    prior_mean: F,
-    prior_variance: f64,
-    mean: F,
-    variance: f64,
-) -> (F, f64) {
-    let k = prior_variance / (prior_variance + variance);
-    let new_mean = prior_mean.clone() + (mean - prior_mean) * k;
-    let new_variance = prior_variance * (1.0 - k);
-    (new_mean, new_variance)
-}
-
 fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &mut MctsNode, road: &mut Road) {
     if node.depth > 1 {
         return;
@@ -375,26 +235,10 @@ fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &mut MctsNode,
         }
     }
 
-    let z = mctsp.prioritize_worst_particles_z;
-    if z >= 1000.0 {
-        // take this high value to mean don't prioritize like this!
-        return;
-    }
-
-    // let orig_costs = costs.iter().map(|(c, _)| *c).collect_vec();
-
-    let mean = costs.iter().map(|(c, _)| *c).sum::<Cost>().total() / costs.len() as f64;
-    let std_dev = (costs
-        .iter()
-        .map(|(c, _)| (c.total() - mean).powi(2))
-        .sum::<f64>()
-        / costs.len() as f64)
-        .sqrt();
-
     // sort descending by cost, then particle
     costs.sort_by(|a, b| b.partial_cmp(a).unwrap());
 
-    // up to samples_n possible particles
+    // at least samples_n possible particles
     let mut node_seen_particles = vec![false; mctsp.samples_n];
     for (_, particle) in node.costs.iter() {
         if particle.id >= node_seen_particles.len() {
@@ -403,10 +247,7 @@ fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &mut MctsNode,
         node_seen_particles[particle.id] = true;
     }
 
-    for (_c, particle) in costs
-        .iter()
-        .take_while(|(c, _)| c.total() - mean >= std_dev * z)
-    {
+    for (_c, particle) in costs.iter() {
         if particle.id >= node_seen_particles.len() || !node_seen_particles[particle.id] {
             for (car, policy) in road.cars.iter_mut().zip(&particle.policies).skip(1) {
                 car.side_policy = Some(policy.clone());
@@ -414,16 +255,6 @@ fn possibly_modify_particle(costs: &mut [(Cost, Particle)], node: &mut MctsNode,
             road.sample_id = Some(particle.id);
             road.save_particle();
             node.n_particles_repeated += 1;
-            // eprintln!(
-            //     "{}: Replaying particle {} w/ c {:.2}, mean {:.2}, std_dev {:.2}: {:?}",
-            //     node.depth,
-            //     particle.id,
-            //     _c.total(),
-            //     mean,
-            //     std_dev,
-            //     node.policy,
-            //     // node.costs.iter().map(|(c, p)| (c.total(), p)).collect_vec(),
-            // );
             return;
         }
     }
@@ -490,29 +321,17 @@ fn find_and_run_trial(node: &mut MctsNode, road: &mut Road, rng: &mut StdRng) ->
 
         // then choose any unexplored branch
         if !has_run_trial {
-            if mcts.choose_random_policy {
-                let unexplored = sub_nodes
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, n)| n.n_trials == 0)
-                    .map(|(i, _)| i)
-                    .collect_vec();
-                if !unexplored.is_empty() {
-                    let sub_node_i = *unexplored.choose(rng).unwrap();
-                    possibly_modify_particle(&mut node.costs, &mut sub_nodes[sub_node_i], road);
-                    trial_final_cost =
-                        Some(find_and_run_trial(&mut sub_nodes[sub_node_i], road, rng));
-                    has_run_trial = true;
-                }
-            } else {
-                for sub_node in sub_nodes.iter_mut() {
-                    if sub_node.n_trials == 0 {
-                        possibly_modify_particle(&mut node.costs, sub_node, road);
-                        trial_final_cost = Some(find_and_run_trial(sub_node, road, rng));
-                        has_run_trial = true;
-                        break;
-                    }
-                }
+            let unexplored = sub_nodes
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| n.n_trials == 0)
+                .map(|(i, _)| i)
+                .collect_vec();
+            if !unexplored.is_empty() {
+                let sub_node_i = *unexplored.choose(rng).unwrap();
+                possibly_modify_particle(&mut node.costs, &mut sub_nodes[sub_node_i], road);
+                trial_final_cost = Some(find_and_run_trial(&mut sub_nodes[sub_node_i], road, rng));
+                has_run_trial = true;
             }
         }
 
@@ -576,68 +395,6 @@ fn print_report(node: &MctsNode) {
     }
 }
 
-fn tree_exploration_report_best_path(
-    f: &mut BufWriter<File>,
-    node: &MctsNode,
-) -> Result<(), std::io::Error> {
-    let mut n = node;
-    while let Some(min_child) = n.min_child() {
-        write!(f, "{} ", min_child.policy.as_ref().unwrap().policy_id())?;
-        n = min_child;
-    }
-    writeln!(f)?;
-    Ok(())
-}
-
-fn tree_exploration_report(f: &mut BufWriter<File>, node: &MctsNode) -> Result<(), std::io::Error> {
-    for child in node.sub_nodes.as_ref().unwrap() {
-        write!(f, "{} ", child.n_trials)?;
-    }
-    writeln!(f)?;
-    for child in node.sub_nodes.as_ref().unwrap() {
-        if child.sub_nodes.is_some() {
-            write!(f, "{} ", child.policy.as_ref().unwrap().policy_id())?;
-            tree_exploration_report(f, child)?;
-        }
-    }
-    Ok(())
-}
-
-fn all_mac_report(f: &mut BufWriter<File>, node: &MctsNode) -> Result<(), std::io::Error> {
-    for mac in node.marginal_costs.iter() {
-        writeln!(f, "{}", mac.0)?;
-    }
-    if let Some(ref sub_nodes) = node.sub_nodes {
-        for child in sub_nodes.iter() {
-            all_mac_report(f, child)?;
-        }
-    }
-    Ok(())
-}
-
-fn bootstrap_run_trial<'a>(node: &mut MctsNode<'a>, roads: &mut RoadSet, n_completed: usize) {
-    let is_single_run = !node.params.run_fast;
-
-    // do search_depth single step trials so the total cost of a bootstrap run is the same
-    // as a normal one
-    for _ in 0..node.params.mcts.search_depth {
-        let sub_node = node.min_child_marginal_index_mut().unwrap();
-        let score = run_step(sub_node, &mut roads.pop()).unwrap();
-        if is_single_run {
-            eprintln!(
-                "{}: Bootstrap trial: {:?} got {:.2}",
-                n_completed,
-                sub_node.policy.as_ref().unwrap(),
-                score
-            );
-        }
-
-        sub_node.update_expected_cost();
-    }
-
-    node.update_expected_cost();
-}
-
 pub fn mcts_choose_policy(
     params: &Parameters,
     true_road: &Road,
@@ -665,13 +422,6 @@ pub fn mcts_choose_policy(
 
     let mut i = 0;
     loop {
-        let marginal_confidence = node.marginal_cost_confidence_interval();
-        // eprintln_f!("{i}: {marginal_confidence=:.2}");
-        if params.mcts.bootstrap_confidence_z > marginal_confidence {
-            bootstrap_run_trial(&mut node, &mut roads, i);
-            continue;
-        }
-
         let mut road = roads.pop();
         road.sample_id = Some(i);
         road.save_particle();
@@ -703,27 +453,6 @@ pub fn mcts_choose_policy(
 
     if debug && params.policy_report_debug {
         print_report(&node);
-    }
-
-    if debug && params.mcts.tree_exploration_report {
-        let mut f = BufWriter::new(File::create("tree_exploration_report").unwrap());
-        tree_exploration_report_best_path(&mut f, &node).unwrap();
-        tree_exploration_report(&mut f, &node).unwrap();
-    }
-
-    if params.is_single_run && params.mcts.all_mac_report {
-        if true_road.timesteps == 0 {
-            let _ = std::fs::remove_file("all_mac_report");
-        }
-
-        let mut f = BufWriter::new(
-            OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open("all_mac_report")
-                .unwrap(),
-        );
-        all_mac_report(&mut f, &node).unwrap();
     }
 
     (best_policy, traces)

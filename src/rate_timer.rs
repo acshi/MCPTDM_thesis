@@ -1,13 +1,11 @@
 use std::time::{Duration, Instant};
 
-#[allow(unused)]
 #[derive(Clone, Debug)]
 pub struct RateTimer {
     interval: Duration,
     last: Instant,
 }
 
-#[allow(unused)]
 impl RateTimer {
     pub fn new(interval: Duration) -> Self {
         Self {
@@ -16,6 +14,7 @@ impl RateTimer {
         }
     }
 
+    #[allow(unused)]
     pub fn from_millis(interval_ms: u64) -> Self {
         Self::new(Duration::from_millis(interval_ms))
     }

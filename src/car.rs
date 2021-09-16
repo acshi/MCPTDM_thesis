@@ -304,17 +304,7 @@ impl Car {
                     40.0,
                 )
                 .rot(-PI / 2.0)
-                .translate(&[
-                    self.x
-                        + if params.debugging_scenario.is_some()
-                            && params.debug_car_i == Some(self.car_i)
-                        {
-                            -5.0
-                        } else {
-                            0.0
-                        },
-                    self.y,
-                ]),
+                .translate(&[self.x, self.y]),
             );
         }
 
@@ -364,11 +354,13 @@ impl Car {
         self.update_geometry_cache();
     }
 
+    #[allow(unused)]
     pub fn set_y(&mut self, y: f64) {
         self.y = y;
         self.update_geometry_cache();
     }
 
+    #[allow(unused)]
     pub fn set_theta(&mut self, theta: f64) {
         self.theta = theta;
         self.update_geometry_cache();

@@ -9,41 +9,6 @@ pub struct SituationParticle {
     pub gaussian_z2: f64,
 }
 
-impl Eq for SituationParticle {}
-
-impl PartialOrd for SituationParticle {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.id.partial_cmp(&other.id)
-    }
-}
-
-impl PartialEq for SituationParticle {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl std::hash::Hash for SituationParticle {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_usize(self.id);
-    }
-}
-
-impl std::fmt::Debug for SituationParticle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?}",
-            (
-                self.id,
-                self.weight_choice,
-                self.gaussian_z1,
-                self.gaussian_z2
-            )
-        )
-    }
-}
-
 impl SituationParticle {
     pub fn sample(id: usize, rng: &mut StdRng) -> Self {
         Self {
@@ -55,7 +20,7 @@ impl SituationParticle {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct CostDistribution {
     weight1: f64, // weight2 = 1.0 - weight1
     normal1: Normal<f64>,
@@ -116,7 +81,6 @@ impl CostDistribution {
     }
 }
 
-#[derive(Clone)]
 pub struct ProblemScenario {
     pub distribution: Option<CostDistribution>,
     pub children: Vec<ProblemScenario>,

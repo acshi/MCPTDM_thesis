@@ -33,22 +33,7 @@ pub struct Parameters {
     pub bound_mode: CostBoundMode,
     pub final_choice_mode: CostBoundMode,
     pub selection_mode: ChildSelectionMode,
-    pub prioritize_worst_particles_z: f64,
-    pub worst_particles_z_abs: bool,
-    pub consider_repeats_after_portion: f64,
-    pub repeat_confidence_interval: f64,
-    pub correct_future_std_dev_mean: bool,
     pub repeat_const: f64,
-    pub repeat_particle_sign: i8,
-    pub repeat_at_all_levels: bool,
-    pub throwout_extreme_costs_z: f64,
-    pub bootstrap_confidence_z: f64,
-    pub bootstrap_n: i32,
-    pub zero_mean_prior_std_dev: f64,
-    pub unknown_prior_std_dev: f64,
-    pub unknown_prior_std_dev_scalar: f64,
-    pub single_trial_discount_factor: f64,
-    pub preload_zeros: i32,
     pub most_visited_best_cost_consistency: bool,
 
     pub thread_limit: usize,
@@ -73,22 +58,7 @@ impl Parameters {
             bound_mode: CostBoundMode::Marginal,
             final_choice_mode: CostBoundMode::Same,
             selection_mode: ChildSelectionMode::KLUCB,
-            prioritize_worst_particles_z: 1000.0,
-            worst_particles_z_abs: false,
-            consider_repeats_after_portion: 0.0,
-            repeat_confidence_interval: 1000.0,
-            correct_future_std_dev_mean: false,
             repeat_const: -1.0,
-            repeat_particle_sign: 1,
-            repeat_at_all_levels: false,
-            throwout_extreme_costs_z: 1000.0,
-            bootstrap_confidence_z: 0.0,
-            bootstrap_n: -1,
-            zero_mean_prior_std_dev: 330.0,
-            unknown_prior_std_dev: 1000.0,
-            unknown_prior_std_dev_scalar: 1.8, // overrides unknown_prior_std_dev if not zero
-            single_trial_discount_factor: -1.0,
-            preload_zeros: -1,
             most_visited_best_cost_consistency: true,
 
             thread_limit: 0,
@@ -112,10 +82,10 @@ fn create_scenarios(
     let mut scenarios = Vec::new();
     let (name, values) = &name_value_pairs[0];
 
-    if name.starts_with("normal.") && base_p.bound_mode != CostBoundMode::Normal
+    if name.starts_with("classic.") && base_p.bound_mode != CostBoundMode::Classic
+        || name.starts_with("expectimax.") && base_p.bound_mode != CostBoundMode::Expectimax
         || name.starts_with("lower_bound.") && base_p.bound_mode != CostBoundMode::LowerBound
         || name.starts_with("marginal.") && base_p.bound_mode != CostBoundMode::Marginal
-        || name.starts_with("marginal_prior.") && base_p.bound_mode != CostBoundMode::MarginalPrior
     {
         return create_scenarios(&base_p, &name_value_pairs[1..]);
     }

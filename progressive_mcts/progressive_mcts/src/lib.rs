@@ -1,26 +1,22 @@
 pub mod cost_set;
 pub mod klucb;
-use serde::Deserialize;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
-#[serde(rename_all = "snake_case")]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CostBoundMode {
-    Normal,
-    BubbleBest,
+    Classic,
+    Expectimax,
     LowerBound,
     Marginal,
-    MarginalPrior,
     Same,
 }
 
 impl std::fmt::Display for CostBoundMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Normal => write!(f, "normal"),
-            Self::BubbleBest => write!(f, "bubble_best"),
+            Self::Classic => write!(f, "classic"),
+            Self::Expectimax => write!(f, "expectimax"),
             Self::LowerBound => write!(f, "lower_bound"),
             Self::Marginal => write!(f, "marginal"),
-            Self::MarginalPrior => write!(f, "marginal_prior"),
             Self::Same => write!(f, "same"),
         }
     }
@@ -31,27 +27,23 @@ impl std::str::FromStr for CostBoundMode {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
-            "normal" => Ok(Self::Normal),
-            "bubble_best" => Ok(Self::BubbleBest),
+            "classic" => Ok(Self::Classic),
+            "expectimax" => Ok(Self::Expectimax),
             "lower_bound" => Ok(Self::LowerBound),
             "marginal" => Ok(Self::Marginal),
-            "marginal_prior" => Ok(Self::MarginalPrior),
             "same" => Ok(Self::Same),
             _ => Err(format!("Invalid CostBoundMode '{}'", s)),
         }
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
-#[serde(rename_all = "lowercase")]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ChildSelectionMode {
     UCB,
     UCBV,
     UCBd,
     KLUCB,
-    #[serde(rename = "klucb+")]
     KLUCBP,
-    Random,
     Uniform,
 }
 
@@ -63,7 +55,6 @@ impl std::fmt::Display for ChildSelectionMode {
             Self::UCBd => write!(f, "ucbd"),
             Self::KLUCB => write!(f, "klucb"),
             Self::KLUCBP => write!(f, "klucb+"),
-            Self::Random => write!(f, "random"),
             Self::Uniform => write!(f, "uniform"),
         }
     }
@@ -79,7 +70,6 @@ impl std::str::FromStr for ChildSelectionMode {
             "ucbd" => Ok(Self::UCBd),
             "klucb" => Ok(Self::KLUCB),
             "klucb+" => Ok(Self::KLUCBP),
-            "random" => Ok(Self::Random),
             "uniform" => Ok(Self::Uniform),
             _ => Err(format!("Invalid ChildSelectionMode '{}'", s)),
         }

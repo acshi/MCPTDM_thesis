@@ -2,8 +2,6 @@ max_steps = 3000
 n_cars = 13
 method = "mcts"
 use_cfb = false
-policies_wait_for_clear = false
-extra_ego_accdec_policies = []
 
 physics_dt = 0.01
 replan_dt = 0.25
@@ -30,7 +28,6 @@ cfb_debug = false
 obstacle_car_debug = false
 policy_report_debug = true
 ego_traces_debug = true
-# debugging_scenario = 1
 
 only_ego_crashes_in_forward_sims = true
 only_crashes_with_ego = true
@@ -62,13 +59,7 @@ logistic_map_low = 5.0
 logistic_map_high = -7.0
 accel_weight = 0.1
 steer_weight = 20.0         # was 10.0
-plan_change_weight = 0.0
 discount_factor = 0.8       # per second, 0.85
-
-[reward]
-safety_margin = 0.44
-uncomfortable_dec = 1.6
-large_curvature_change = 0.12
 
 [cfb]
 key_vehicle_base_dist = 10.0
@@ -77,9 +68,6 @@ uncertainty_threshold = 0.3
 max_n_for_cartesian_product = 4
 dt = 0.2
 horizon_t = 8.0
-set_cost_weights = true
-sample_from_base_set = false
-sample_unimportant_vehicle_policies = true
 
 [tree]
 dt = 0.2
@@ -106,18 +94,9 @@ search_depth = 4
 total_forward_t = 8.0
 samples_n = 64
 prefer_same_policy = true
-choose_random_policy = true
 bound_mode = "marginal"
 selection_mode = "klucb"
-ucb_const = 1.5                           # -100 for ucb
+ucb_const = 1.5
 klucb_max_cost = 4.7
-prioritize_worst_particles_z = -1000.0
 repeat_const = 32768
-single_trial_discount_factor = 1
-preload_zeros = 0
-zero_mean_prior_std_dev = 470
-unknown_prior_std_dev_scalar = 1.0
-bootstrap_confidence_z = 0
 most_visited_best_cost_consistency = true
-tree_exploration_report = false
-all_mac_report = false

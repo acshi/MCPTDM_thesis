@@ -27,14 +27,6 @@ pub struct EudmParameters {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct TreeParameters {
-    pub dt: f64,
-    pub layer_t: f64,
-    pub search_depth: u32,
-    pub samples_n: usize,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct MctsParameters {
     pub dt: f64,
     pub layer_t: f64,
@@ -42,21 +34,12 @@ pub struct MctsParameters {
     pub total_forward_t: Option<f64>,
     pub samples_n: usize,
     pub prefer_same_policy: bool,
-    pub choose_random_policy: bool,
     pub ucb_const: f64,
     pub bound_mode: CostBoundMode,
     pub selection_mode: ChildSelectionMode,
     pub klucb_max_cost: f64,
-    pub prioritize_worst_particles_z: f64,
     pub repeat_const: f64,
-    pub single_trial_discount_factor: f64,
-    pub preload_zeros: i32,
-    pub zero_mean_prior_std_dev: f64,
-    pub unknown_prior_std_dev_scalar: f64,
-    pub bootstrap_confidence_z: f64,
     pub most_visited_best_cost_consistency: bool,
-    pub tree_exploration_report: bool,
-    pub all_mac_report: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -80,16 +63,7 @@ pub struct CostParameters {
     pub accel_weight: f64,
     pub steer_weight: f64,
 
-    pub plan_change_weight: f64,
-
     pub discount_factor: f64,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq)]
-pub struct RewardParameters {
-    pub safety_margin: f64,
-    pub uncomfortable_dec: f64,
-    pub large_curvature_change: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -100,9 +74,6 @@ pub struct CfbParameters {
     pub max_n_for_cartesian_product: usize,
     pub dt: f64,
     pub horizon_t: f64,
-    pub set_cost_weights: bool,
-    pub sample_from_base_set: bool,
-    pub sample_unimportant_vehicle_policies: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -130,8 +101,6 @@ pub struct Parameters {
     pub n_cars: usize,
     pub method: String,
     pub use_cfb: bool,
-    pub policies_wait_for_clear: bool,
-    pub extra_ego_accdec_policies: Vec<f64>,
 
     pub physics_dt: f64,
     pub replan_dt: f64,
@@ -163,15 +132,12 @@ pub struct Parameters {
     pub only_crashes_with_ego: bool,
     pub obstacles_only_for_ego: bool,
     pub true_belief_sample_only: bool,
-    pub debugging_scenario: Option<i32>,
 
     pub spawn: SpawnParameters,
     pub belief: BeliefParameters,
     pub cost: CostParameters,
-    pub reward: RewardParameters,
     pub cfb: CfbParameters,
     pub eudm: EudmParameters,
-    pub tree: TreeParameters,
     pub mpdm: MpdmParameters,
     pub mcts: MctsParameters,
 
@@ -243,13 +209,6 @@ fn create_scenarios(
             match name.as_str() {
                 "method" => params.method = val.parse().unwrap(),
                 "use_cfb" => params.use_cfb = val.parse().unwrap(),
-                "extra_ego_accdec_policies" => {
-                    params.extra_ego_accdec_policies = val
-                        .split(',')
-                        .filter(|v| !v.is_empty())
-                        .map(|v| v.parse::<f64>().unwrap())
-                        .collect_vec()
-                }
                 "max_steps" => params.max_steps = val.parse().unwrap(),
                 "n_cars" => params.n_cars = val.parse().unwrap(),
                 "discount_factor" => params.cost.discount_factor = val.parse().unwrap(),
@@ -258,15 +217,12 @@ fn create_scenarios(
                 "run_fast" => params.run_fast = val.parse().unwrap(),
                 "load_and_record_results" => params.load_and_record_results = val.parse().unwrap(),
                 "thread_limit" => params.thread_limit = val.parse().unwrap(),
-                "tree.samples_n" => params.tree.samples_n = val.parse().unwrap(),
                 "mpdm.samples_n" => params.mpdm.samples_n = val.parse().unwrap(),
                 "eudm.samples_n" => params.eudm.samples_n = val.parse().unwrap(),
                 "mcts.samples_n" => params.mcts.samples_n = val.parse().unwrap(),
                 "mpdm.forward_t" => params.mpdm.forward_t = val.parse().unwrap(),
-                "tree.search_depth" => params.tree.search_depth = val.parse().unwrap(),
                 "eudm.search_depth" => params.eudm.search_depth = val.parse().unwrap(),
                 "mcts.search_depth" => params.mcts.search_depth = val.parse().unwrap(),
-                "tree.layer_t" => params.tree.layer_t = val.parse().unwrap(),
                 "eudm.layer_t" => params.eudm.layer_t = val.parse().unwrap(),
                 "mcts.layer_t" => params.mcts.layer_t = val.parse().unwrap(),
                 "mcts.total_forward_t" => params.mcts.total_forward_t = Some(val.parse().unwrap()),
@@ -275,31 +231,14 @@ fn create_scenarios(
                 "safety_margin_high" => params.cost.safety_margin_high = val.parse().unwrap(),
                 "accel" => params.cost.accel_weight = val.parse().unwrap(),
                 "steer" => params.cost.steer_weight = val.parse().unwrap(),
-                "plan_change" => params.cost.plan_change_weight = val.parse().unwrap(),
                 "mcts.bound_mode" => params.mcts.bound_mode = val.parse().unwrap(),
                 "mcts.selection_mode" => params.mcts.selection_mode = val.parse().unwrap(),
                 "mcts.ucb_const" => params.mcts.ucb_const = val.parse().unwrap(),
                 "mcts.klucb_max_cost" => params.mcts.klucb_max_cost = val.parse().unwrap(),
-                "mcts.prioritize_worst_particles_z" => {
-                    params.mcts.prioritize_worst_particles_z = val.parse().unwrap()
-                }
                 "mcts.repeat_const" => params.mcts.repeat_const = val.parse().unwrap(),
-                "mcts.single_trial_discount_factor" => {
-                    params.mcts.single_trial_discount_factor = val.parse().unwrap()
-                }
-                "mcts.zero_mean_prior_std_dev" => {
-                    params.mcts.zero_mean_prior_std_dev = val.parse().unwrap()
-                }
-                "mcts.unknown_prior_std_dev_scalar" => {
-                    params.mcts.unknown_prior_std_dev_scalar = val.parse().unwrap()
-                }
-                "mcts.bootstrap_confidence_z" => {
-                    params.mcts.bootstrap_confidence_z = val.parse().unwrap()
-                }
                 "mcts.most_visited_best_cost_consistency" => {
                     params.mcts.most_visited_best_cost_consistency = val.parse().unwrap()
                 }
-                "mcts.all_mac_report" => params.mcts.all_mac_report = val.parse().unwrap(),
                 "eudm.allow_different_root_policy" => {
                     params.eudm.allow_different_root_policy = val.parse().unwrap()
                 }
@@ -323,7 +262,6 @@ fn create_scenarios(
     for s in scenarios.iter_mut() {
         let samples_n = match s.method.as_str() {
             "fixed" => "".to_string(),
-            "tree" => format_f!(",samples_n={s.tree.samples_n}"),
             "mpdm" => format_f!(",samples_n={s.mpdm.samples_n}"),
             "eudm" => format_f!(",samples_n={s.eudm.samples_n}"),
             "mcts" => format_f!(",samples_n={s.mcts.samples_n}"),
@@ -332,7 +270,6 @@ fn create_scenarios(
 
         let search_depth = match s.method.as_str() {
             "fixed" => "".to_string(),
-            "tree" => format_f!(",search_depth={s.tree.search_depth}"),
             "mpdm" => "".to_string(),
             "eudm" => format_f!(",search_depth={s.eudm.search_depth}"),
             "mcts" => format_f!(",search_depth={s.mcts.search_depth}"),
@@ -341,7 +278,6 @@ fn create_scenarios(
 
         let forward_t = match s.method.as_str() {
             "fixed" => "".to_string(),
-            "tree" => format_f!(",layer_t={s.tree.layer_t}"),
             "mpdm" => format_f!(",forward_t={s.mpdm.forward_t}"),
             "eudm" => format_f!(",layer_t={s.eudm.layer_t}"),
             "mcts" => {
@@ -353,12 +289,6 @@ fn create_scenarios(
             }
             _ => panic!("Unknown method {}", s.method),
         };
-
-        let extra_ego_accdec = s
-            .extra_ego_accdec_policies
-            .iter()
-            .map(|a| a.to_string())
-            .join(",");
 
         let selection_mode = match s.method.as_str() {
             "mcts" => format_f!(",selection_mode={s.mcts.selection_mode}"),
@@ -384,44 +314,9 @@ fn create_scenarios(
             _ => "".to_string(),
         };
 
-        let prioritize_worst_particles_z = match s.method.as_str() {
-            "mcts" => {
-                format_f!(",prioritize_worst_particles_z={s.mcts.prioritize_worst_particles_z}")
-            }
-            _ => "".to_string(),
-        };
-
         let repeat_const = match s.method.as_str() {
             "mcts" => {
                 format_f!(",repeat_const={s.mcts.repeat_const}")
-            }
-            _ => "".to_string(),
-        };
-
-        let single_trial_discount_factor = match s.method.as_str() {
-            "mcts" => {
-                format_f!(",single_trial_discount_factor={s.mcts.single_trial_discount_factor}")
-            }
-            _ => "".to_string(),
-        };
-
-        let zero_mean_prior_std_dev = match s.method.as_str() {
-            "mcts" => {
-                format_f!(",zero_mean_prior_std_dev={s.mcts.zero_mean_prior_std_dev}")
-            }
-            _ => "".to_string(),
-        };
-
-        let unknown_prior_std_dev_scalar = match s.method.as_str() {
-            "mcts" => {
-                format_f!(",unknown_prior_std_dev_scalar={s.mcts.unknown_prior_std_dev_scalar}")
-            }
-            _ => "".to_string(),
-        };
-
-        let bootstrap_confidence_z = match s.method.as_str() {
-            "mcts" => {
-                format_f!(",bootstrap_confidence_z={s.mcts.bootstrap_confidence_z}")
             }
             _ => "".to_string(),
         };
@@ -449,11 +344,9 @@ fn create_scenarios(
         s.scenario_name = Some(format_f!(
             ",method={s.method}\
              ,use_cfb={s.use_cfb}\
-             ,extra_ego_accdec_policies={extra_ego_accdec}\
              {samples_n}{search_depth}{forward_t}\
-             {selection_mode}{bound_mode}{ucb_const}{kluct_max_cost}{prioritize_worst_particles_z}\
-             {repeat_const}{single_trial_discount_factor}{zero_mean_prior_std_dev}\
-             {unknown_prior_std_dev_scalar}{bootstrap_confidence_z}{most_visited_best_cost_consistency}\
+             {selection_mode}{bound_mode}{ucb_const}{kluct_max_cost}{repeat_const}\
+             {most_visited_best_cost_consistency}\
              {allow_different_root_policy}\
              ,max_steps={s.max_steps}\
              ,n_cars={s.n_cars}\
@@ -462,7 +355,6 @@ fn create_scenarios(
              ,safety_margin_high={s.cost.safety_margin_high}\
              ,accel={s.cost.accel_weight}\
              ,steer={s.cost.steer_weight}\
-             ,plan_change={s.cost.plan_change_weight}\
              ,replan_dt={s.replan_dt}\
              ,discount_factor={s.cost.discount_factor}\
              ,rng_seed={s.rng_seed}\

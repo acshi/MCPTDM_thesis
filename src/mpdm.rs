@@ -65,13 +65,9 @@ pub fn make_obstacle_vehicle_policy_belief_states(params: &Parameters) -> Vec<Si
 }
 
 pub fn make_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
-    let wait_for_clear = params.policies_wait_for_clear;
     let mut policy_choices = Vec::new();
 
-    let mut long_policies = vec![LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate];
-    for &accdec in params.extra_ego_accdec_policies.iter() {
-        long_policies.push(LongitudinalPolicy::AccDec(accdec));
-    }
+    let long_policies = vec![LongitudinalPolicy::Maintain, LongitudinalPolicy::Accelerate];
 
     for &lane_i in &[0, 1] {
         for &long_policy in long_policies.iter() {
@@ -79,7 +75,7 @@ pub fn make_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
                 policy_choices.len() as u32,
                 Some(lane_i),
                 params.lane_change_time,
-                wait_for_clear,
+                false,
                 long_policy,
             )));
         }
@@ -89,7 +85,7 @@ pub fn make_policy_choices(params: &Parameters) -> Vec<SidePolicy> {
         policy_choices.len() as u32,
         None,
         params.lane_change_time,
-        wait_for_clear,
+        false,
         LongitudinalPolicy::Decelerate,
     )));
 

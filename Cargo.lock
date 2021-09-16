@@ -1230,7 +1230,6 @@ dependencies = [
  "rand_distr",
  "rayon",
  "rolling-stats",
- "serde 1.0.126",
 ]
 
 [[package]]

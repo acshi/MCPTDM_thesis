@@ -69,12 +69,6 @@ define_params!(
     search_depth,
     n_actions,
     samples_n,
-    repeat_particle_sign,
-    repeat_at_all_levels,
-    correct_future_std_dev_mean,
-    worst_particles_z_abs,
-    preload_zeros,
-    bootstrap_n,
     most_visited_best_cost_consistency
 );
 
@@ -86,16 +80,7 @@ define_params!(
     ucbv_const,
     ucbd_const,
     klucb_max_cost,
-    prioritize_worst_particles_z,
-    consider_repeats_after_portion,
-    repeat_confidence_interval,
-    repeat_const,
-    throwout_extreme_costs_z,
-    bootstrap_confidence_z,
-    zero_mean_prior_std_dev,
-    unknown_prior_std_dev,
-    unknown_prior_std_dev_scalar,
-    single_trial_discount_factor
+    repeat_const
 );
 
 macro_rules! define_result_values {
@@ -117,9 +102,7 @@ define_result_values!(
     true_best_cost,
     regret,
     cost_estimation_error,
-    sum_repeated,
-    max_repeated,
-    repeated_cost_avg
+    sum_repeated
 );
 
 pub fn create_table_sql() -> String {
