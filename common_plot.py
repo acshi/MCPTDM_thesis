@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 import numpy as np
 from matplotlib import pyplot as plt
-import localreg
 import numbers
 
 plt.rcParams.update({'font.size': 12})
