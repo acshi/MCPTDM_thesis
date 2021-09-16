@@ -1,7 +1,8 @@
 pub mod cost_set;
 pub mod klucb;
+use serde::Deserialize;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
 pub enum CostBoundMode {
     Classic,
     Expectimax,
@@ -37,7 +38,7 @@ impl std::str::FromStr for CostBoundMode {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
 pub enum ChildSelectionMode {
     UCB,
     UCBV,
