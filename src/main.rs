@@ -61,27 +61,6 @@ struct State {
     paper_graphics_sets: Vec<Vec<rvx::Shape>>,
 }
 
-fn check_for_duplicate_shapes(shapes: &[rvx::Shape]) {
-    let mut ht = std::collections::HashMap::new();
-    for shape in shapes.iter() {
-        let entry = ht.entry(shape).or_insert(-1);
-        *entry += 1;
-    }
-    let duplicates = ht.iter().map(|(_k, v)| *v).sum::<i32>();
-    eprintln!(
-        "Traces has {} shapes and {} duplicates",
-        shapes.len(),
-        duplicates
-    );
-
-    let (most_common_shape, most_common_count) = ht.iter().max_by_key(|a| a.1).unwrap();
-    eprintln!(
-        "The most common shape with {} copies is {:?}",
-        *most_common_count + 1,
-        most_common_shape
-    );
-}
-
 impl State {
     fn update_graphics(&mut self) {
         if let Some(r) = self.r.as_mut() {
@@ -121,9 +100,6 @@ impl State {
                 .push(replan_real_time_start.elapsed().as_secs_f64());
 
             self.traces = traces;
-            if false {
-                check_for_duplicate_shapes(&self.traces);
-            }
 
             if let Some(policy) = policy {
                 self.road.set_ego_policy(policy);

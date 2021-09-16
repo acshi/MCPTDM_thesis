@@ -43,7 +43,6 @@ fn compute_selection_index(
             -klucb_bernoulli(scaled_mean, mctsp.ucb_const.abs() * (total_n / n).ln() / n)
         }
         ChildSelectionMode::Uniform => n,
-        ChildSelectionMode::Random => unimplemented!("No index for Random ChildSelectionMode"),
         _ => unimplemented!(),
     };
     Some(index)
@@ -143,8 +142,8 @@ impl<'a> MctsNode<'a> {
         let mcts = &self.params.mcts;
 
         let expected_cost = match mcts.bound_mode {
-            CostBoundMode::Normal => self.mean_cost(),
-            CostBoundMode::BubbleBest => self
+            CostBoundMode::Classic => self.mean_cost(),
+            CostBoundMode::Expectimax => self
                 .min_child_expected_cost()
                 .unwrap_or_else(|| self.mean_cost()),
             CostBoundMode::LowerBound => self

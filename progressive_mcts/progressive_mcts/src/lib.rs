@@ -3,6 +3,7 @@ pub mod klucb;
 use serde::Deserialize;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum CostBoundMode {
     Classic,
     Expectimax,
@@ -39,11 +40,13 @@ impl std::str::FromStr for CostBoundMode {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Hash)]
+#[serde(rename_all = "lowercase")]
 pub enum ChildSelectionMode {
     UCB,
     UCBV,
     UCBd,
     KLUCB,
+    #[serde(rename = "klucb+")]
     KLUCBP,
     Uniform,
 }

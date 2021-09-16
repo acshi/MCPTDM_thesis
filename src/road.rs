@@ -532,25 +532,9 @@ impl Road {
 
                     if self.is_truth || !self.params.only_ego_crashes_in_forward_sims || i1 == 0 {
                         self.cars[i1].crashed = true;
-                        // let s = self as &Road;
-                        // eprintln_f!(
-                        //     "{s.timesteps}: {:?}, y {:.3}, crashed with {i2}: {:?}, y {:.3}",
-                        //     self.cars[i1].side_policy.as_ref().unwrap(),
-                        //     self.cars[i1].y(),
-                        //     self.cars[i2].side_policy.as_ref().unwrap(),
-                        //     self.cars[i2].y()
-                        // );
                     }
                     if self.is_truth || !self.params.only_ego_crashes_in_forward_sims || i2 == 0 {
                         self.cars[i2].crashed = true;
-                        // let s = self as &Road;
-                        // eprintln_f!(
-                        //     "{s.timesteps}: {:?}, y {:.3} crashed with {i1}: {:?}, y {:.3}",
-                        //     self.cars[i2].side_policy.as_ref().unwrap(),
-                        //     self.cars[i2].y(),
-                        //     self.cars[i1].side_policy.as_ref().unwrap(),
-                        //     self.cars[i1].y()
-                        // );
                     }
                 }
             }

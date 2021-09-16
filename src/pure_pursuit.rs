@@ -62,56 +62,6 @@ fn ranges_overlap(low_a: f64, high_a: f64, low_b: f64, high_b: f64) -> bool {
     false
 }
 
-// fn circle_line_contact(
-//     circ_xy: Point2<f64>,
-//     radius: f64,
-//     pt1: Point2<f64>,
-//     pt2: Point2<f64>,
-// ) -> Option<Point2<f64>> {
-//     use approx::assert_relative_eq;
-//     let (cx, cy) = (circ_xy.x, circ_xy.y);
-//     let r = radius;
-
-//     let (x1, y1) = (pt1.x - cx, pt1.y - cy);
-//     let (x2, y2) = (pt2.x - cx, pt2.y - cy);
-//     eprint_f!("{cx=:6.2} {cy=:6.2}, {x1=:6.2} {y1=:6.2}, {x2=:6.2} {y2=:6.2}, {r:6.2}: ");
-
-//     // handle some special cases a little faster
-//     let mut special_case_solution = None;
-//     if y1 == y2 {
-//         let r_prime = if y1 == 0.0 {
-//             r
-//         } else {
-//             (r * r - y1 * y1).sqrt()
-//         };
-//         let (low_x, high_x) = if x1 < x2 { (x1, x2) } else { (x2, x1) };
-//         if range_dist(low_x, high_x, -r_prime, r_prime) == 0.0 {
-//             if x1 < 0.0 {
-//                 special_case_solution = Some(point!(cx - r_prime, y1 + cy));
-//             } else {
-//                 special_case_solution = Some(point!(cx + r_prime, y1 + cy));
-//             }
-//         }
-//     }
-
-//     if let Some(pt) = special_case_solution {
-//         eprint!("special {:.2?} ", pt.coords.as_slice());
-//     }
-
-//     let res = circle_line_contact_inner(circ_xy, radius, pt1, pt2);
-//     if let Some(pt) = res {
-//         eprintln!("{:.2?}", pt.coords.as_slice());
-//     } else {
-//         eprintln!();
-//     }
-
-//     if let (Some(special_case_solution), Some(res)) = (special_case_solution, res) {
-//         assert_relative_eq!(res, special_case_solution);
-//     }
-
-//     res
-// }
-
 fn circle_line_contact(
     circ_xy: Point2<f64>,
     radius: f64,
