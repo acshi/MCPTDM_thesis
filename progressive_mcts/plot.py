@@ -57,7 +57,7 @@ if should_make_figure("1"):
                 ("final_choice_mode", "same"),
         ], bound_mode)
         fig.ticks(ucb_const_ticknames)
-        fig.legend()
+        fig.legend(order=[1, 2, 0, 3])
         fig.show(title="Regret by UCB constant factor and expected-cost rule",
                  xlabel="UCB constant factor * 0.1",
                  file_suffix=f"_final_choice_mode_same")
@@ -81,7 +81,7 @@ if should_make_figure("2"):
 
         fig.ylim([10, 44])
         fig.ticks(ucb_const_ticknames)
-        fig.legend()
+        fig.legend(order=[4, 0, 1, 2, 3])
 
         fig.show(xlabel="UCB constant factor * 0.1",
                  file_suffix=f"_final_choice_mode_marginal")
@@ -111,7 +111,7 @@ if should_make_figure("3"):
 
         fig.xlim([2.8, 12.4])
         fig.ticks(range(3, 12 + 1))
-        fig.legend("lower left")
+        fig.legend("lower left", order=[4, 0, 1, 2, 3])
         fig.show(xlabel="log2(# of trials)")
 
 # cargo run --release rng_seed 0-4095 :: samples_n 8 16 32 64 128 256 512 1024 2048 4096 :: bound_mode marginal :: selection_mode ucb ucbv ucbd klucb klucb+ uniform :: ucb.ucb_const -1000 :: ucbv.ucb_const -220 :: ucbv.ucbv_const 0.001 :: ucbd.ucb_const -100 :: ucbd.ucbd_const 0.1 :: klucb.ucb_const -0.1 :: klucb.klucb_max_cost 4700 :: klucb+.ucb_const -1 :: klucb+.klucb_max_cost 470
@@ -142,7 +142,7 @@ if should_make_figure("4"):
         # fig.ylim([-20, 380])
         fig.xlim([2.8, 12.4])
         fig.ticks(range(3, 12 + 1))
-        fig.legend("lower left")
+        fig.legend("lower left", order=[5, 0, 2, 1, 4, 3])
         fig.show(xlabel="log2(# of trials)")
 
 # cargo run --release rng_seed 0-16383 :: samples_n 8 16 32 64 128 256 512 1024 :: repeat_const 0 1024 2048 4096 8192 16384 32768 65536 131072 262144 524288

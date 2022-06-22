@@ -602,6 +602,10 @@ impl Road {
 
         let min_dist = self.min_unsafe_dist(0);
         if let Some(min_dist) = min_dist {
+            // When safety_margin_low = 0, this reduces to the simple equation shown in the paper
+            // in Eq. 11, W_safety (1 + e^(k_safety (d_min - d_safety))^-1) where...
+            // k_safety = (logistic_map_high - logistic_map_low) / safety_margin_high
+            // d_safety = logistic_map_low * safety_margin_high / (logistic_map_low - logistic_map_high)
             let penalty = cparams.safety_weight
                 * logistic(change_range(
                     min_dist,
